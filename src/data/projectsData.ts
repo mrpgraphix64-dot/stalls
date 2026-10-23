@@ -1588,38 +1588,6 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
   },
   {
     "id": "stall-48",
-    "filename": "WhatsApp Image 2024-12-21 at 12.17.14 PM.jpeg",
-    "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.14_PM.webp",
-    "title": "Bespoke Exhibition Stall Installation",
-    "client": "Trade Fair Client",
-    "category": "custom-stalls",
-    "categoryLabel": "Custom Exhibition Stalls",
-    "event": "Commercial Trade Fair",
-    "location": "Ahmedabad / International",
-    "year": "2024",
-    "boothNumber": "Exhibition Stand",
-    "specs": "Custom Carpentry, Octanorm Integration, Backlit Graphics",
-    "description": "Custom exhibition stand designed and fabricated with precision detailing.",
-    "caption": "Custom Exhibition Fabrication View",
-    "tags": [
-      "Custom Stall",
-      "Turnkey Fabrication",
-      "Trade Fair"
-    ],
-    "projectId": "general-exhibition-showcase",
-    "isLead": false,
-    "width": 1280,
-    "height": 960,
-    "optWidth": 1280,
-    "optHeight": 960,
-    "thumbWidth": 720,
-    "thumbHeight": 540,
-    "aspectRatio": 1.333,
-    "thumbUrl": "/images/thumbs/WhatsApp_Image_2024-12-21_at_12.17.14_PM.webp",
-    "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.14_PM.webp"
-  },
-  {
-    "id": "stall-49",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.15 PM (1).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.15_PM_1.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -1651,7 +1619,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.15_PM_1.webp"
   },
   {
-    "id": "stall-50",
+    "id": "stall-49",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.15 PM (2).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.15_PM_2.webp",
     "title": "IQ Infinite Technologies Exhibition Stall",
@@ -1683,7 +1651,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.15_PM_2.webp"
   },
   {
-    "id": "stall-51",
+    "id": "stall-50",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.15 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.15_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -1715,7 +1683,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.15_PM.webp"
   },
   {
-    "id": "stall-52",
+    "id": "stall-51",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.16 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.16_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -1747,7 +1715,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.16_PM.webp"
   },
   {
-    "id": "stall-53",
+    "id": "stall-52",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.17 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.17_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -1779,7 +1747,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.17_PM.webp"
   },
   {
-    "id": "stall-54",
+    "id": "stall-53",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.20 PM (1).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.20_PM_1.webp",
     "title": "JigNect Technologies Software Quality Stall",
@@ -1811,7 +1779,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.20_PM_1.webp"
   },
   {
-    "id": "stall-55",
+    "id": "stall-54",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.21 PM (1).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.21_PM_1.webp",
     "title": "Theta Technolabs & CirrOps Cloud Stall",
@@ -1843,7 +1811,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.21_PM_1.webp"
   },
   {
-    "id": "stall-56",
+    "id": "stall-55",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.21 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.21_PM.webp",
     "title": "Theta Technolabs & CirrOps Cloud Stall",
@@ -1875,7 +1843,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.21_PM.webp"
   },
   {
-    "id": "stall-57",
+    "id": "stall-56",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.22 PM (1).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.22_PM_1.webp",
     "title": "UXTeam Experience & Design Stall",
@@ -1907,7 +1875,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.22_PM_1.webp"
   },
   {
-    "id": "stall-58",
+    "id": "stall-57",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.22 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.22_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -1939,7 +1907,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.22_PM.webp"
   },
   {
-    "id": "stall-59",
+    "id": "stall-58",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.23 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.23_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -1971,7 +1939,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.23_PM.webp"
   },
   {
-    "id": "stall-60",
+    "id": "stall-59",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.26 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.26_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -2003,7 +1971,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.26_PM.webp"
   },
   {
-    "id": "stall-61",
+    "id": "stall-60",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.27 PM (1).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.27_PM_1.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -2035,7 +2003,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.27_PM_1.webp"
   },
   {
-    "id": "stall-62",
+    "id": "stall-61",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.27 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.27_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -2067,7 +2035,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.27_PM.webp"
   },
   {
-    "id": "stall-63",
+    "id": "stall-62",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.29 PM (1).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.29_PM_1.webp",
     "title": "Infynno Solutions Exhibition Stall",
@@ -2099,7 +2067,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.29_PM_1.webp"
   },
   {
-    "id": "stall-64",
+    "id": "stall-63",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.29 PM (2).jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.29_PM_2.webp",
     "title": "Saeculum Solutions Exhibition Stand",
@@ -2131,7 +2099,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.29_PM_2.webp"
   },
   {
-    "id": "stall-65",
+    "id": "stall-64",
     "filename": "WhatsApp Image 2024-12-21 at 12.17.29 PM.jpeg",
     "cleanName": "WhatsApp_Image_2024-12-21_at_12.17.29_PM.webp",
     "title": "Bespoke Exhibition Stall Installation",
@@ -2163,7 +2131,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/WhatsApp_Image_2024-12-21_at_12.17.29_PM.webp"
   },
   {
-    "id": "stall-66",
+    "id": "stall-65",
     "filename": "radix_view_2.jpg",
     "cleanName": "radix_view_2.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2197,7 +2165,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_2.webp"
   },
   {
-    "id": "stall-67",
+    "id": "stall-66",
     "filename": "radix_view_3.jpg",
     "cleanName": "radix_view_3.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2231,7 +2199,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_3.webp"
   },
   {
-    "id": "stall-68",
+    "id": "stall-67",
     "filename": "radix_view_4.jpg",
     "cleanName": "radix_view_4.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2265,7 +2233,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_4.webp"
   },
   {
-    "id": "stall-69",
+    "id": "stall-68",
     "filename": "radix_view_5.jpg",
     "cleanName": "radix_view_5.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2299,7 +2267,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_5.webp"
   },
   {
-    "id": "stall-70",
+    "id": "stall-69",
     "filename": "radix_view_6.jpg",
     "cleanName": "radix_view_6.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2333,7 +2301,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_6.webp"
   },
   {
-    "id": "stall-71",
+    "id": "stall-70",
     "filename": "radix_view_7.jpg",
     "cleanName": "radix_view_7.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2367,7 +2335,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_7.webp"
   },
   {
-    "id": "stall-72",
+    "id": "stall-71",
     "filename": "radix_view_8.jpg",
     "cleanName": "radix_view_8.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2401,7 +2369,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_8.webp"
   },
   {
-    "id": "stall-73",
+    "id": "stall-72",
     "filename": "radix_view_9.jpg",
     "cleanName": "radix_view_9.webp",
     "title": "Radix Threat Defense & Cloud Security",
@@ -2435,7 +2403,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/radix_view_9.webp"
   },
   {
-    "id": "stall-74",
+    "id": "stall-73",
     "filename": "techify_view_1.jpg",
     "cleanName": "techify_view_1.webp",
     "title": "Techify Solutions Exhibition Stall",
@@ -2468,7 +2436,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/techify_view_1.webp"
   },
   {
-    "id": "stall-75",
+    "id": "stall-74",
     "filename": "techify_view_2.jpg",
     "cleanName": "techify_view_2.webp",
     "title": "Techify Solutions Exhibition Stall",
@@ -2501,7 +2469,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/techify_view_2.webp"
   },
   {
-    "id": "stall-76",
+    "id": "stall-75",
     "filename": "techify_view_3.jpg",
     "cleanName": "techify_view_3.webp",
     "title": "Techify Solutions Exhibition Stall",
@@ -2534,7 +2502,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/techify_view_3.webp"
   },
   {
-    "id": "stall-77",
+    "id": "stall-76",
     "filename": "techify_view_4.jpg",
     "cleanName": "techify_view_4.webp",
     "title": "Techify Solutions Exhibition Stall",
@@ -2567,7 +2535,7 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "fullUrl": "/images/optimized/techify_view_4.webp"
   },
   {
-    "id": "stall-78",
+    "id": "stall-77",
     "filename": "techify_view_5.jpg",
     "cleanName": "techify_view_5.webp",
     "title": "Techify Solutions Exhibition Stall",
