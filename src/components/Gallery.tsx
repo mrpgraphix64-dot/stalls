@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Maximize2, Layers, MapPin, Loader2, ArrowUp, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Maximize2, Layers, MapPin, ArrowUp, CheckCircle2 } from 'lucide-react';
 import { ProjectImage } from '../data/projectsData';
 
 interface GalleryProps {
@@ -8,7 +8,7 @@ interface GalleryProps {
   onProjectClick: (projectId: string) => void;
 }
 
-const ITEMS_PER_PAGE = 18;
+const ITEMS_PER_PAGE = 16;
 
 // Hook to detect responsive column count without layout shifts
 function useColumnCount() {
@@ -168,8 +168,6 @@ export const Gallery: React.FC<GalleryProps> = ({
   onProjectClick,
 }) => {
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const loaderRef = useRef<HTMLDivElement | null>(null);
   const columnCount = useColumnCount();
 
   // Reset pagination whenever dataset changes
@@ -179,36 +177,15 @@ export const Gallery: React.FC<GalleryProps> = ({
 
   const displayedImages = images.slice(0, visibleCount);
   const hasMore = visibleCount < images.length;
+  const remainingCount = images.length - visibleCount;
 
-  // Append next batch smoothly
-  const loadMore = useCallback(() => {
-    if (isLoadingMore || visibleCount >= images.length) return;
-    setIsLoadingMore(true);
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => Math.min(prev + 16, images.length));
+  };
 
-    // Smooth subtle delay to allow smooth network loading
-    setTimeout(() => {
-      setVisibleCount((prev) => Math.min(prev + 12, images.length));
-      setIsLoadingMore(false);
-    }, 200);
-  }, [isLoadingMore, visibleCount, images.length]);
-
-  // Infinite Scroll / Auto-Loading with 450px lookahead buffer
-  useEffect(() => {
-    const target = loaderRef.current;
-    if (!target || !hasMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !isLoadingMore) {
-          loadMore();
-        }
-      },
-      { rootMargin: '450px' }
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, loadMore]);
+  const handleLoadAll = () => {
+    setVisibleCount(images.length);
+  };
 
   // Distribute items into columns round-robin:
   // EXISTING ITEMS STAY IN THEIR EXACT COLUMN AND NEVER SHIFT!
@@ -263,23 +240,31 @@ export const Gallery: React.FC<GalleryProps> = ({
         ))}
       </div>
 
-      {/* Auto Loading Sentinel & Infinite Scroll Indicator */}
+      {/* Manual Load Controls — Cleanly allows users to scroll past to Services, Process & Enquiry */}
       {hasMore && (
-        <div ref={loaderRef} className="pt-6 pb-12 flex flex-col items-center justify-center">
-          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white border border-gray-200/90 shadow-sm text-xs font-bold uppercase tracking-wider text-brand-dark transition-all">
-            <Loader2 className="w-4 h-4 text-brand-red animate-spin" />
-            <span>Loading more stalls ({images.length - visibleCount} remaining)...</span>
+        <div className="pt-8 pb-4 flex flex-col items-center justify-center text-center">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={handleLoadMore}
+              className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-brand-dark hover:bg-brand-red text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98]"
+            >
+              <span>Load More Stalls</span>
+              <span className="bg-white/20 text-white text-[11px] px-2 py-0.5 rounded-full font-mono">
+                +{Math.min(16, remainingCount)}
+              </span>
+            </button>
+
+            {remainingCount > 16 && (
+              <button
+                onClick={handleLoadAll}
+                className="inline-flex items-center gap-2 px-6 py-3.5 bg-white hover:bg-brand-surface text-brand-dark text-xs font-bold uppercase tracking-wider rounded-xl border border-gray-300 hover:border-brand-dark transition-all duration-200 shadow-sm"
+              >
+                <span>View All ({images.length})</span>
+              </button>
+            )}
           </div>
 
-          {/* Smooth Progress Bar */}
-          <div className="w-56 h-1.5 bg-gray-200/70 rounded-full mt-4 overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-brand-orange to-brand-red transition-all duration-300 rounded-full"
-              style={{ width: `${(visibleCount / images.length) * 100}%` }}
-            />
-          </div>
-
-          <p className="text-xs text-gray-600 font-medium mt-2">
+          <p className="text-xs text-gray-500 font-medium mt-3">
             Showing {displayedImages.length} of {images.length} verified project views
           </p>
         </div>
@@ -287,7 +272,7 @@ export const Gallery: React.FC<GalleryProps> = ({
 
       {/* Completed State When All Projects Loaded */}
       {!hasMore && images.length > ITEMS_PER_PAGE && (
-        <div className="py-12 flex flex-col items-center justify-center text-center border-t border-gray-200/80 mt-8 animate-smooth-in">
+        <div className="py-10 flex flex-col items-center justify-center text-center border-t border-gray-200/80 mt-6 animate-smooth-in">
           <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 shadow-sm">
             <CheckCircle2 className="w-5 h-5" />
           </div>
