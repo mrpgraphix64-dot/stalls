@@ -46,6 +46,7 @@ skip_files = {
     'DSC05907 (1).jpg', # duplicate of DSC05907.jpg
     'WhatsApp Image 2024-12-23 at 9.30.22 PM.jpeg', # duplicate of WhatsApp Image 2024-12-21 at 12.17.29 PM.jpeg
     'DSC09743.jpg', # Excluded by user request (7Span stall)
+    'WhatsApp Image 2024-12-21 at 12.17.19 PM.jpeg', # Excluded by user request (unfinished raw plywood stall)
 }
 
 # Mapping of file patterns or names to verified project groupings and details
