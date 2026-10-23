@@ -8,11 +8,11 @@ interface HeroProps {
 
 export const Hero: React.FC<HeroProps> = ({ onExploreClick, onPlanClick }) => {
   return (
-    <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden bg-[#FAF9F5]">
+    <section className="relative pt-20 pb-12 md:pt-24 md:pb-16 overflow-hidden bg-[#FAF9F5]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Top Header Block */}
-        <div className="max-w-4xl space-y-6 mb-12 lg:mb-16">
+        <div className="max-w-4xl space-y-4 mb-8 lg:mb-10">
           <div className="text-sm font-bold text-brand-dark tracking-wide">
             Exhibition Stall Design & Turnkey Fabrication
           </div>

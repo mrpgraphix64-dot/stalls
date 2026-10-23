@@ -27,10 +27,8 @@ export const Header: React.FC<HeaderProps> = ({ onQuoteClick }) => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
-        isScrolled
-          ? 'bg-[#FAF9F5]/95 backdrop-blur-md shadow-subtle border-b border-brand-subtle/80 py-3.5'
-          : 'bg-transparent py-5'
+      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-200 bg-white border-b border-gray-200/90 shadow-[0_2px_10px_rgba(0,0,0,0.04)] ${
+        isScrolled ? 'py-2.5 md:py-3' : 'py-3.5 md:py-4'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -111,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuoteClick }) => {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#FAF9F5] border-b border-brand-subtle px-6 pt-4 pb-6 space-y-4 shadow-xl">
+        <div className="md:hidden bg-white border-b border-gray-200 px-6 pt-4 pb-6 space-y-4 shadow-xl">
           <div className="flex flex-col space-y-2">
             {navLinks.map((link) => (
               <a
