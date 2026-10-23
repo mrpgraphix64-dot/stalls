@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Maximize2, Layers, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Maximize2, Layers, MapPin, Loader2, ArrowUp, CheckCircle2 } from 'lucide-react';
 import { ProjectImage } from '../data/projectsData';
 
 interface GalleryProps {
@@ -16,13 +16,43 @@ export const Gallery: React.FC<GalleryProps> = ({
   onProjectClick,
 }) => {
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset pagination whenever filtered dataset changes
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [images]);
 
   const displayedImages = images.slice(0, visibleCount);
   const hasMore = visibleCount < images.length;
 
-  const handleLoadMore = () => {
-    setVisibleCount((prev) => Math.min(prev + 12, images.length));
-  };
+  const loadMore = useCallback(() => {
+    if (isLoadingMore || visibleCount >= images.length) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) => Math.min(prev + 12, images.length));
+      setIsLoadingMore(false);
+    }, 280);
+  }, [isLoadingMore, visibleCount, images.length]);
+
+  // Infinite Scroll / Auto-Loading Intersection Observer
+  useEffect(() => {
+    const target = loaderRef.current;
+    if (!target || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoadingMore) {
+          loadMore();
+        }
+      },
+      { rootMargin: '350px' }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, loadMore]);
 
   if (images.length === 0) {
     return (
@@ -36,14 +66,14 @@ export const Gallery: React.FC<GalleryProps> = ({
   }
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       {/* Editorial Masonry Grid */}
       <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
         {displayedImages.map((img, idx) => {
           return (
             <div
               key={img.id}
-              className="break-inside-avoid group relative rounded-2xl overflow-hidden bg-white border border-brand-subtle transition-all duration-300 flex flex-col cursor-pointer"
+              className="break-inside-avoid group relative rounded-2xl overflow-hidden bg-white border border-brand-subtle transition-all duration-300 flex flex-col cursor-pointer shadow-sm hover:shadow-md animate-fade-in"
               onClick={() => onImageClick(img, idx)}
             >
               {/* Image Container with native aspect preservation */}
@@ -141,18 +171,47 @@ export const Gallery: React.FC<GalleryProps> = ({
         })}
       </div>
 
-      {/* Pagination / Progressive Load More */}
+      {/* Auto Loading Sentinel & Infinite Scroll Indicator */}
       {hasMore && (
-        <div className="text-center pt-8 pb-4">
-          <button
-            onClick={handleLoadMore}
-            className="inline-flex items-center gap-2 px-9 py-4 bg-brand-dark hover:bg-brand-red text-white text-sm font-bold uppercase tracking-wider rounded-xl transition-all"
-          >
-            <span>Load More Projects ({images.length - visibleCount} remaining)</span>
-          </button>
-          <p className="text-sm text-gray-700 font-medium mt-3">
-            Showing {visibleCount} of {images.length} verified project views
+        <div ref={loaderRef} className="pt-6 pb-12 flex flex-col items-center justify-center">
+          <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white border border-gray-200 shadow-sm text-xs font-bold uppercase tracking-wider text-brand-dark">
+            <Loader2 className="w-4 h-4 text-brand-red animate-spin" />
+            <span>Loading more stalls automatically ({images.length - visibleCount} remaining)</span>
+          </div>
+
+          {/* Smooth Progress Bar */}
+          <div className="w-56 h-1.5 bg-gray-100 rounded-full mt-4 overflow-hidden shadow-inner">
+            <div 
+              className="h-full bg-gradient-to-r from-brand-orange to-brand-red transition-all duration-300 rounded-full"
+              style={{ width: `${(visibleCount / images.length) * 100}%` }}
+            />
+          </div>
+
+          <p className="text-xs text-gray-700 font-medium mt-2">
+            Showing {displayedImages.length} of {images.length} verified project views
           </p>
+        </div>
+      )}
+
+      {/* Completed State When All Projects Loaded */}
+      {!hasMore && images.length > ITEMS_PER_PAGE && (
+        <div className="py-12 flex flex-col items-center justify-center text-center border-t border-gray-200 mt-6">
+          <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <h4 className="text-sm font-bold text-brand-dark uppercase tracking-wider">
+            All {images.length} Exhibition Stalls Loaded
+          </h4>
+          <p className="text-xs text-gray-700 mt-1 max-w-sm">
+            You have explored the complete portfolio of custom exhibition stands, pavilions, and 3D concepts.
+          </p>
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-gray-700 hover:text-brand-red px-5 py-2.5 rounded-xl bg-white border border-gray-200 hover:border-brand-red transition-all shadow-sm"
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+            <span>Back to Top</span>
+          </button>
         </div>
       )}
     </div>
