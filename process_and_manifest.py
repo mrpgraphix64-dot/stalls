@@ -41,10 +41,11 @@ def apply_watermark(image_rgb, size_ratio=0.22, opacity=0.75):
 with open('images_ocr.json', 'r', encoding='utf-8-sig') as f:
     ocr_data = {item['Name']: item['Text'] for item in json.load(f)}
 
-# Known exact duplicates to skip
+# Known exact duplicates or requested exclusions to skip
 skip_files = {
     'DSC05907 (1).jpg', # duplicate of DSC05907.jpg
     'WhatsApp Image 2024-12-23 at 9.30.22 PM.jpeg', # duplicate of WhatsApp Image 2024-12-21 at 12.17.29 PM.jpeg
+    'DSC09743.jpg', # Excluded by user request (7Span stall)
 }
 
 # Mapping of file patterns or names to verified project groupings and details
