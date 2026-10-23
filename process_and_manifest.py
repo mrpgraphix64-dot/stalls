@@ -248,6 +248,25 @@ def classify_image(filename, ocr_text):
             'isLead': fname == 'dsc06268.jpg'
         }
 
+    # 10.5 Razorpay Global FinTech
+    if 'razorpay' in txt or fname in ['dsc09735.jpg', 'dsc09736.jpg', 'dsc09732.jpg', 'whatsapp image 2024-12-21 at 12.17.13 pm (1).jpeg']:
+        return {
+            'projectId': 'razorpay-tech-expo',
+            'projectTitle': 'Razorpay Global FinTech & International Payments Pavilion',
+            'client': 'Razorpay',
+            'category': 'pavilions',
+            'categoryLabel': 'Brand Pavilions & Activations',
+            'event': 'Gujarat Tech Expo 2024',
+            'location': 'Ahmedabad, Gujarat',
+            'year': '2024',
+            'boothNumber': 'FinTech Pavilion',
+            'specs': 'Bespoke Architectural Pavilion, Digital Payment Demo Bar, High-Illumination Fascia',
+            'description': 'Premier exhibition pavilion executed for Razorpay showcasing their global payments suite and enterprise fintech solutions. Features custom overhead branding, live interactive checkout demo stations, and dedicated B2B discussion lounges.',
+            'caption': 'Razorpay — Global Payments Suite Pavilion',
+            'tags': ['FinTech', 'Razorpay', 'Flagship Pavilion', 'Enterprise Payments'],
+            'isLead': fname == 'dsc09735.jpg'
+        }
+
     # 11. factoHR
     if 'factohr' in txt or fname in ['dsc09711.jpg', 'dsc09712.jpg', 'whatsapp image 2024-12-21 at 12.17.13 pm.jpeg']:
         return {
@@ -517,6 +536,61 @@ for idx, (filename, full_path) in enumerate(input_candidates):
         processed_manifest.append(item_record)
 
 print(f'Successfully processed and optimized {len(processed_manifest)} images!')
+
+# Priority ordering: Razorpay, factoHR, and premier big brand stalls first
+def calculate_stall_priority(item):
+    fn = item['filename'].lower()
+    pid = item['projectId'].lower()
+    c = item['client'].lower()
+    
+    # Priority Tier 1: Razorpay
+    if 'razorpay' in c or 'razorpay' in pid or fn in ['dsc09735.jpg', 'dsc09732.jpg', 'dsc09736.jpg', 'whatsapp image 2024-12-21 at 12.17.13 pm (1).jpeg']:
+        if fn == 'dsc09735.jpg': return (1, 1) # lead shot
+        if fn == 'dsc09732.jpg': return (1, 2)
+        if fn == 'dsc09736.jpg': return (1, 3)
+        return (1, 4)
+        
+    # Priority Tier 2: factoHR
+    if 'factohr' in c or 'factohr' in pid or fn in ['dsc09711.jpg', 'dsc09712.jpg', 'whatsapp image 2024-12-21 at 12.17.13 pm.jpeg']:
+        if fn == 'dsc09711.jpg': return (2, 1) # lead shot
+        if fn == 'dsc09712.jpg': return (2, 2)
+        return (2, 3)
+        
+    # Priority Tier 3: Big Stalls & Premier Brand Pavilions
+    if 'benefex' in pid:
+        return (3, 1) # London pavilion
+    if 'technobrains' in pid and fn == 'dsc09686.jpg':
+        return (3, 2) # Organiser flagship pavilion lead
+    if 'chambury' in pid:
+        return (3, 3) # Birmingham pavilion
+    if 'appaspect' in pid and fn == 'dsc05907.jpg':
+        return (3, 4) # Corner pavilion
+    if 'technostacks' in pid and fn == 'dsc05940.jpg':
+        return (3, 5) # Booth E26
+    if 'syndell' in pid and fn == 'dsc06224.jpg':
+        return (3, 6) # Main corridor stand
+    if 'magnusminds' in pid and fn == 'dsc05911.jpg':
+        return (3, 7) # Wide pavilion
+    if 'radix' in pid and fn == 'radix_view_1.jpg':
+        return (3, 8) # Radix 3D island
+    if 'technobrains' in pid:
+        return (3, 9)
+    if 'appaspect' in pid:
+        return (3, 10)
+    if 'technostacks' in pid:
+        return (3, 11)
+    if 'syndell' in pid:
+        return (3, 12)
+    if 'magnusminds' in pid:
+        return (3, 13)
+        
+    return (10, 0)
+
+processed_manifest.sort(key=calculate_stall_priority)
+
+# Reassign sequential stall IDs
+for idx, item in enumerate(processed_manifest):
+    item['id'] = f'stall-{idx+1}'
 
 # Save JSON manifest to public
 with open(os.path.join('public', 'projectsManifest.json'), 'w', encoding='utf-8') as f:
