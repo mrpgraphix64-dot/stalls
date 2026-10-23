@@ -1,9 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
-import { FilterBar } from './components/FilterBar';
 import { Gallery } from './components/Gallery';
-import { ProjectGroupsView } from './components/ProjectGroupsView';
 import { Lightbox } from './components/Lightbox';
 import { ProjectModal } from './components/ProjectModal';
 import { Services } from './components/Services';
@@ -19,10 +17,6 @@ import {
 } from './data/projectsData';
 
 export default function App() {
-  const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'masonry' | 'projects'>('masonry');
-
   // Lightbox State
   const [lightboxOpen, setLightboxOpen] = useState<boolean>(false);
   const [lightboxIndex, setLightboxIndex] = useState<number>(0);
@@ -57,56 +51,9 @@ export default function App() {
     };
   }, []);
 
-  // Filtered images calculation
-  const filteredImages = useMemo(() => {
-    return ALL_PROJECT_IMAGES.filter((img) => {
-      // Category match
-      const matchesCategory =
-        activeCategory === 'all' || img.category === activeCategory;
-
-      // Search match
-      const query = searchQuery.toLowerCase().trim();
-      if (!query) return matchesCategory;
-
-      const matchesSearch =
-        img.title.toLowerCase().includes(query) ||
-        img.client.toLowerCase().includes(query) ||
-        img.event.toLowerCase().includes(query) ||
-        img.location.toLowerCase().includes(query) ||
-        img.boothNumber.toLowerCase().includes(query) ||
-        img.description.toLowerCase().includes(query) ||
-        img.specs.toLowerCase().includes(query) ||
-        img.tags.some((t) => t.toLowerCase().includes(query));
-
-      return matchesCategory && matchesSearch;
-    });
-  }, [activeCategory, searchQuery]);
-
-  // Filtered projects calculation
-  const filteredProjects = useMemo(() => {
-    return PROJECT_GROUPS.filter((group) => {
-      const matchesCategory =
-        activeCategory === 'all' || group.category === activeCategory;
-
-      const query = searchQuery.toLowerCase().trim();
-      if (!query) return matchesCategory;
-
-      const matchesSearch =
-        group.title.toLowerCase().includes(query) ||
-        group.client.toLowerCase().includes(query) ||
-        group.event.toLowerCase().includes(query) ||
-        group.location.toLowerCase().includes(query) ||
-        group.boothNumber.toLowerCase().includes(query) ||
-        group.description.toLowerCase().includes(query) ||
-        group.specs.toLowerCase().includes(query);
-
-      return matchesCategory && matchesSearch;
-    });
-  }, [activeCategory, searchQuery]);
-
   // Handlers
-  const handleOpenLightbox = (image: ProjectImage, index: number) => {
-    setLightboxImages(filteredImages);
+  const handleOpenLightbox = (_image: ProjectImage, index: number) => {
+    setLightboxImages(ALL_PROJECT_IMAGES);
     setLightboxIndex(index);
     setLightboxOpen(true);
   };
@@ -154,9 +101,9 @@ export default function App() {
         <Hero onExploreClick={scrollToGallery} onPlanClick={scrollToEnquiry} />
 
         {/* Gallery & Portfolio Section */}
-        <section id="gallery" className="pt-6 pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <section id="gallery" className="pt-8 pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="mb-8 space-y-3">
+          <div className="mb-10 space-y-3">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-brand-dark tracking-tight font-display">
               Selected exhibition stalls.
             </h2>
@@ -165,33 +112,13 @@ export default function App() {
             </p>
           </div>
 
-          {/* Sticky Category and Filter Bar */}
-          <FilterBar
-            activeCategory={activeCategory}
-            onSelectCategory={setActiveCategory}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            totalFilteredCount={
-              viewMode === 'masonry' ? filteredImages.length : filteredProjects.length
-            }
-          />
-
-          {/* Active View: Masonry Gallery or Grouped Projects */}
+          {/* Continuous Masonry Gallery */}
           <div id="projects">
-            {viewMode === 'masonry' ? (
-              <Gallery
-                images={filteredImages}
-                onImageClick={handleOpenLightbox}
-                onProjectClick={handleOpenProjectModal}
-              />
-            ) : (
-              <ProjectGroupsView
-                groups={filteredProjects}
-                onSelectProject={handleOpenProjectModal}
-              />
-            )}
+            <Gallery
+              images={ALL_PROJECT_IMAGES}
+              onImageClick={handleOpenLightbox}
+              onProjectClick={handleOpenProjectModal}
+            />
           </div>
         </section>
 
