@@ -10,6 +10,7 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
     fullName: '',
     phone: '',
     email: '',
+    boothNumber: '',
     stallDimensions: '6m x 3m (18 sqm)',
     requirements: prefilledStall ? `Interested in a stall design similar to ${prefilledStall}.` : '',
     botcheck: '', // Honeypot field
@@ -66,12 +67,13 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
         },
         body: JSON.stringify({
           access_key: '64d62118-2ee3-4eb0-a8d9-29bfcfd22f83',
-          subject: `New Exhibition Stall Enquiry from ${formData.fullName} (${formData.phone})`,
+          subject: `New Exhibition Stall Enquiry from ${formData.fullName} (${formData.phone})${formData.boothNumber ? ` - Booth ${formData.boothNumber}` : ''}`,
           from_name: 'Reworkzone Stalls Portfolio',
           to_email: 'info@reworkzone.in',
           name: formData.fullName,
           phone: formData.phone,
           email: formData.email,
+          booth_number: formData.boothNumber || 'Not specified',
           stall_size: formData.stallDimensions,
           message: formData.requirements,
         }),
@@ -96,6 +98,7 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
       `• Name: ${formData.fullName || 'Exhibitor'}\n` +
       `• Phone: ${formData.phone || '-'}\n` +
       `• Email: ${formData.email || '-'}\n` +
+      (formData.boothNumber ? `• Booth No: ${formData.boothNumber}\n` : '') +
       `• Stall Size: ${formData.stallDimensions}\n` +
       `• Requirements: ${formData.requirements || 'Please share your design proposal and quotation.'}`
     );
@@ -208,6 +211,7 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                         fullName: '',
                         phone: '',
                         email: '',
+                        boothNumber: '',
                         stallDimensions: '6m x 3m (18 sqm)',
                         requirements: '',
                         botcheck: '',
@@ -272,7 +276,7 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                   </div>
                 </div>
 
-                {/* Row 2: Work Email & Stall Size */}
+                {/* Row 2: Work Email & Booth Number */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2">
@@ -291,21 +295,36 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
 
                   <div>
                     <label className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2">
-                      Approximate Stall Size
+                      Booth / Stall No.
                     </label>
-                    <select
-                      name="stallDimensions"
-                      value={formData.stallDimensions}
+                    <input
+                      type="text"
+                      name="boothNumber"
+                      value={formData.boothNumber}
                       onChange={handleChange}
+                      placeholder="e.g. Hall 3, Booth E-26 (or Pending)"
                       className="w-full px-4 py-3 bg-white rounded-xl border border-brand-subtle text-sm text-brand-dark focus:border-brand-dark focus:ring-1 focus:ring-brand-dark outline-none transition-all"
-                    >
-                      {dimensionPresets.map((dim) => (
-                        <option key={dim} value={dim}>
-                          {dim}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
+                </div>
+
+                {/* Row 3: Stall Dimensions */}
+                <div>
+                  <label className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2">
+                    Approximate Stall Dimensions
+                  </label>
+                  <select
+                    name="stallDimensions"
+                    value={formData.stallDimensions}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-white rounded-xl border border-brand-subtle text-sm text-brand-dark focus:border-brand-dark focus:ring-1 focus:ring-brand-dark outline-none transition-all"
+                  >
+                    {dimensionPresets.map((dim) => (
+                      <option key={dim} value={dim}>
+                        {dim}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Row 3: Event Name & Requirements */}
