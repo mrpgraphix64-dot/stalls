@@ -1,7 +1,7 @@
 import os
 import json
 import hashlib
-from PIL import Image
+from PIL import Image, ImageOps
 
 thumbs_dir = os.path.join('public', 'images', 'thumbs')
 opt_dir = os.path.join('public', 'images', 'optimized')
@@ -361,7 +361,26 @@ def classify_image(filename, ocr_text):
             'isLead': fname == 'whatsapp image 2024-11-11 at 5.01.55 pm.jpeg'
         }
 
-    # 17. Tech Expo Walkthrough, Experience Zone & Brand Pavilions
+    # 17. Technostacks
+    if 'technostacks' in txt or 'e26' in txt or fname == 'dsc05940.jpg':
+        return {
+            'projectId': 'technostacks-tech-expo',
+            'projectTitle': 'Technostacks Immersive Solutions Stall',
+            'client': 'Technostacks',
+            'category': 'tech-corporate',
+            'categoryLabel': 'Tech & Corporate Expo',
+            'event': 'Gujarat Tech Expo 2024',
+            'location': 'Ahmedabad, Gujarat',
+            'year': '2024',
+            'boothNumber': 'Booth E26',
+            'specs': 'Immersive Tech Display Booth, Digital Touch Demos, Overhead Suspended Banner',
+            'description': 'Modern tech exhibition stand fabricated for Technostacks at Booth E26, featuring sleek purple and white brand aesthetics, interactive display consoles, and high-visibility suspended signage.',
+            'caption': 'Technostacks — Immersive Solutions & Digital Twin Booth E26',
+            'tags': ['Tech Stall', 'Booth E26', 'Digital Twin', 'Interactive Display'],
+            'isLead': True
+        }
+
+    # 18. Tech Expo Walkthrough, Experience Zone & Brand Pavilions
     if 'experience zone' in txt or 'tech expo' in txt or fname.startswith('dsc'):
         return {
             'projectId': 'tech-expo-pavilions',
@@ -430,7 +449,9 @@ for idx, (filename, full_path) in enumerate(input_candidates):
     thumb_path = os.path.join(thumbs_dir, clean_base)
     opt_path = os.path.join(opt_dir, clean_base)
     
-    with Image.open(full_path) as im:
+    with Image.open(full_path) as raw_im:
+        # Respect camera EXIF orientation tag (auto-rotates portrait shots upright)
+        im = ImageOps.exif_transpose(raw_im)
         orig_w, orig_h = im.size
         im_rgb = im.convert('RGB')
         
