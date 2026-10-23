@@ -187,16 +187,35 @@ export const Gallery: React.FC<GalleryProps> = ({
     setVisibleCount(images.length);
   };
 
-  // Distribute items into columns round-robin:
-  // EXISTING ITEMS STAY IN THEIR EXACT COLUMN AND NEVER SHIFT!
+  // Distribute items into columns using shortest-column height balancing:
+  // 1. Keeps all columns level and balanced with ZERO awkward gaps or empty holes at the bottom!
+  // 2. Deterministic: earlier items 0..N NEVER change columns or shift when new items are loaded!
   const columnsData = useMemo(() => {
     const cols: { item: ProjectImage; originalIndex: number }[][] = Array.from(
       { length: columnCount },
       () => []
     );
+    const colHeights = new Array(columnCount).fill(0);
+
     displayedImages.forEach((img, idx) => {
-      cols[idx % columnCount].push({ item: img, originalIndex: idx });
+      // Relative height = 1 / aspectRatio + metadata footer height
+      const aspect = img.aspectRatio || 1.33;
+      const relativeHeight = (1 / aspect) + 0.22;
+
+      // Find the currently shortest column
+      let shortestCol = 0;
+      let minHeight = colHeights[0];
+      for (let c = 1; c < columnCount; c++) {
+        if (colHeights[c] < minHeight) {
+          minHeight = colHeights[c];
+          shortestCol = c;
+        }
+      }
+
+      cols[shortestCol].push({ item: img, originalIndex: idx });
+      colHeights[shortestCol] += relativeHeight;
     });
+
     return cols;
   }, [displayedImages, columnCount]);
 
