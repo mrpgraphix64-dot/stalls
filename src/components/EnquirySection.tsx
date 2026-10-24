@@ -22,6 +22,12 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
     email?: string;
   }>({});
 
+  const [touchedFields, setTouchedFields] = useState<{
+    fullName?: boolean;
+    phone?: boolean;
+    email?: boolean;
+  }>({});
+
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -46,19 +52,16 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
       if (!raw) return 'Please enter your mobile or WhatsApp number.';
       const digitsOnly = raw.replace(/\D/g, '');
       if (digitsOnly.length < 10) {
-        return 'Mobile number must be at least 10 digits.';
+        return `Please enter at least 10 or 11 digits (${digitsOnly.length} entered).`;
       }
-      if (!raw.startsWith('+') && digitsOnly.length !== 10) {
-        return 'Local mobile number must be exactly 10 digits.';
+      if (!raw.startsWith('+') && digitsOnly.length > 12) {
+        return 'Phone number cannot exceed 11–12 digits.';
       }
       if (digitsOnly.length > 13) {
         return 'Phone number is too long (maximum 13 digits).';
       }
       if (/^(\d)\1{9,}$/.test(digitsOnly)) {
         return 'Please enter a genuine mobile number.';
-      }
-      if (digitsOnly.length === 10 && !/^[6-9]/.test(digitsOnly)) {
-        return 'Indian mobile numbers must start with 6, 7, 8, or 9.';
       }
       return undefined;
     }
@@ -75,15 +78,15 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
-    // For phone field, restrict input characters and enforce 10-digit maximum
+    // For phone field, restrict input characters and allow 10, 11, or 12 digits (for domestic and foreign numbers)
     let cleanedValue = value;
     if (name === 'phone') {
       cleanedValue = value.replace(/[^0-9+\s\-()]/g, '');
       const digitsOnly = cleanedValue.replace(/\D/g, '');
-      // If doesn't start with +, strictly cap at 10 digits
+      // If doesn't start with +, cap at 12 digits (permitting 10, 11, or 12 digits)
       if (!cleanedValue.trim().startsWith('+')) {
-        if (digitsOnly.length > 10) {
-          cleanedValue = digitsOnly.slice(0, 10);
+        if (digitsOnly.length > 12) {
+          cleanedValue = digitsOnly.slice(0, 12);
         }
       } else {
         if (digitsOnly.length > 13) {
@@ -97,15 +100,31 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
       [name]: cleanedValue,
     }));
 
-    // If an error is already displayed on this field, update or clear it dynamically
-    if (fieldErrors[name as keyof typeof fieldErrors]) {
-      const err = validateField(name, cleanedValue);
-      setFieldErrors((prev) => ({ ...prev, [name]: err }));
+    // LIVE VALIDATION: Run immediately on change as user types
+    if (name === 'phone') {
+      const rawDigits = cleanedValue.replace(/\D/g, '');
+      if (rawDigits.length >= 10 && rawDigits.length <= 12 && !/^(\d)\1{9,}$/.test(rawDigits)) {
+        // Valid 10-12 digits: clear error immediately
+        setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+      } else if (fieldErrors.phone || (touchedFields.phone && rawDigits.length > 0)) {
+        const err = validateField(name, cleanedValue);
+        setFieldErrors((prev) => ({ ...prev, phone: err }));
+      }
+    } else if (name === 'fullName') {
+      if (cleanedValue.trim().length >= 2) {
+        setFieldErrors((prev) => ({ ...prev, fullName: undefined }));
+      }
+    } else if (name === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      if (emailRegex.test(cleanedValue.trim())) {
+        setFieldErrors((prev) => ({ ...prev, email: undefined }));
+      }
     }
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    setTouchedFields((prev) => ({ ...prev, [name]: true }));
     const err = validateField(name, value);
     if (err) {
       setFieldErrors((prev) => ({ ...prev, [name]: err }));
@@ -170,6 +189,13 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
       setStatus('success');
     }
   };
+
+  const phoneDigits = formData.phone.replace(/\D/g, '');
+  const isPhoneValid =
+    (phoneDigits.length >= 10 && phoneDigits.length <= 12 && !/^(\d)\1{9,}$/.test(phoneDigits)) ||
+    (formData.phone.trim().startsWith('+') && phoneDigits.length >= 10 && phoneDigits.length <= 13);
+  const isNameValid = formData.fullName.trim().length >= 2;
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(formData.email.trim());
 
   const handleWhatsAppDirect = () => {
     const text = encodeURIComponent(
@@ -333,19 +359,28 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                     <label className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2">
                       Your Name <span className="text-brand-red">*</span>
                     </label>
-                    <input
-                      type="text"
-                      name="fullName"
-                      value={formData.fullName}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      placeholder="e.g. Rahul Sharma"
-                      className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
-                        fieldErrors.fullName
-                          ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
-                          : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
-                      }`}
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="fullName"
+                        value={formData.fullName}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="e.g. Rahul Sharma"
+                        className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all pr-10 ${
+                          fieldErrors.fullName
+                            ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
+                            : isNameValid && touchedFields.fullName
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/10'
+                            : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
+                        }`}
+                      />
+                      {isNameValid && touchedFields.fullName && (
+                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-600 pointer-events-none">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
                     {fieldErrors.fullName && (
                       <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -355,29 +390,60 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2">
-                      Mobile / WhatsApp Number <span className="text-brand-red">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      maxLength={14}
-                      value={formData.phone}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      placeholder="e.g. 98765 43210 (10 digits)"
-                      className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
-                        fieldErrors.phone
-                          ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
-                          : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
-                      }`}
-                    />
-                    {fieldErrors.phone && (
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-brand-dark uppercase tracking-wider">
+                        Mobile / WhatsApp Number <span className="text-brand-red">*</span>
+                      </label>
+                      {formData.phone && (
+                        <span className="text-[10px] text-gray-500 font-mono font-medium">
+                          {phoneDigits.length} / 10–11 digits
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        name="phone"
+                        maxLength={15}
+                        value={formData.phone}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="e.g. 98765 43210 (10 or 11 digits)"
+                        className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all pr-10 ${
+                          fieldErrors.phone
+                            ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
+                            : isPhoneValid
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/10'
+                            : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
+                        }`}
+                      />
+                      {isPhoneValid && (
+                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-600 pointer-events-none">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
+                    {fieldErrors.phone ? (
                       <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                         <span>{fieldErrors.phone}</span>
                       </p>
-                    )}
+                    ) : isPhoneValid ? (
+                      <p className="text-xs text-emerald-600 font-medium mt-1.5 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>
+                          {phoneDigits.length === 10
+                            ? 'Valid 10-digit number'
+                            : phoneDigits.length === 11
+                            ? 'Valid 11-digit number'
+                            : 'Valid international number'}
+                        </span>
+                      </p>
+                    ) : formData.phone && phoneDigits.length < 10 ? (
+                      <p className="text-xs text-amber-600 font-medium mt-1.5 flex items-center gap-1">
+                        <span>Enter 10 or 11 digits ({phoneDigits.length} entered so far)</span>
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -387,19 +453,28 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                     <label className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2">
                       Work Email <span className="text-brand-red">*</span>
                     </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      placeholder="e.g. rahul@company.com"
-                      className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
-                        fieldErrors.email
-                          ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
-                          : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
-                      }`}
-                    />
+                    <div className="relative">
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="e.g. rahul@company.com"
+                        className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all pr-10 ${
+                          fieldErrors.email
+                            ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
+                            : isEmailValid && touchedFields.email
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/10'
+                            : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
+                        }`}
+                      />
+                      {isEmailValid && touchedFields.email && (
+                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-600 pointer-events-none">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
                     {fieldErrors.email && (
                       <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
