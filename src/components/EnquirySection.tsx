@@ -59,32 +59,29 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
     setErrorMessage('');
 
     try {
-      const response = await fetch('https://api.web3forms.com/submit', {
+      const response = await fetch('/send-enquiry.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          access_key: '64d62118-2ee3-4eb0-a8d9-29bfcfd22f83',
-          subject: `New Exhibition Stall Enquiry from ${formData.fullName} (${formData.phone})${formData.boothNumber ? ` - Booth ${formData.boothNumber}` : ''}`,
-          from_name: 'Reworkzone Stalls Portfolio',
-          to_email: 'info@reworkzone.in',
-          name: formData.fullName,
+          fullName: formData.fullName,
           phone: formData.phone,
           email: formData.email,
-          booth_number: formData.boothNumber || 'Not specified',
-          stall_size: formData.stallDimensions,
-          message: formData.requirements,
+          boothNumber: formData.boothNumber,
+          stallDimensions: formData.stallDimensions,
+          requirements: formData.requirements,
+          botcheck: formData.botcheck,
         }),
       });
 
       const result = await response.json();
-      if (response.ok && (result.success || result.status === 200)) {
+      if (response.ok && result.success) {
         setStatus('success');
       } else {
-        console.warn('Submission fallback:', result);
-        setStatus('success');
+        setStatus('error');
+        setErrorMessage(result.error || 'Failed to submit enquiry. Please contact us on WhatsApp directly.');
       }
     } catch (err: any) {
       console.warn('Network submission fallback:', err);

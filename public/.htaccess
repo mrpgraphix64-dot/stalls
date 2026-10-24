@@ -23,3 +23,8 @@
     Header set Cache-Control "no-cache, no-store, must-revalidate"
   </FilesMatch>
 </IfModule>
+
+# Block direct web access to sensitive inquiry data
+<FilesMatch "^(enquiries.*|.*\.csv|.*\.log)$">
+  Require all denied
+</FilesMatch>
