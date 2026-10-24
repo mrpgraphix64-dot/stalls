@@ -48,6 +48,7 @@ skip_files = {
     'DSC09743.jpg', # Excluded by user request (7Span stall)
     'WhatsApp Image 2024-12-21 at 12.17.19 PM.jpeg', # Excluded by user request (unfinished raw plywood stall)
     'WhatsApp Image 2024-12-21 at 12.17.14 PM.jpeg', # Excluded by user request (auditorium/conference hall seating)
+    'DSC06278.jpg', # Excluded by user request (outdoor crowd/parking lot photo)
 }
 
 # Mapping of file patterns or names to verified project groupings and details
