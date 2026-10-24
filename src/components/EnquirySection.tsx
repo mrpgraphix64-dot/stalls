@@ -127,16 +127,21 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
               </div>
 
               <div className="space-y-4">
-                <a
-                  href="tel:+918401060482"
-                  className="flex items-center gap-3 text-base text-brand-dark hover:text-brand-red font-semibold transition-colors"
-                >
-                  <Phone className="w-5 h-5 text-brand-red shrink-0" />
+                <div className="flex items-start gap-3 text-base text-brand-dark font-semibold">
+                  <Phone className="w-5 h-5 text-brand-red shrink-0 mt-0.5" />
                   <div>
-                    <div>+91 84010 60482</div>
-                    <div className="text-xs text-gray-600 font-normal">Call or WhatsApp (Direct)</div>
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <a href="tel:+918401060482" className="hover:text-brand-red transition-colors">
+                        +91 84010 60482
+                      </a>
+                      <span className="text-gray-300">/</span>
+                      <a href="tel:+918980004518" className="hover:text-brand-red transition-colors">
+                        +91 89800 04518
+                      </a>
+                    </div>
+                    <div className="text-xs text-gray-600 font-normal mt-0.5">Call or WhatsApp (Direct)</div>
                   </div>
-                </a>
+                </div>
 
                 <a
                   href="mailto:info@reworkzone.in"

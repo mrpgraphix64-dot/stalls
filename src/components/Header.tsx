@@ -71,14 +71,24 @@ export const Header: React.FC<HeaderProps> = ({ onQuoteClick }) => {
 
           {/* Action CTAs */}
           <div className="hidden md:flex items-center gap-3">
-            <a
-              href="tel:+918401060482"
-              className="text-xs font-semibold text-gray-600 hover:text-brand-dark flex items-center gap-1.5 px-2.5 py-1.5 transition-colors"
-              title="Call Reworkzone"
-            >
-              <Phone className="w-3.5 h-3.5 text-brand-red" />
-              <span>+91 84010 60482</span>
-            </a>
+            <div className="text-xs font-semibold text-gray-600 flex items-center gap-1.5 px-2 py-1.5">
+              <Phone className="w-3.5 h-3.5 text-brand-red shrink-0" />
+              <a
+                href="tel:+918401060482"
+                className="hover:text-brand-dark transition-colors"
+                title="Call +91 84010 60482"
+              >
+                +91 84010 60482
+              </a>
+              <span className="text-gray-300">/</span>
+              <a
+                href="tel:+918980004518"
+                className="hover:text-brand-dark transition-colors"
+                title="Call +91 89800 04518"
+              >
+                +91 89800 04518
+              </a>
+            </div>
             <button
               onClick={onQuoteClick}
               className="inline-flex items-center gap-1.5 bg-brand-dark hover:bg-brand-red text-white text-xs lg:text-sm font-semibold tracking-wide uppercase px-5 py-2.5 rounded-full transition-all duration-200 shadow-sm hover:shadow group"
@@ -127,14 +137,21 @@ export const Header: React.FC<HeaderProps> = ({ onQuoteClick }) => {
           <div className="pt-2 flex flex-col gap-2.5 text-sm text-gray-600">
             <a
               href="tel:+918401060482"
-              className="flex items-center gap-2 py-1.5 text-gray-800 font-medium"
+              className="flex items-center gap-2 py-1 text-gray-800 font-medium"
             >
               <Phone className="w-4 h-4 text-brand-red" />
               <span>+91 84010 60482</span>
             </a>
             <a
+              href="tel:+918980004518"
+              className="flex items-center gap-2 py-1 text-gray-800 font-medium"
+            >
+              <Phone className="w-4 h-4 text-brand-red" />
+              <span>+91 89800 04518</span>
+            </a>
+            <a
               href="mailto:info@reworkzone.in"
-              className="flex items-center gap-2 py-1.5 text-gray-800 font-medium"
+              className="flex items-center gap-2 py-1 text-gray-800 font-medium"
             >
               <Mail className="w-4 h-4 text-brand-red" />
               <span>info@reworkzone.in</span>
