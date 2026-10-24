@@ -475,6 +475,9 @@ for idx, (filename, full_path) in enumerate(input_candidates):
     with Image.open(full_path) as raw_im:
         # Respect camera EXIF orientation tag (auto-rotates portrait shots upright)
         im = ImageOps.exif_transpose(raw_im)
+        # Fix camera misorientation for Syndell team photo so team stands upright
+        if filename == 'DSC06215.jpg':
+            im = im.rotate(-90, expand=True)
         orig_w, orig_h = im.size
         im_rgb = im.convert('RGB')
         
