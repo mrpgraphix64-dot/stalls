@@ -1,6 +1,8 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+  # Block direct web access to private data directory
+  RewriteRule ^data/ - [F,L]
   RewriteRule ^admin/?$ admin.php [L]
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f

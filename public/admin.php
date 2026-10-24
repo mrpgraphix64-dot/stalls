@@ -52,28 +52,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pin'])) {
 
 $isLoggedIn = !empty($_SESSION['admin_logged_in']);
 
+require_once __DIR__ . '/smtp-mailer.php';
+
+// Handle SMTP Settings Save & Test
+$smtpNotice = '';
+if ($isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_smtp') {
+    $host = trim($_POST['smtp_host'] ?? 'smtp.hostinger.com');
+    $port = intval($_POST['smtp_port'] ?? 465);
+    $user = trim($_POST['smtp_user'] ?? 'info@reworkzone.in');
+    $pass = $_POST['smtp_pass'] ?? '';
+    $enc  = ($port == 465) ? 'ssl' : 'tls';
+
+    if (empty($pass)) {
+        $existing = reworkzone_get_smtp_config();
+        if ($existing && !empty($existing['password'])) {
+            $pass = $existing['password'];
+        }
+    }
+
+    if (empty($host) || empty($user) || empty($pass)) {
+        $smtpNotice = 'ERROR: Please provide SMTP host, email address, and email password.';
+    } else {
+        $testSubject = 'Hostinger SMTP Verified - ' . date('H:i:s');
+        $testBody = "<h3>Hostinger SMTP Verified Successfully!</h3><p>Your exhibition stall portfolio (stalls.reworkzone.in) is now securely connected to Hostinger SMTP. All future stall inquiries will arrive directly in your inbox.</p>";
+        $testResult = reworkzone_send_via_socket($host, $port, $user, $pass, $user, $testSubject, $testBody, $user, 'Reworkzone Admin', $enc);
+        
+        if ($testResult['success']) {
+            reworkzone_save_smtp_config($host, $port, $user, $pass, $enc);
+            $smtpNotice = 'SUCCESS: Hostinger SMTP connected and verified! A test email has been delivered to ' . htmlspecialchars($user) . '.';
+        } else {
+            $smtpNotice = 'ERROR: Connection failed: ' . htmlspecialchars($testResult['error']);
+        }
+    }
+}
+
 // Test Email Action for Diagnosing Hostinger Deliverability
 $testMailNotice = '';
 if ($isLoggedIn && isset($_GET['action']) && $_GET['action'] === 'test_mail') {
     $to = 'info@reworkzone.in';
     $subject = 'Hostinger Mail Delivery Test - ' . date('H:i:s');
-    $body = "Hello Team Reworkzone,\n\nThis is a test notification from stalls.reworkzone.in/admin sent at " . date('Y-m-d H:i:s') . ".\n\nHostinger PHP mail is working properly and delivering directly to info@reworkzone.in.";
-    $headers = [];
-    $headers[] = 'MIME-Version: 1.0';
-    $headers[] = 'Content-type: text/plain; charset=UTF-8';
-    $headers[] = 'From: Reworkzone Stalls <info@reworkzone.in>';
-    $headers[] = 'Reply-To: info@reworkzone.in';
-    $headers[] = 'Return-Path: <info@reworkzone.in>';
-    $headers[] = 'X-Mailer: PHP/' . phpversion();
-
-    $sent = @mail($to, $subject, $body, implode("\r\n", $headers), "-finfo@reworkzone.in");
-    if (!$sent) {
-        $sent = @mail($to, $subject, $body, implode("\r\n", $headers));
-    }
-    if ($sent) {
-        $testMailNotice = 'SUCCESS: Test email successfully sent to info@reworkzone.in! Please check your Hostinger inbox (and Spam folder).';
+    $body = "<h3>Hostinger Mail Delivery Test</h3><p>Sent at " . date('Y-m-d H:i:s') . " from stalls.reworkzone.in/admin.</p>";
+    
+    $dispatch = reworkzone_dispatch_email($to, $subject, $body, $to, 'Reworkzone Admin');
+    if ($dispatch['success']) {
+        $testMailNotice = 'SUCCESS: Test email successfully sent to ' . $to . ' via ' . $dispatch['method'] . '! Please check your inbox.';
     } else {
-        $testMailNotice = 'NOTE: Hostinger mail() returned false. Please verify that info@reworkzone.in exists in Hostinger Mail and PHP Sendmail is enabled in hPanel.';
+        $errorMsg = $dispatch['error'] ?? 'Unknown error';
+        $testMailNotice = 'NOTE: ' . $errorMsg . '. Please enter your email password in Hostinger Email / SMTP Settings below.';
     }
 }
 
@@ -341,6 +366,104 @@ if ($isLoggedIn && file_exists($csvPath)) {
             </div>
           </div>
         <?php endif; ?>
+
+        <!-- SMTP Email Delivery Configuration Card -->
+        <?php $currentSmtp = reworkzone_get_smtp_config(); ?>
+        <div class="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 pb-4 border-b border-gray-100">
+            <div>
+              <h2 class="text-lg font-bold text-gray-900">Hostinger Email / SMTP Delivery</h2>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Hostinger shared hosting restricts unauthenticated PHP mail(). Connect your Hostinger Webmail (<span class="font-semibold text-gray-800">info@reworkzone.in</span>) via SMTP SSL to guarantee 100% inbox delivery.
+              </p>
+            </div>
+            <div>
+              <?php if ($currentSmtp): ?>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  SMTP Connected (<?= htmlspecialchars($currentSmtp['username']) ?>)
+                </span>
+              <?php else: ?>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-200">
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                  SMTP Not Configured
+                </span>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <?php if (!empty($smtpNotice)): ?>
+            <div class="mb-5 p-3.5 rounded-xl <?= strpos($smtpNotice, 'SUCCESS') !== false ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800' ?> border text-xs font-semibold">
+              <?= htmlspecialchars($smtpNotice) ?>
+            </div>
+          <?php endif; ?>
+
+          <form method="POST" action="/admin" class="space-y-4">
+            <input type="hidden" name="action" value="save_smtp">
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-left">
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">SMTP Host</label>
+                <input
+                  type="text"
+                  name="smtp_host"
+                  required
+                  value="<?= htmlspecialchars($currentSmtp['host'] ?? 'smtp.hostinger.com') ?>"
+                  class="w-full text-xs font-mono py-2.5 px-3 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:border-red-600 outline-none"
+                >
+                <span class="text-[10px] text-gray-400">Default: smtp.hostinger.com</span>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">SMTP Port</label>
+                <input
+                  type="number"
+                  name="smtp_port"
+                  required
+                  value="<?= htmlspecialchars($currentSmtp['port'] ?? 465) ?>"
+                  class="w-full text-xs font-mono py-2.5 px-3 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:border-red-600 outline-none"
+                >
+                <span class="text-[10px] text-gray-400">465 (SSL) or 587 (TLS)</span>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Email / Username</label>
+                <input
+                  type="email"
+                  name="smtp_user"
+                  required
+                  value="<?= htmlspecialchars($currentSmtp['username'] ?? 'info@reworkzone.in') ?>"
+                  class="w-full text-xs font-mono py-2.5 px-3 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:border-red-600 outline-none"
+                >
+                <span class="text-[10px] text-gray-400">Your Hostinger Webmail</span>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Email Password</label>
+                <input
+                  type="password"
+                  name="smtp_pass"
+                  <?= $currentSmtp ? '' : 'required' ?>
+                  placeholder="<?= $currentSmtp ? '(Unchanged ••••••••)' : 'Enter password' ?>"
+                  class="w-full text-xs font-mono py-2.5 px-3 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:border-red-600 outline-none"
+                >
+                <span class="text-[10px] text-gray-400">Stored safely on server</span>
+              </div>
+            </div>
+
+            <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <p class="text-[11px] text-gray-500">
+                Credentials are saved to a protected internal file (<code class="bg-gray-100 px-1 py-0.5 rounded">/data/smtp_config.json</code>) blocked by .htaccess from web access.
+              </p>
+              <button
+                type="submit"
+                class="w-full sm:w-auto px-5 py-2.5 bg-gray-900 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shrink-0"
+              >
+                Save &amp; Test Connection
+              </button>
+            </div>
+          </form>
+        </div>
 
       </div>
     <?php endif; ?>

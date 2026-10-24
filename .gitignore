@@ -19,6 +19,9 @@ extracted_pdf
 *.jpeg
 
 # Editor directories and files
+data/
+*.log
+
 .vscode/*
 !.vscode/extensions.json
 .idea
