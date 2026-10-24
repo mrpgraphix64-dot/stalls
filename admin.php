@@ -52,6 +52,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pin'])) {
 
 $isLoggedIn = !empty($_SESSION['admin_logged_in']);
 
+// Test Email Action for Diagnosing Hostinger Deliverability
+$testMailNotice = '';
+if ($isLoggedIn && isset($_GET['action']) && $_GET['action'] === 'test_mail') {
+    $to = 'info@reworkzone.in';
+    $subject = 'Hostinger Mail Delivery Test - ' . date('H:i:s');
+    $body = "Hello Team Reworkzone,\n\nThis is a test notification from stalls.reworkzone.in/admin sent at " . date('Y-m-d H:i:s') . ".\n\nHostinger PHP mail is working properly and delivering directly to info@reworkzone.in.";
+    $headers = [];
+    $headers[] = 'MIME-Version: 1.0';
+    $headers[] = 'Content-type: text/plain; charset=UTF-8';
+    $headers[] = 'From: Reworkzone Stalls <info@reworkzone.in>';
+    $headers[] = 'Reply-To: info@reworkzone.in';
+    $headers[] = 'Return-Path: <info@reworkzone.in>';
+    $headers[] = 'X-Mailer: PHP/' . phpversion();
+
+    $sent = @mail($to, $subject, $body, implode("\r\n", $headers), "-finfo@reworkzone.in");
+    if (!$sent) {
+        $sent = @mail($to, $subject, $body, implode("\r\n", $headers));
+    }
+    if ($sent) {
+        $testMailNotice = 'SUCCESS: Test email successfully sent to info@reworkzone.in! Please check your Hostinger inbox (and Spam folder).';
+    } else {
+        $testMailNotice = 'NOTE: Hostinger mail() returned false. Please verify that info@reworkzone.in exists in Hostinger Mail and PHP Sendmail is enabled in hPanel.';
+    }
+}
+
 // If logged in, read CSV records
 $leads = [];
 if ($isLoggedIn && file_exists($csvPath)) {
@@ -170,6 +195,13 @@ if ($isLoggedIn && file_exists($csvPath)) {
       <!-- DASHBOARD VIEW -->
       <div class="space-y-6">
 
+        <?php if (!empty($testMailNotice)): ?>
+          <div class="p-4 rounded-xl <?= strpos($testMailNotice, 'SUCCESS') !== false ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800' ?> border text-xs font-semibold flex items-center justify-between shadow-sm">
+            <span><?= htmlspecialchars($testMailNotice) ?></span>
+            <a href="/admin" class="underline ml-4 opacity-75 hover:opacity-100">Dismiss</a>
+          </div>
+        <?php endif; ?>
+
         <!-- Top Control Bar -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
           <div>
@@ -177,11 +209,22 @@ if ($isLoggedIn && file_exists($csvPath)) {
             <p class="text-xs text-gray-500 mt-0.5">Real-time leads captured from stalls.reworkzone.in</p>
           </div>
 
-          <div class="flex items-center gap-3">
+          <div class="flex flex-wrap items-center gap-3">
             <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200">
               <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <?= count($leads) ?> Total Leads
             </span>
+
+            <a
+              href="/admin?action=test_mail"
+              class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-colors border border-gray-200"
+              title="Send a quick test email to info@reworkzone.in to verify deliverability"
+            >
+              <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+              <span>Test Mail</span>
+            </a>
 
             <?php if (count($leads) > 0): ?>
               <a

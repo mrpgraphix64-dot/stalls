@@ -192,14 +192,26 @@ $htmlBody = <<<HTML
 HTML;
 
 // Email Headers
+// Hostinger Mail policy: From and envelope sender (-f) MUST match an active domain mailbox (info@reworkzone.in)
 $headers = [];
 $headers[] = 'MIME-Version: 1.0';
 $headers[] = 'Content-type: text/html; charset=UTF-8';
-$headers[] = 'From: Reworkzone Stalls <noreply@reworkzone.in>';
+$headers[] = 'From: Reworkzone Stalls <info@reworkzone.in>';
 $headers[] = "Reply-To: {$fullName} <{$email}>";
+$headers[] = 'Return-Path: <info@reworkzone.in>';
 $headers[] = 'X-Mailer: PHP/' . phpversion();
 
-$mailSent = @mail($to, $subject, $htmlBody, implode("\r\n", $headers));
+$additionalParams = '-finfo@reworkzone.in';
+$mailSent = @mail($to, $subject, $htmlBody, implode("\r\n", $headers), $additionalParams);
+if (!$mailSent) {
+    // Fallback attempt without envelope flag if restricted
+    $mailSent = @mail($to, $subject, $htmlBody, implode("\r\n", $headers));
+}
+
+// Log status to data/mail_status.log for quick troubleshooting
+$logFile = $dataDir . '/mail_status.log';
+$logEntry = date('Y-m-d H:i:s') . " | To: {$to} | From: {$fullName} ({$phone}) | MailSent: " . ($mailSent ? 'YES' : 'NO') . "\n";
+@file_put_contents($logFile, $logEntry, FILE_APPEND);
 
 echo json_encode([
     'success' => true,
