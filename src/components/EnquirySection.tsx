@@ -16,6 +16,12 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
     botcheck: '', // Honeypot field
   });
 
+  const [fieldErrors, setFieldErrors] = useState<{
+    fullName?: string;
+    phone?: string;
+    email?: string;
+  }>({});
+
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -29,10 +35,23 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
   ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    // For phone field, restrict input to valid phone characters
+    let cleanedValue = value;
+    if (name === 'phone') {
+      cleanedValue = value.replace(/[^0-9+\s\-()]/g, '');
+    }
+
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: cleanedValue,
     }));
+
+    // Clear inline error on change
+    if (fieldErrors[name as keyof typeof fieldErrors]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,19 +61,46 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
       return;
     }
 
-    if (!formData.fullName.trim() || !formData.phone.trim() || !formData.email.trim()) {
+    const errors: { fullName?: string; phone?: string; email?: string } = {};
+
+    // 1. Name validation
+    const trimmedName = formData.fullName.trim();
+    if (!trimmedName) {
+      errors.fullName = 'Please enter your name.';
+    } else if (trimmedName.length < 2) {
+      errors.fullName = 'Name must be at least 2 characters.';
+    }
+
+    // 2. Phone validation
+    const rawPhone = formData.phone.trim();
+    const digitsOnly = rawPhone.replace(/\D/g, '');
+    if (!rawPhone) {
+      errors.phone = 'Please enter your mobile or WhatsApp number.';
+    } else if (digitsOnly.length < 10) {
+      errors.phone = 'Please enter a valid 10-digit mobile number.';
+    } else if (digitsOnly.length > 13) {
+      errors.phone = 'Phone number is too long (maximum 13 digits).';
+    } else if (/^(\d)\1{9,}$/.test(digitsOnly)) {
+      errors.phone = 'Please enter a genuine contact number.';
+    }
+
+    // 3. Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const trimmedEmail = formData.email.trim();
+    if (!trimmedEmail) {
+      errors.email = 'Please enter your work email.';
+    } else if (!emailRegex.test(trimmedEmail)) {
+      errors.email = 'Please enter a valid work email (e.g. name@company.com).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       setStatus('error');
-      setErrorMessage('Please fill in your name, phone number, and work email.');
+      setErrorMessage(Object.values(errors)[0] || 'Please correct the highlighted fields.');
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email.trim())) {
-      setStatus('error');
-      setErrorMessage('Please enter a valid work email address.');
-      return;
-    }
-
+    setFieldErrors({});
     setStatus('submitting');
     setErrorMessage('');
 
@@ -258,8 +304,18 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                       value={formData.fullName}
                       onChange={handleChange}
                       placeholder="e.g. Rahul Sharma"
-                      className="w-full px-4 py-3 bg-white rounded-xl border border-brand-subtle text-sm text-brand-dark focus:border-brand-dark focus:ring-1 focus:ring-brand-dark outline-none transition-all"
+                      className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
+                        fieldErrors.fullName
+                          ? 'border-red-500 ring-1 ring-red-500 bg-red-50/20'
+                          : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
+                      }`}
                     />
+                    {fieldErrors.fullName && (
+                      <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{fieldErrors.fullName}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -270,11 +326,22 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                       type="tel"
                       name="phone"
                       required
+                      maxLength={15}
                       value={formData.phone}
                       onChange={handleChange}
-                      placeholder="e.g. +91 98765 43210"
-                      className="w-full px-4 py-3 bg-white rounded-xl border border-brand-subtle text-sm text-brand-dark focus:border-brand-dark focus:ring-1 focus:ring-brand-dark outline-none transition-all"
+                      placeholder="e.g. 98765 43210 or +91 98765 43210"
+                      className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
+                        fieldErrors.phone
+                          ? 'border-red-500 ring-1 ring-red-500 bg-red-50/20'
+                          : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
+                      }`}
                     />
+                    {fieldErrors.phone && (
+                      <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{fieldErrors.phone}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -291,8 +358,18 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                       value={formData.email}
                       onChange={handleChange}
                       placeholder="e.g. rahul@company.com"
-                      className="w-full px-4 py-3 bg-white rounded-xl border border-brand-subtle text-sm text-brand-dark focus:border-brand-dark focus:ring-1 focus:ring-brand-dark outline-none transition-all"
+                      className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
+                        fieldErrors.email
+                          ? 'border-red-500 ring-1 ring-red-500 bg-red-50/20'
+                          : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
+                      }`}
                     />
+                    {fieldErrors.email && (
+                      <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{fieldErrors.email}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>

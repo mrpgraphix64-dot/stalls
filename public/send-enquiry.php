@@ -49,6 +49,19 @@ if (empty($fullName) || empty($phone) || empty($email)) {
     exit;
 }
 
+$digitsOnly = preg_replace('/\D/', '', $phone);
+if (strlen($digitsOnly) < 10 || strlen($digitsOnly) > 14) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Please enter a valid 10-digit mobile number.']);
+    exit;
+}
+
+if (preg_match('/^(\d)\1{9,}$/', $digitsOnly)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Please enter a genuine mobile number.']);
+    exit;
+}
+
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Please provide a valid email address.']);
