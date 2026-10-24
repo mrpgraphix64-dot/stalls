@@ -6,12 +6,19 @@
 
 session_start();
 
+require_once __DIR__ . '/smtp-mailer.php';
+
 // ==========================================
 // CONFIGURATION
 // Default Admin PIN: 8401 (You can change this below)
 // ==========================================
 define('ADMIN_PIN', '8401');
-$csvPath = __DIR__ . '/data/enquiries.csv';
+
+$dataDir = reworkzone_get_data_dir();
+$csvPath = $dataDir . '/enquiries.csv';
+if (!file_exists($csvPath) && file_exists(__DIR__ . '/data/enquiries.csv')) {
+    $csvPath = __DIR__ . '/data/enquiries.csv';
+}
 
 // Handle Logout
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
@@ -51,8 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pin'])) {
 }
 
 $isLoggedIn = !empty($_SESSION['admin_logged_in']);
-
-require_once __DIR__ . '/smtp-mailer.php';
 
 // Handle SMTP Settings Save & Test
 $smtpNotice = '';

@@ -68,25 +68,37 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     exit;
 }
 
-// 4. Save to secure local CSV file on Hostinger
-$dataDir = __DIR__ . '/data';
-if (!is_dir($dataDir)) {
-    @mkdir($dataDir, 0755, true);
-}
+require_once __DIR__ . '/smtp-mailer.php';
 
+// 4. Save to secure persistent CSV file (survives Git deploys)
+$dataDir = reworkzone_get_data_dir();
 $csvFile = $dataDir . '/enquiries.csv';
-$isNewFile = !file_exists($csvFile);
+$localCsv = __DIR__ . '/data/enquiries.csv';
 
 $now = date('Y-m-d H:i:s');
 $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+$row = [$now, $fullName, $phone, $email, $boothNumber, $stallSize, $requirements, $clientIp];
 
-$fp = @fopen($csvFile, 'a');
-if ($fp) {
+// Append to persistent external storage
+$isNewFile = !file_exists($csvFile);
+if (($fp = @fopen($csvFile, 'a')) !== false) {
     if ($isNewFile) {
         fputcsv($fp, ['Timestamp', 'Full Name', 'Phone', 'Email', 'Booth No', 'Stall Size', 'Requirements', 'Client IP']);
     }
-    fputcsv($fp, [$now, $fullName, $phone, $email, $boothNumber, $stallSize, $requirements, $clientIp]);
+    fputcsv($fp, $row);
     fclose($fp);
+}
+
+// Also append to local data/ backup
+$localDataDir = __DIR__ . '/data';
+if (!is_dir($localDataDir)) @mkdir($localDataDir, 0755, true);
+$isNewLocal = !file_exists($localCsv);
+if (($fpLocal = @fopen($localCsv, 'a')) !== false) {
+    if ($isNewLocal) {
+        fputcsv($fpLocal, ['Timestamp', 'Full Name', 'Phone', 'Email', 'Booth No', 'Stall Size', 'Requirements', 'Client IP']);
+    }
+    fputcsv($fpLocal, $row);
+    fclose($fpLocal);
 }
 
 // 5. Send Notification Email to info@reworkzone.in

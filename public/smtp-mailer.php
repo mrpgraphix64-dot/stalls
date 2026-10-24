@@ -4,10 +4,46 @@
  * Zero dependencies, works out of the box on Hostinger PHP 7.4 - 8.3+
  */
 
+function reworkzone_get_data_dir() {
+    // 1. Try persistent directory outside public_html (never wiped by Hostinger Git Deploy)
+    $parentDir = dirname(__DIR__);
+    $persistentDir = $parentDir . '/reworkzone_leads';
+    if (@is_dir($persistentDir) || @mkdir($persistentDir, 0755, true)) {
+        // Migrate any local data so nothing is ever lost
+        $localCsv = __DIR__ . '/data/enquiries.csv';
+        $persistentCsv = $persistentDir . '/enquiries.csv';
+        if (file_exists($localCsv) && !file_exists($persistentCsv)) {
+            @copy($localCsv, $persistentCsv);
+        }
+        $localSmtp = __DIR__ . '/data/smtp_config.json';
+        $persistentSmtp = $persistentDir . '/smtp_config.json';
+        if (file_exists($localSmtp) && !file_exists($persistentSmtp)) {
+            @copy($localSmtp, $persistentSmtp);
+        }
+        return $persistentDir;
+    }
+
+    // 2. Fallback to local data/ directory
+    $localDir = __DIR__ . '/data';
+    if (!is_dir($localDir)) {
+        @mkdir($localDir, 0755, true);
+    }
+    return $localDir;
+}
+
 function reworkzone_get_smtp_config() {
-    $configFile = __DIR__ . '/data/smtp_config.json';
+    $dataDir = reworkzone_get_data_dir();
+    $configFile = $dataDir . '/smtp_config.json';
     if (file_exists($configFile)) {
         $content = @file_get_contents($configFile);
+        $data = json_decode($content, true);
+        if (is_array($data) && !empty($data['host']) && !empty($data['username']) && !empty($data['password'])) {
+            return $data;
+        }
+    }
+    $localConfigFile = __DIR__ . '/data/smtp_config.json';
+    if (file_exists($localConfigFile)) {
+        $content = @file_get_contents($localConfigFile);
         $data = json_decode($content, true);
         if (is_array($data) && !empty($data['host']) && !empty($data['username']) && !empty($data['password'])) {
             return $data;
@@ -17,10 +53,7 @@ function reworkzone_get_smtp_config() {
 }
 
 function reworkzone_save_smtp_config($host, $port, $username, $password, $encryption = 'ssl') {
-    $dataDir = __DIR__ . '/data';
-    if (!is_dir($dataDir)) {
-        @mkdir($dataDir, 0755, true);
-    }
+    $dataDir = reworkzone_get_data_dir();
     $configFile = $dataDir . '/smtp_config.json';
     $data = [
         'host'       => trim($host),
@@ -30,7 +63,15 @@ function reworkzone_save_smtp_config($host, $port, $username, $password, $encryp
         'encryption' => trim($encryption),
         'updated_at' => date('Y-m-d H:i:s'),
     ];
-    return @file_put_contents($configFile, json_encode($data, JSON_PRETTY_PRINT)) !== false;
+    $json = json_encode($data, JSON_PRETTY_PRINT);
+    // Save to persistent external directory
+    $saved = @file_put_contents($configFile, $json) !== false;
+    // Also save copy to local data directory
+    $localDir = __DIR__ . '/data';
+    if (!is_dir($localDir)) @mkdir($localDir, 0755, true);
+    @file_put_contents($localDir . '/smtp_config.json', $json);
+
+    return $saved;
 }
 
 function reworkzone_send_via_socket($host, $port, $username, $password, $to, $subject, $htmlBody, $replyToEmail = '', $replyToName = '', $encryption = 'ssl') {
