@@ -34,13 +34,62 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
     'Custom / Undecided Dimensions',
   ];
 
+  const validateField = (name: string, value: string): string | undefined => {
+    if (name === 'fullName') {
+      const trimmed = value.trim();
+      if (!trimmed) return 'Please enter your name.';
+      if (trimmed.length < 2) return 'Name must be at least 2 characters.';
+      return undefined;
+    }
+    if (name === 'phone') {
+      const raw = value.trim();
+      if (!raw) return 'Please enter your mobile or WhatsApp number.';
+      const digitsOnly = raw.replace(/\D/g, '');
+      if (digitsOnly.length < 10) {
+        return 'Mobile number must be at least 10 digits.';
+      }
+      if (!raw.startsWith('+') && digitsOnly.length !== 10) {
+        return 'Local mobile number must be exactly 10 digits.';
+      }
+      if (digitsOnly.length > 13) {
+        return 'Phone number is too long (maximum 13 digits).';
+      }
+      if (/^(\d)\1{9,}$/.test(digitsOnly)) {
+        return 'Please enter a genuine mobile number.';
+      }
+      if (digitsOnly.length === 10 && !/^[6-9]/.test(digitsOnly)) {
+        return 'Indian mobile numbers must start with 6, 7, 8, or 9.';
+      }
+      return undefined;
+    }
+    if (name === 'email') {
+      const trimmed = value.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      if (!trimmed) return 'Please enter your work email.';
+      if (!emailRegex.test(trimmed)) return 'Please enter a valid work email (e.g. name@company.com).';
+      return undefined;
+    }
+    return undefined;
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
-    // For phone field, restrict input to valid phone characters
+    // For phone field, restrict input characters and enforce 10-digit maximum
     let cleanedValue = value;
     if (name === 'phone') {
       cleanedValue = value.replace(/[^0-9+\s\-()]/g, '');
+      const digitsOnly = cleanedValue.replace(/\D/g, '');
+      // If doesn't start with +, strictly cap at 10 digits
+      if (!cleanedValue.trim().startsWith('+')) {
+        if (digitsOnly.length > 10) {
+          cleanedValue = digitsOnly.slice(0, 10);
+        }
+      } else {
+        if (digitsOnly.length > 13) {
+          cleanedValue = '+' + digitsOnly.slice(0, 13);
+        }
+      }
     }
 
     setFormData((prev) => ({
@@ -48,9 +97,18 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
       [name]: cleanedValue,
     }));
 
-    // Clear inline error on change
+    // If an error is already displayed on this field, update or clear it dynamically
     if (fieldErrors[name as keyof typeof fieldErrors]) {
-      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+      const err = validateField(name, cleanedValue);
+      setFieldErrors((prev) => ({ ...prev, [name]: err }));
+    }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const err = validateField(name, value);
+    if (err) {
+      setFieldErrors((prev) => ({ ...prev, [name]: err }));
     }
   };
 
@@ -62,36 +120,14 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
     }
 
     const errors: { fullName?: string; phone?: string; email?: string } = {};
+    const nameErr = validateField('fullName', formData.fullName);
+    if (nameErr) errors.fullName = nameErr;
 
-    // 1. Name validation
-    const trimmedName = formData.fullName.trim();
-    if (!trimmedName) {
-      errors.fullName = 'Please enter your name.';
-    } else if (trimmedName.length < 2) {
-      errors.fullName = 'Name must be at least 2 characters.';
-    }
+    const phoneErr = validateField('phone', formData.phone);
+    if (phoneErr) errors.phone = phoneErr;
 
-    // 2. Phone validation
-    const rawPhone = formData.phone.trim();
-    const digitsOnly = rawPhone.replace(/\D/g, '');
-    if (!rawPhone) {
-      errors.phone = 'Please enter your mobile or WhatsApp number.';
-    } else if (digitsOnly.length < 10) {
-      errors.phone = 'Please enter a valid 10-digit mobile number.';
-    } else if (digitsOnly.length > 13) {
-      errors.phone = 'Phone number is too long (maximum 13 digits).';
-    } else if (/^(\d)\1{9,}$/.test(digitsOnly)) {
-      errors.phone = 'Please enter a genuine contact number.';
-    }
-
-    // 3. Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    const trimmedEmail = formData.email.trim();
-    if (!trimmedEmail) {
-      errors.email = 'Please enter your work email.';
-    } else if (!emailRegex.test(trimmedEmail)) {
-      errors.email = 'Please enter a valid work email (e.g. name@company.com).';
-    }
+    const emailErr = validateField('email', formData.email);
+    if (emailErr) errors.email = emailErr;
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -272,7 +308,7 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} noValidate className="space-y-6">
                 
                 <input
                   type="checkbox"
@@ -300,13 +336,13 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                     <input
                       type="text"
                       name="fullName"
-                      required
                       value={formData.fullName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       placeholder="e.g. Rahul Sharma"
                       className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
                         fieldErrors.fullName
-                          ? 'border-red-500 ring-1 ring-red-500 bg-red-50/20'
+                          ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
                           : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
                       }`}
                     />
@@ -325,14 +361,14 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                     <input
                       type="tel"
                       name="phone"
-                      required
-                      maxLength={15}
+                      maxLength={14}
                       value={formData.phone}
                       onChange={handleChange}
-                      placeholder="e.g. 98765 43210 or +91 98765 43210"
+                      onBlur={handleBlur}
+                      placeholder="e.g. 98765 43210 (10 digits)"
                       className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
                         fieldErrors.phone
-                          ? 'border-red-500 ring-1 ring-red-500 bg-red-50/20'
+                          ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
                           : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
                       }`}
                     />
@@ -354,13 +390,13 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
                     <input
                       type="email"
                       name="email"
-                      required
                       value={formData.email}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       placeholder="e.g. rahul@company.com"
                       className={`w-full px-4 py-3 bg-white rounded-xl border text-sm text-brand-dark outline-none transition-all ${
                         fieldErrors.email
-                          ? 'border-red-500 ring-1 ring-red-500 bg-red-50/20'
+                          ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/20'
                           : 'border-brand-subtle focus:border-brand-dark focus:ring-1 focus:ring-brand-dark'
                       }`}
                     />

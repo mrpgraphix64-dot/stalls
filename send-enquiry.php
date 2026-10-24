@@ -50,9 +50,29 @@ if (empty($fullName) || empty($phone) || empty($email)) {
 }
 
 $digitsOnly = preg_replace('/\D/', '', $phone);
-if (strlen($digitsOnly) < 10 || strlen($digitsOnly) > 14) {
+$isInternational = (strpos(trim($phone), '+') === 0);
+
+if (strlen($digitsOnly) < 10) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Please enter a valid 10-digit mobile number.']);
+    echo json_encode(['success' => false, 'error' => 'Mobile number must have at least 10 digits.']);
+    exit;
+}
+
+if (!$isInternational && strlen($digitsOnly) !== 10) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Local mobile number must be exactly 10 digits.']);
+    exit;
+}
+
+if ($isInternational && strlen($digitsOnly) > 13) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Phone number is too long (maximum 13 digits).']);
+    exit;
+}
+
+if (strlen($digitsOnly) === 10 && !preg_match('/^[6-9]/', $digitsOnly)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Indian mobile numbers must start with 6, 7, 8, or 9.']);
     exit;
 }
 
