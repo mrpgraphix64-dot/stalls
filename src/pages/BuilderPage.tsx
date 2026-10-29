@@ -453,6 +453,13 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onRequestQuote }) => {
     setSelectedId(null);
   };
 
+  const removeOne = (type: ItemType) => {
+    const last = [...items].reverse().find((i) => i.type === type);
+    if (!last) return;
+    setItems((prev) => prev.filter((i) => i.id !== last.id));
+    if (selectedId === last.id) setSelectedId(null);
+  };
+
   // Keyboard: Delete removes, R rotates
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -787,7 +794,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onRequestQuote }) => {
                     </>
                   ) : (
                     <span className="text-xs text-gray-500 flex items-center gap-1.5 ml-1">
-                      <Info className="w-3.5 h-3.5" /> Select an item to rotate, copy or delete it.
+                      <Info className="w-3.5 h-3.5" /> Click an item to rotate, copy or delete it (or press Delete). You can also use the bin icon in the list on the right.
                     </span>
                   )}
                   <button
@@ -913,7 +920,18 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onRequestQuote }) => {
                           </div>
                           <div className="text-[11px] text-gray-500">{s.note}</div>
                         </div>
-                        <div className="font-bold text-right whitespace-nowrap">{s.cost ? inr(s.cost) : ''}</div>
+                        <div className="flex items-start gap-2">
+                          <span className="font-bold text-right whitespace-nowrap">{s.cost ? inr(s.cost) : ''}</span>
+                          <button
+                            type="button"
+                            title={`Remove one ${s.label}`}
+                            aria-label={`Remove one ${s.label}`}
+                            onClick={() => removeOne(s.type)}
+                            className="p-1 rounded-md text-gray-400 hover:text-brand-red hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>

@@ -626,29 +626,30 @@ const Preview3D: React.FC<Preview3DProps> = ({ layout, wallColor, floorColor, br
     if (shell) {
       // white laminated panels in a 2" aluminium frame, three modules per side
       const panel = std('#f6f7f9', { roughness: 0.35, clearcoat: 0.15, clearcoatRoughness: 0.4 });
-      const post = (x: number, z: number) => group.add(rbox(0.05, wallH, 0.05, alu, x, 0, z, 0.004));
+      const post = (x: number, z: number, side = false) =>
+        group.add(rbox(side ? WALL_T + 0.02 : 0.05, wallH + 0.006, side ? 0.05 : WALL_T + 0.02, alu, x, -0.003, z, 0.004));
       if (w.back) {
         group.add(rbox(W, wallH, WALL_T, panel, 0, 0, backZ, 0.004));
-        group.add(rbox(W, 0.05, WALL_T + 0.02, alu, 0, wallH - 0.05, backZ, 0.004));
-        group.add(rbox(W, 0.05, WALL_T + 0.02, alu, 0, 0, backZ, 0.004));
+        group.add(rbox(W + 0.004, 0.056, WALL_T + 0.02, alu, 0, wallH - 0.05, backZ, 0.004));
+        group.add(rbox(W + 0.004, 0.056, WALL_T + 0.02, alu, 0, -0.003, backZ, 0.004));
         jointsX.forEach((x) => post(x, backZ));
       }
       if (w.left) {
         group.add(rbox(WALL_T, wallH, D, panel, leftX, 0, 0, 0.004));
-        group.add(rbox(WALL_T + 0.02, 0.05, D, alu, leftX, wallH - 0.05, 0, 0.004));
-        group.add(rbox(WALL_T + 0.02, 0.05, D, alu, leftX, 0, 0, 0.004));
-        jointsZ.forEach((z) => post(leftX, z));
+        group.add(rbox(WALL_T + 0.02, 0.056, D + 0.004, alu, leftX, wallH - 0.05, 0, 0.004));
+        group.add(rbox(WALL_T + 0.02, 0.056, D + 0.004, alu, leftX, -0.003, 0, 0.004));
+        jointsZ.forEach((z) => post(leftX, z, true));
       }
       if (w.right) {
         group.add(rbox(WALL_T, wallH, D, panel, rightX, 0, 0, 0.004));
-        group.add(rbox(WALL_T + 0.02, 0.05, D, alu, rightX, wallH - 0.05, 0, 0.004));
-        group.add(rbox(WALL_T + 0.02, 0.05, D, alu, rightX, 0, 0, 0.004));
-        jointsZ.forEach((z) => post(rightX, z));
+        group.add(rbox(WALL_T + 0.02, 0.056, D + 0.004, alu, rightX, wallH - 0.05, 0, 0.004));
+        group.add(rbox(WALL_T + 0.02, 0.056, D + 0.004, alu, rightX, -0.003, 0, 0.004));
+        jointsZ.forEach((z) => post(rightX, z, true));
       }
       if (w.back) {
         // corner and front posts of the frame
-        post(-W / 2 + 0.025, backZ);
-        post(W / 2 - 0.025, backZ);
+        group.add(rbox(0.1, wallH + 0.006, 0.1, alu, -W / 2 + 0.05, -0.003, backZ, 0.004));
+        group.add(rbox(0.1, wallH + 0.006, 0.1, alu, W / 2 - 0.05, -0.003, backZ, 0.004));
         post(-W / 2 + 0.025, D / 2 - 0.025);
         post(W / 2 - 0.025, D / 2 - 0.025);
         if (stall.centrePost) post(0, D / 2 - 0.025);
