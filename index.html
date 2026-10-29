@@ -34,10 +34,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     
     <meta name="theme-color" content="#FAF9F5" />
-    <script type="module" crossorigin src="/assets/index.dev-CjtvDtr0.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BOvEccJY.css">
+    <script type="module" crossorigin src="/assets/index.dev-BxLD48d-.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CDDCxapp.css">
   </head>
   <body class="bg-[#FAF9F5] text-brand-dark font-sans antialiased selection:bg-brand-red selection:text-white">
-    <div id="root"></div>
+    <div id="root"><div class="rz-splash" role="status" aria-label="Loading">
+      <style>
+        .rz-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:#f7f5ee;color:#1a1a1a;font-family:system-ui,sans-serif}
+        .rz-splash img{width:140px;height:auto}
+        .rz-splash .bar{width:160px;height:3px;border-radius:3px;background:#e4e0d3;overflow:hidden}
+        .rz-splash .bar i{display:block;width:50%;height:100%;border-radius:3px;background:linear-gradient(90deg,transparent,#e5322d,transparent);animation:rzbar 1.2s ease-in-out infinite}
+        @keyframes rzbar{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+        @media (prefers-reduced-motion:reduce){.rz-splash .bar i{animation:none;width:100%}}
+      </style>
+      <img src="/logo.png" alt="Reworkzone" />
+      <div class="bar"><i></i></div>
+    </div></div>
   </body>
 </html>

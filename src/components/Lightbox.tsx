@@ -142,6 +142,12 @@ export const Lightbox: React.FC<LightboxProps> = ({
           </button>
         )}
 
+        {!isLoaded && (
+          <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none" role="status" aria-label="Loading image">
+            <div className="w-10 h-10 rounded-full border-2 border-white/20 border-t-brand-red animate-spin" />
+          </div>
+        )}
+
         {/* High Resolution Protected Image */}
         <div 
           className={`relative max-w-full max-h-full flex items-center justify-center select-none transition-transform duration-300 ${isZoomed ? 'scale-125 cursor-zoom-out' : 'cursor-default'}`}

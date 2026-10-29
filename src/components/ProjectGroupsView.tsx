@@ -29,6 +29,7 @@ export const ProjectGroupsView: React.FC<ProjectGroupsViewProps> = ({
                 className="relative aspect-[16/10] overflow-hidden bg-gray-100 select-none"
                 onContextMenu={(e) => e.preventDefault()}
               >
+                <div className="absolute inset-0 bg-gradient-to-r from-[#ECE9DF] via-[#F4F2EB] to-[#ECE9DF] animate-pulse" />
                 <img
                   src={lead.thumbUrl}
                   alt={group.title}

@@ -1,3 +1,4 @@
+import { StallLoader } from '../components/StallLoader';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -814,7 +815,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onRequestQuote }) => {
 
             {view === '3d' && (
               <div className="lg:flex-1 min-h-0 bg-white border border-brand-subtle rounded-2xl p-2 sm:p-3">
-                <Suspense fallback={<div className="py-32 text-center text-sm text-gray-500">Loading 3D preview…</div>}>
+                <Suspense fallback={<StallLoader className="w-full min-h-[22rem] lg:h-full" />}>
                   <Preview3D layout={layout} wallColor={effWall} floorColor={floorColor} brand={brand} stallNo={stallNo} shell={shell} stall={stall} items={items} />
                 </Suspense>
               </div>

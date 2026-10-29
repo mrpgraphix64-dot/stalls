@@ -120,3 +120,23 @@ img, .protected-image {
 @media (prefers-reduced-motion: reduce) {
   .animate-nudge { animation: none; }
 }
+
+/* Stall loader */
+.loader-draw { stroke-dasharray: 160; stroke-dashoffset: 160; animation: loaderDraw 2.4s ease-in-out infinite; }
+.loader-d2 { animation-delay: 0.15s; }
+.loader-d3 { animation-delay: 0.3s; }
+.loader-d4 { animation-delay: 0.45s; }
+@keyframes loaderDraw {
+  0% { stroke-dashoffset: 160; opacity: 0; }
+  15% { opacity: 1; }
+  55%, 80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+.loader-pulse { transform-origin: 60px 30px; animation: loaderPulse 1.2s ease-in-out infinite; }
+@keyframes loaderPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.8); opacity: 0.4; } }
+.loader-bar { animation: loaderBar 1.3s ease-in-out infinite; }
+@keyframes loaderBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
+@media (prefers-reduced-motion: reduce) {
+  .loader-draw { animation: none; stroke-dashoffset: 0; }
+  .loader-pulse, .loader-bar { animation: none; }
+}

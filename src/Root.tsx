@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import App from './App';
-import { BuilderPage } from './pages/BuilderPage';
+import { StallLoader } from './components/StallLoader';
+
+const BuilderPage = lazy(() => import('./pages/BuilderPage').then((m) => ({ default: m.BuilderPage })));
 
 const isBuilder = () => window.location.hash.startsWith('#/build');
 
@@ -21,12 +23,14 @@ export default function Root() {
 
   if (builder) {
     return (
-      <BuilderPage
-        onRequestQuote={(summary) => {
-          setPrefill(summary);
-          window.location.hash = '#enquiry';
-        }}
-      />
+      <Suspense fallback={<StallLoader label="Opening the stall builder" className="fixed inset-0 rounded-none" />}>
+        <BuilderPage
+          onRequestQuote={(summary) => {
+            setPrefill(summary);
+            window.location.hash = '#enquiry';
+          }}
+        />
+      </Suspense>
     );
   }
   return <App key={prefill} initialPrefill={prefill} />;

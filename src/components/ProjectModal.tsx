@@ -196,6 +196,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                   onContextMenu={(e) => e.preventDefault()}
                   className="group relative rounded-xl overflow-hidden aspect-[4/3] bg-gray-100 cursor-pointer border border-brand-subtle hover:border-brand-dark transition-all select-none"
                 >
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#ECE9DF] via-[#F4F2EB] to-[#ECE9DF] animate-pulse" />
                   <img
                     src={img.thumbUrl}
                     alt={img.caption || img.title}
