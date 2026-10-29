@@ -20,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuoteClick }) => {
   const navLinks = [
     { label: 'Portfolio', href: '#gallery' },
     { label: 'Case Studies', href: '#projects' },
+    { label: 'Build Your Stall', href: '#/build' },
     { label: 'Services', href: '#services' },
     { label: 'Our Process', href: '#process' },
     { label: 'Contact', href: '#enquiry' },

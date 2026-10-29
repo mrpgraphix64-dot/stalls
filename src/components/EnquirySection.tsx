@@ -1,18 +1,36 @@
 import React, { useState } from 'react';
 import { CheckCircle2, AlertCircle, Phone, Mail, MapPin, MessageSquare, ArrowRight, Clock } from 'lucide-react';
 
+const DIMENSION_PRESETS = [
+  '3m x 3m (9 sqm - Standard Shell/Corner)',
+  '6m x 3m (18 sqm - Popular Peninsula)',
+  '6m x 6m (36 sqm - Island Stand)',
+  '9m x 3m (27 sqm - Shell Scheme)',
+  '2m x 2m (4 sqm - Startup Booth)',
+  '9m x 6m (54 sqm - Large Pavilion)',
+  '12m x 6m+ (72+ sqm - Double Decker)',
+  'Custom / Undecided Dimensions',
+];
+
+const presetForPrefill = (text: string) =>
+  DIMENSION_PRESETS.find((p) => text.includes('Size: ' + p.split(' (')[0])) || '6m x 3m (18 sqm - Popular Peninsula)';
+
 interface EnquirySectionProps {
   prefilledStall?: string;
 }
 
-export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }) => {
+export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall = '' }) => {
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
     email: '',
     boothNumber: '',
-    stallDimensions: '6m x 3m (18 sqm)',
-    requirements: prefilledStall ? `Interested in a stall design similar to ${prefilledStall}.` : '',
+    stallDimensions: prefilledStall.startsWith('Custom stall designed') ? presetForPrefill(prefilledStall) : '6m x 3m (18 sqm)',
+    requirements: !prefilledStall
+      ? ''
+      : prefilledStall.startsWith('Custom stall designed')
+        ? prefilledStall
+        : `Interested in a stall design similar to ${prefilledStall}.`,
     botcheck: '', // Honeypot field
   });
 
@@ -31,14 +49,7 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall }
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const dimensionPresets = [
-    '3m x 3m (9 sqm - Standard Shell/Corner)',
-    '6m x 3m (18 sqm - Popular Peninsula)',
-    '6m x 6m (36 sqm - Island Stand)',
-    '9m x 6m (54 sqm - Large Pavilion)',
-    '12m x 6m+ (72+ sqm - Double Decker)',
-    'Custom / Undecided Dimensions',
-  ];
+  const dimensionPresets = DIMENSION_PRESETS;
 
   const validateField = (name: string, value: string): string | undefined => {
     if (name === 'fullName') {

@@ -26,6 +26,12 @@ export interface ProjectImage {
   aspectRatio: number;
   thumbUrl: string;
   fullUrl: string;
+  size?: string;
+  designType?: 'Render' | 'Built';
+  inclusions?: string[];
+  materials?: string[];
+  addons?: string[];
+  buildTime?: string;
 }
 
 export interface ProjectGroup {
@@ -42,7 +48,30 @@ export interface ProjectGroup {
   description: string;
   leadImage: ProjectImage;
   images: ProjectImage[];
+  size?: string;
+  designType?: 'Render' | 'Built';
+  inclusions?: string[];
+  materials?: string[];
+  addons?: string[];
+  buildTime?: string;
 }
+
+// Standard 3 x 3 m shell scheme package (Tech Expo Gujarat 2026 exhibitor manual)
+const STD_3X3 = {
+  inclusions: [
+    'Modular structure: white Octanorm panels in an aluminium frame (3 sides enclosed, 1 open front)',
+    'Fascia board with company name and stall number',
+    'Carpet flooring over the full stall area',
+    '1 system counter (reception table)',
+    '2 white chairs',
+    '3 track-mounted spot lights',
+    '1 x 15 Amp power point',
+    '1 wastepaper basket',
+  ],
+  materials: ["White laminated panels (3'1\" x 7'10\")", 'Aluminium extrusion frame (2" profile)', 'Carpet', 'Vinyl printed graphics only'],
+  addons: ['Laminate table', 'Black steel chair', '2-seater sofa', 'Brochure stand', 'Glass shelf', 'Extra spot lights', 'Plug point 15 Amp'],
+  buildTime: 'Organiser handover 25 Nov, build-up by 26 Nov 11 PM',
+};
 
 export const ALL_PROJECT_IMAGES: ProjectImage[] = [
   {
@@ -695,13 +724,13 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     ],
     "projectId": "syndell-tech-expo",
     "isLead": true,
-    "width": 7008,
-    "height": 4672,
-    "optWidth": 1920,
-    "optHeight": 1280,
-    "thumbWidth": 720,
-    "thumbHeight": 480,
-    "aspectRatio": 1.5,
+    "width": 4672,
+    "height": 7008,
+    "optWidth": 1280,
+    "optHeight": 1920,
+    "thumbWidth": 480,
+    "thumbHeight": 720,
+    "aspectRatio": 0.667,
     "thumbUrl": "/images/thumbs/DSC06215.webp",
     "fullUrl": "/images/optimized/DSC06215.webp"
   },
@@ -2533,6 +2562,272 @@ export const ALL_PROJECT_IMAGES: ProjectImage[] = [
     "aspectRatio": 1.777,
     "thumbUrl": "/images/thumbs/techify_view_5.webp",
     "fullUrl": "/images/optimized/techify_view_5.webp"
+  },
+  {
+      "id": "size-3x3-1",
+      "filename": "Eternal_AI_Studio_Exhibition_Booth.webp",
+      "cleanName": "Eternal_AI_Studio_Exhibition_Booth.webp",
+      "title": "Eternal AI Studio 3x3 Exhibition Stall",
+      "client": "Eternal AI Studio",
+      "category": "3d-concepts",
+      "categoryLabel": "3D Concepts & Renders",
+      "event": "3x3 Exhibition Stall",
+      "location": "",
+      "year": "",
+      "boothNumber": "3 x 3 m",
+      "specs": "3 x 3 m (9 sq m) custom exhibition stall",
+      "description": "Three-wall 3x3 stall with a backlit-style wave graphic, wall-mounted display screen and a branded reception counter.",
+      "caption": "Eternal AI Studio 3x3 Exhibition Stall",
+      "tags": [
+          "3x3 Stall",
+          "Render",
+          "Compact Booth"
+      ],
+      "projectId": "eternal-ai-studio-3x3",
+      "isLead": true,
+      "width": 1448,
+      "height": 1086,
+      "optWidth": 1448,
+      "optHeight": 1086,
+      "thumbWidth": 720,
+      "thumbHeight": 540,
+      "aspectRatio": 1.333,
+      "thumbUrl": "/images/thumbs/Eternal_AI_Studio_Exhibition_Booth.webp",
+      "fullUrl": "/images/optimized/Eternal_AI_Studio_Exhibition_Booth.webp",
+      "size": "3x3",
+      "designType": "Render",
+    inclusions: ['Three-wall 3 x 3 m stall (open front)', 'Full-height printed wave-graphic walls', 'Wall-mounted LED display screen', 'Branded reception counter with front graphic', 'Overhead LED header lighting', 'Grey carpet flooring', 'On-site installation and dismantling'],
+    materials: ['Modular wall system', 'High-resolution vinyl graphics', 'LED display', 'Laminate counter', 'Carpet'],
+    addons: ['Second display screen', 'Brochure rack', 'Counter stool', 'Spot lights'],
+    buildTime: '2 days on-site'
+  },
+  {
+      "id": "size-3x3-2",
+      "filename": "Eternal_AI_Studio_Trade_Show_Booth.webp",
+      "cleanName": "Eternal_AI_Studio_Trade_Show_Booth.webp",
+      "title": "Eternal AI Studio 3x3 Exhibition Stall",
+      "client": "Eternal AI Studio",
+      "category": "3d-concepts",
+      "categoryLabel": "3D Concepts & Renders",
+      "event": "3x3 Exhibition Stall",
+      "location": "",
+      "year": "",
+      "boothNumber": "3 x 3 m",
+      "specs": "3 x 3 m (9 sq m) custom exhibition stall",
+      "description": "Alternate front view of the three-wall 3x3 stall with product messaging panels and a branded counter.",
+      "caption": "Eternal AI Studio 3x3 Exhibition Stall",
+      "tags": [
+          "3x3 Stall",
+          "Render",
+          "Compact Booth"
+      ],
+      "projectId": "eternal-ai-studio-3x3",
+      "isLead": false,
+      "width": 1448,
+      "height": 1086,
+      "optWidth": 1448,
+      "optHeight": 1086,
+      "thumbWidth": 720,
+      "thumbHeight": 540,
+      "aspectRatio": 1.333,
+      "thumbUrl": "/images/thumbs/Eternal_AI_Studio_Trade_Show_Booth.webp",
+      "fullUrl": "/images/optimized/Eternal_AI_Studio_Trade_Show_Booth.webp",
+      "size": "3x3",
+      "designType": "Render",
+    inclusions: ['Three-wall 3 x 3 m stall (open front)', 'Full-height printed wave-graphic walls', 'Wall-mounted LED display screen', 'Branded reception counter with front graphic', 'Overhead LED header lighting', 'Grey carpet flooring', 'On-site installation and dismantling'],
+    materials: ['Modular wall system', 'High-resolution vinyl graphics', 'LED display', 'Laminate counter', 'Carpet'],
+    addons: ['Second display screen', 'Brochure rack', 'Counter stool', 'Spot lights'],
+    buildTime: '2 days on-site'
+  },
+  {
+      "id": "size-3x3-3",
+      "filename": "Futuristic_Syndell_Exhibition_Booth.webp",
+      "cleanName": "Futuristic_Syndell_Exhibition_Booth.webp",
+      "title": "Syndell 3x3 Exhibition Stall",
+      "client": "Syndell Technologies",
+      "category": "3d-concepts",
+      "categoryLabel": "3D Concepts & Renders",
+      "event": "3x3 Exhibition Stall",
+      "location": "",
+      "year": "",
+      "boothNumber": "3 x 3 m",
+      "specs": "3 x 3 m (9 sq m) custom exhibition stall",
+      "description": "Compact 3x3 stall with a green fascia, illuminated reception counter and a small meeting corner.",
+      "caption": "Syndell 3x3 Exhibition Stall",
+      "tags": [
+          "3x3 Stall",
+          "Render",
+          "Compact Booth"
+      ],
+      "projectId": "syndell-3x3",
+      "isLead": true,
+      "width": 1672,
+      "height": 941,
+      "optWidth": 1672,
+      "optHeight": 941,
+      "thumbWidth": 720,
+      "thumbHeight": 405,
+      "aspectRatio": 1.777,
+      "thumbUrl": "/images/thumbs/Futuristic_Syndell_Exhibition_Booth.webp",
+      "fullUrl": "/images/optimized/Futuristic_Syndell_Exhibition_Booth.webp",
+      "size": "3x3",
+      "designType": "Render",
+    inclusions: ['3 x 3 m stall with raised green fascia', 'Illuminated branded reception counter', 'Printed back-wall graphic panels', 'Mounted display screens on back wall', 'Compact meeting table with 2 chairs', 'Blue carpet flooring', 'On-site installation and dismantling'],
+    materials: ['Plywood fascia with paint finish', 'LED backlit counter logo', 'Vinyl graphics', 'Carpet'],
+    addons: ['Additional chairs', 'Product display shelf', 'TV / screen upgrade', 'Storage cabinet'],
+    buildTime: '2 to 3 days on-site'
+  },
+  {
+      "id": "size-3x3-4",
+      "filename": "ONBBITS_Green_Conversation_Booth_1.webp",
+      "cleanName": "ONBBITS_Green_Conversation_Booth_1.webp",
+      "title": "ONBBITS 3x3 Corner Stall",
+      "client": "ONBBITS",
+      "category": "3d-concepts",
+      "categoryLabel": "3D Concepts & Renders",
+      "event": "3x3 Exhibition Stall",
+      "location": "",
+      "year": "",
+      "boothNumber": "3 x 3 m",
+      "specs": "3 x 3 m (9 sq m) custom exhibition stall",
+      "description": "Two-open-side corner 3x3 stall with full-height branded graphic walls in a green theme.",
+      "caption": "ONBBITS 3x3 Corner Stall",
+      "tags": [
+          "3x3 Stall",
+          "Render",
+          "Compact Booth"
+      ],
+      "projectId": "onbbits-3x3",
+      "isLead": true,
+      "width": 1254,
+      "height": 1254,
+      "optWidth": 1254,
+      "optHeight": 1254,
+      "thumbWidth": 720,
+      "thumbHeight": 720,
+      "aspectRatio": 1.0,
+      "thumbUrl": "/images/thumbs/ONBBITS_Green_Conversation_Booth_1.webp",
+      "fullUrl": "/images/optimized/ONBBITS_Green_Conversation_Booth_1.webp",
+      "size": "3x3",
+      "designType": "Render",
+    inclusions: ['Two-open-side corner 3 x 3 m stall', 'Full-height printed graphic walls', 'Clean open floor for demos and footfall', 'Spot lighting', 'Carpet flooring', 'On-site installation and dismantling'],
+    materials: ['Modular wall panels', 'Large-format printed graphics', 'LED spot lights', 'Carpet'],
+    addons: ['Reception counter', 'Demo screen or TV', 'Lounge seating', 'Plant and decor styling'],
+    buildTime: '1 to 2 days on-site'
+  },
+  {
+      "id": "size-3x3-5",
+      "filename": "WhatsApp_Image_2026_10_28_at_11_03_16_AM_1.webp",
+      "cleanName": "WhatsApp_Image_2026_10_28_at_11_03_16_AM_1.webp",
+      "title": "Samcom Technobrains 3x3 Exhibition Stall",
+      "client": "Samcom Technobrains",
+      "category": "custom-stalls",
+      "categoryLabel": "Custom Exhibition Stalls",
+      "event": "3x3 Exhibition Stall",
+      "location": "",
+      "year": "",
+      "boothNumber": "3 x 3 m",
+      "specs": "3 x 3 m (9 sq m) custom exhibition stall",
+      "description": "Built 3x3 stall with printed graphic panels, a fascia name board and a branded counter.",
+      "caption": "Samcom Technobrains 3x3 Exhibition Stall",
+      "tags": [
+          "3x3 Stall",
+          "Built",
+          "Compact Booth"
+      ],
+      "projectId": "samcom-3x3",
+      "isLead": true,
+      "width": 960,
+      "height": 1280,
+      "optWidth": 960,
+      "optHeight": 1280,
+      "thumbWidth": 540,
+      "thumbHeight": 720,
+      "aspectRatio": 0.75,
+      "thumbUrl": "/images/thumbs/WhatsApp_Image_2026_10_28_at_11_03_16_AM_1.webp",
+      "fullUrl": "/images/optimized/WhatsApp_Image_2026_10_28_at_11_03_16_AM_1.webp",
+      "size": "3x3",
+      "designType": "Built",
+    inclusions: ['3 x 3 m stall with fascia name board and stall number', 'Printed graphic panels with QR code', 'Branded reception counter', 'Table and visitor chairs', 'Overhead lighting', 'Carpet flooring', 'On-site installation and dismantling'],
+    materials: ['Modular partition panels', 'Printed vinyl graphics', 'Laminate counter', 'Carpet'],
+    addons: ['Brochure holders', 'Display screen', 'Extra seating', 'Spot lights'],
+    buildTime: '2 days on-site'
+  },
+  {
+      "id": "size-3x3-6",
+      "filename": "WhatsApp_Image_2026_10_28_at_11_03_16_AM.webp",
+      "cleanName": "WhatsApp_Image_2026_10_28_at_11_03_16_AM.webp",
+      "title": "Eternal Web 3x3 Exhibition Stall",
+      "client": "Eternal Web",
+      "category": "custom-stalls",
+      "categoryLabel": "Custom Exhibition Stalls",
+      "event": "3x3 Exhibition Stall",
+      "location": "",
+      "year": "",
+      "boothNumber": "3 x 3 m",
+      "specs": "3 x 3 m (9 sq m) custom exhibition stall",
+      "description": "Built 3x3 corner stall with a purple graphic wall, branded counter and meeting chairs.",
+      "caption": "Eternal Web 3x3 Exhibition Stall",
+      "tags": [
+          "3x3 Stall",
+          "Built",
+          "Compact Booth"
+      ],
+      "projectId": "eternal-web-3x3",
+      "isLead": true,
+      "width": 1600,
+      "height": 1066,
+      "optWidth": 1600,
+      "optHeight": 1066,
+      "thumbWidth": 720,
+      "thumbHeight": 480,
+      "aspectRatio": 1.501,
+      "thumbUrl": "/images/thumbs/WhatsApp_Image_2026_10_28_at_11_03_16_AM.webp",
+      "fullUrl": "/images/optimized/WhatsApp_Image_2026_10_28_at_11_03_16_AM.webp",
+      "size": "3x3",
+      "designType": "Built",
+    inclusions: ['Corner 3 x 3 m stall with full-height purple graphic wall', 'Branded reception counter', 'Two visitor chairs', 'Spot lighting', 'Blue carpet flooring', 'On-site installation and dismantling'],
+    materials: ['Modular wall panels', 'Large-format vinyl print', 'Laminate counter', 'Carpet'],
+    addons: ['Display screen', 'Brochure rack', 'Extra seating', 'Storage cabinet'],
+    buildTime: '2 days on-site'
+  },
+  {
+      "id": "size-3x3-7",
+      "filename": "apspect_stall.webp",
+      "cleanName": "apspect_stall.webp",
+      "title": "AppAspect 3x3 Exhibition Stall",
+      "client": "AppAspect",
+      "category": "custom-stalls",
+      "categoryLabel": "Custom Exhibition Stalls",
+      "event": "3x3 Exhibition Stall",
+      "location": "",
+      "year": "",
+      "boothNumber": "3 x 3 m",
+      "specs": "3 x 3 m (9 sq m) custom exhibition stall",
+      "description": "Built 3x3 stall with a green fascia, infographic back wall, wall-mounted TV and two branded counters.",
+      "caption": "AppAspect 3x3 Exhibition Stall",
+      "tags": [
+          "3x3 Stall",
+          "Built",
+          "Compact Booth"
+      ],
+      "projectId": "appaspect-3x3",
+      "isLead": true,
+      "width": 1920,
+      "height": 1280,
+      "optWidth": 1920,
+      "optHeight": 1280,
+      "thumbWidth": 720,
+      "thumbHeight": 480,
+      "aspectRatio": 1.5,
+      "thumbUrl": "/images/thumbs/apspect_stall.webp",
+      "fullUrl": "/images/optimized/apspect_stall.webp",
+      "size": "3x3",
+      "designType": "Built",
+    inclusions: ['3 x 3 m stall with green fascia header', 'Infographic printed back wall', 'Wall-mounted TV', 'Two branded counters', 'Visitor chairs', 'Spot lighting', 'Blue carpet flooring', 'On-site installation and dismantling'],
+    materials: ['Plywood fascia with paint finish', 'Printed vinyl graphics', 'Laminate counters', 'Carpet'],
+    addons: ['Lead-capture QR stand', 'Additional counter', 'Product display shelf', 'Storage cabinet'],
+    buildTime: '2 days on-site'
   }
 ];
 
@@ -2554,7 +2849,13 @@ export const PROJECT_GROUPS: ProjectGroup[] = (() => {
         specs: img.specs,
         description: img.description,
         leadImage: img,
-        images: []
+        images: [],
+        size: img.size,
+        designType: img.designType,
+        inclusions: img.inclusions,
+        materials: img.materials,
+        addons: img.addons,
+        buildTime: img.buildTime,
       });
     }
     const group = map.get(img.projectId)!;
@@ -2574,3 +2875,61 @@ export const CATEGORIES = [
   { id: 'international', label: 'International (London & Birmingham)', count: ALL_PROJECT_IMAGES.filter(i => i.category === 'international').length },
   { id: 'pavilions', label: 'Brand Pavilions & Activations', count: ALL_PROJECT_IMAGES.filter(i => i.category === 'pavilions').length }
 ];
+
+export const SIZES = Array.from(
+  ALL_PROJECT_IMAGES.reduce((m, i) => (i.size ? m.set(i.size, (m.get(i.size) || 0) + 1) : m), new Map<string, number>())
+).map(([id, count]) => ({ id, label: id.replace('x', ' × ') + ' m', count }));
+
+// Standard package shown on the size info panel
+
+const SHELL_MATERIALS = ["White laminated panels (3'1\" x 7'10\")", 'Aluminium extrusion frame (2" profile)', 'Carpet', 'Vinyl printed graphics only'];
+const SHELL_ADDONS = ['Laminate table', 'Black steel chair', '2-seater sofa', 'Brochure stand', 'Glass shelf', 'Extra spot lights', 'Plug point 15 Amp'];
+const SHELL_TIME = 'Organiser handover 25 Nov, build-up by 26 Nov 11 PM';
+const SHELL_BASE = [
+  'Modular structure: white Octanorm panels in an aluminium frame',
+  'Fascia board with company name and stall number',
+  'Carpet flooring over the full stall area',
+];
+
+export const SIZE_PACKAGES: Record<string, { area: string; blurb: string; inclusions: string[]; materials: string[]; addons: string[]; buildTime: string }> = {
+  '3x3': {
+    area: '9 sq m',
+    blurb: "Ready-to-use shell scheme stall (9 sq m, 8'0\" walls): white panels, aluminium frame, carpet, fascia, lighting and power included. Extra furniture and lights can be rented.",
+    inclusions: STD_3X3.inclusions,
+    materials: STD_3X3.materials,
+    addons: STD_3X3.addons,
+    buildTime: STD_3X3.buildTime,
+  },
+  '3x6': {
+    area: '18 sq m',
+    blurb: 'Two-module shell scheme stall with a 6 m open frontage (centre post is part of the structure).',
+    inclusions: [...SHELL_BASE, '2 system counters', '4 white chairs', '6 track-mounted spot lights', '2 x 15 Amp power points', '2 wastepaper baskets'],
+    materials: SHELL_MATERIALS,
+    addons: SHELL_ADDONS,
+    buildTime: SHELL_TIME,
+  },
+  '6x6': {
+    area: '36 sq m',
+    blurb: 'Large shell scheme stall, ideal for product demos and meeting areas.',
+    inclusions: [...SHELL_BASE, '2 system counters', '2 round glass tables', '2 sofas', '6 white chairs', '12 track-mounted spot lights', '3 x 15 Amp power points', '2 wastepaper baskets'],
+    materials: SHELL_MATERIALS,
+    addons: SHELL_ADDONS,
+    buildTime: SHELL_TIME,
+  },
+  '3x9': {
+    area: '27 sq m',
+    blurb: 'Corner shell scheme stall with three modules and a 9 m open frontage, with a sofa and glass table meeting area.',
+    inclusions: [...SHELL_BASE, '1 two-seater sofa', '4 white chairs', '2 system counters', '1 round glass table', '9 track-mounted spot lights', '3 x 15 Amp power points', '2 wastepaper baskets'],
+    materials: SHELL_MATERIALS,
+    addons: SHELL_ADDONS,
+    buildTime: SHELL_TIME,
+  },
+  '2x2': {
+    area: '4 sq m',
+    blurb: 'Compact Startup Booth on a riser. No panel walls, fascia or spot lights.',
+    inclusions: ['1 riser', '1 table', '2 white chairs', '1 x 15 Amp power point', '1 wastepaper basket'],
+    materials: ['Raised platform (riser)', 'Laminate table', 'Vinyl printed standees (inside 2 x 2 m)'],
+    addons: ['Extra chairs', 'Brochure stand', 'Spot light', 'Plug point 15 Amp'],
+    buildTime: SHELL_TIME,
+  },
+};

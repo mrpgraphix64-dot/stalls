@@ -71,6 +71,11 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               <span className="bg-brand-red text-white text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded">
                 {project.categoryLabel}
               </span>
+              {project.designType && (
+                <span className="bg-white/20 text-white text-xs font-semibold px-2 py-0.5 rounded backdrop-blur-sm">
+                  {project.designType}
+                </span>
+              )}
               {project.boothNumber && (
                 <span className="bg-white/20 text-white text-xs font-semibold px-2 py-0.5 rounded backdrop-blur-sm">
                   {project.boothNumber}
@@ -84,11 +89,15 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
 
             <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-gray-300 mt-2 font-medium">
               <span className="text-white font-semibold">{project.event}</span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-brand-orange" />
-                {project.location}
-              </span>
+              {project.location && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-brand-orange" />
+                    {project.location}
+                  </span>
+                </>
+              )}
               {project.year && (
                 <>
                   <span>•</span>
@@ -135,6 +144,39 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Spec sheet: inclusions, materials, add-ons */}
+          {project.inclusions && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-brand-subtle">
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">What's included</h3>
+                <ul className="space-y-1.5 text-sm text-gray-700">
+                  {project.inclusions.map((i) => (
+                    <li key={i} className="flex gap-2"><span className="text-brand-red">✓</span>{i}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Materials</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(project.materials || []).map((m) => (
+                    <span key={m} className="text-xs px-2.5 py-1 rounded-lg bg-brand-surface text-gray-700">{m}</span>
+                  ))}
+                </div>
+                {project.buildTime && (
+                  <p className="text-xs text-gray-600 pt-2"><span className="font-bold">Build time:</span> {project.buildTime}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Optional add-ons</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(project.addons || []).map((a) => (
+                    <span key={a} className="text-xs px-2.5 py-1 rounded-lg border border-brand-subtle text-gray-700">{a}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Multi-angle Views Gallery */}
           <div className="space-y-4">

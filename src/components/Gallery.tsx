@@ -85,6 +85,12 @@ const GalleryCard: React.FC<{
           }`}
         />
 
+        {img.size && (
+          <span className="absolute top-3 left-3 z-20 bg-brand-dark/90 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-sm pointer-events-none">
+            {img.size.replace('x', ' × ')} m
+          </span>
+        )}
+
         {/* Invisible Protective Shield preventing right-click or drag */}
         <div 
           className="absolute inset-0 z-10 cursor-pointer" 

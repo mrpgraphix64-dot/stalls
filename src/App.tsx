@@ -8,6 +8,7 @@ import { Services } from './components/Services';
 import { Process } from './components/Process';
 import { EnquirySection } from './components/EnquirySection';
 import { Footer } from './components/Footer';
+import { SizeFilter } from './components/SizeFilter';
 
 import {
   ALL_PROJECT_IMAGES,
@@ -16,7 +17,18 @@ import {
   ProjectGroup,
 } from './data/projectsData';
 
-export default function App() {
+interface AppProps {
+  initialPrefill?: string;
+}
+
+export default function App({ initialPrefill = '' }: AppProps) {
+  // Size filter
+  const [activeSize, setActiveSize] = useState<string>('all');
+  const visibleImages = React.useMemo(
+    () => (activeSize === 'all' ? ALL_PROJECT_IMAGES : ALL_PROJECT_IMAGES.filter((i) => i.size === activeSize)),
+    [activeSize]
+  );
+
   // Lightbox State
   const [lightboxOpen, setLightboxOpen] = useState<boolean>(false);
   const [lightboxIndex, setLightboxIndex] = useState<number>(0);
@@ -27,7 +39,12 @@ export default function App() {
   const [projectModalOpen, setProjectModalOpen] = useState<boolean>(false);
 
   // Prefilled Enquiry State
-  const [prefilledStall, setPrefilledStall] = useState<string>('');
+  const [prefilledStall, setPrefilledStall] = useState<string>(initialPrefill);
+
+  // Arriving from the builder: jump to the enquiry form
+  React.useEffect(() => {
+    if (initialPrefill) setTimeout(() => document.getElementById('enquiry')?.scrollIntoView(), 50);
+  }, [initialPrefill]);
 
   // Global Image Protection: Block right-click context menu and drag-to-save
   React.useEffect(() => {
@@ -53,7 +70,7 @@ export default function App() {
 
   // Handlers
   const handleOpenLightbox = (_image: ProjectImage, index: number) => {
-    setLightboxImages(ALL_PROJECT_IMAGES);
+    setLightboxImages(visibleImages);
     setLightboxIndex(index);
     setLightboxOpen(true);
   };
@@ -112,10 +129,17 @@ export default function App() {
             </p>
           </div>
 
+          <SizeFilter
+            activeSize={activeSize}
+            onSelectSize={setActiveSize}
+            totalCount={ALL_PROJECT_IMAGES.length}
+            onGetQuote={handleDiscussStall}
+          />
+
           {/* Continuous Masonry Gallery */}
           <div id="projects">
             <Gallery
-              images={ALL_PROJECT_IMAGES}
+              images={visibleImages}
               onImageClick={handleOpenLightbox}
               onProjectClick={handleOpenProjectModal}
             />
