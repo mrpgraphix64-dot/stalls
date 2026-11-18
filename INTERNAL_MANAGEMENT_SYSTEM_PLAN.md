@@ -414,18 +414,34 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
 
 ---
 
-## 6. Security & File Storage Architecture
+## 6. Security, Reliability & Hosting Inspection
 
-1. **Private File System:**
-   - Files are stored in a non-public folder (e.g. `/var/reworkzone_storage/` on the VPS).
-   - Direct web access to file paths is blocked by Nginx.
-   - File downloads must pass through NestJS authentication middleware (`GET /api/v1/files/:id/download`).
-2. **Access Security:**
-   - Individual credentials for every team member.
-   - All mutations log the user's `id` and `timestamp` in `activity_logs`.
-   - Rate limiting on `/api/v1/auth/login` to prevent brute force.
-3. **Database Integrity:**
-   - Automated nightly PostgreSQL `pg_dump` backups stored in a secondary backup directory or S3 bucket.
+### Existing Hosting & Runtime Inspection Results
+1. **Hosting Environment**: Hostinger Shared / Cloud Hosting running Apache 2.4 + PHP 8.x.
+2. **Web Routing**: `.htaccess` handles SPA routing (`RewriteRule . /index.html [L]`) and routes `/admin` to `admin.php`.
+3. **Git Deployment Behavior**: Hostinger Git integration runs `git reset --hard origin/main` on push. Any untracked files inside `public_html` are wiped on deploy.
+4. **Persistent Storage Pattern**: All persistent files (SQLite DB, uploaded client assets, enquiry CSV) MUST reside outside the deploy root in `../reworkzone_data/` (or `../reworkzone_leads/`), with automatic directory creation and permission checks (`0755`).
+
+### Security Hardening Guidelines
+1. **SQLite Database Protection**:
+   - Location: `../reworkzone_data/reworkzone_stalls.sqlite` (physically inaccessible from the web).
+   - `.htaccess` rule added to block any `.sqlite`, `.db`, or `.bak` files if placed locally:
+     ```apache
+     <FilesMatch "\.(sqlite|db|csv|log|bak|env)$">
+       Require all denied
+     </FilesMatch>
+     ```
+2. **6-Digit PIN Authentication Security**:
+   - PINs are hashed using PHP `password_hash()` or SHA-256 with server-side salt.
+   - Rate limiting / lock: After 5 incorrect attempts, lock out submissions for 15 minutes to prevent brute-force attacks.
+   - Session tokens stored in secure, `HttpOnly`, `SameSite=Lax` cookies.
+3. **Private File Storage & Streaming**:
+   - Uploaded working design files (`.ai`, `.cdr`, `.psd`) and high-res print PDFs are stored with obfuscated unique names in `../reworkzone_data/booth_files/{event_id}/{booth_id}/`.
+   - File downloads are served via an authenticated streaming script with proper `Content-Type` and `Content-Disposition: attachment; filename="original_name.pdf"`. No direct public URLs.
+4. **Automated SQLite Backups**:
+   - A lightweight daily snapshot rotates the last 7 daily copies in `../reworkzone_data/backups/`.
+5. **Zero Disruption Guarantee**:
+   - The public website (`/`, `/#portfolio`, `/#builder`, `/send-enquiry.php`) and existing lead intake remain 100% untouched.
 
 ---
 
@@ -433,8 +449,8 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
 
 | Feature | Version 1 (Build First) | Version 2 (Future / Out of Scope) |
 | :--- | :---: | :---: |
-| Team Authentication (Individual Logins) | ✅ Yes | — |
-| Single Shared Permission Level | ✅ Yes | — |
+| 6-Digit PIN Authentication (1 Account) | ✅ Yes | — |
+| Multi-Account Access (2 Accounts: Master vs Ops) | Ready in DB | ✅ Role distinction activated |
 | Event Creation & Scheduling | ✅ Yes | — |
 | Booth Creation with 8 Tab Views | ✅ Yes | — |
 | Categorized File Uploads & Versions | ✅ Yes | — |
@@ -444,38 +460,53 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
 | Basic Costing (Estimated vs Actual) | ✅ Yes | — |
 | Search & Multi-Filter by Event/Status | ✅ Yes | — |
 | Responsive Mobile & Desktop Layout | ✅ Yes | — |
+| Automated SQLite Daily Backups | ✅ Yes | — |
 | Excel / CSV Export of Stall Summaries | ❌ Post-MVP | ✅ V2 |
 | PDF Stall Handover Sheet Generation | ❌ Post-MVP | ✅ V2 |
 | Reusable Stall Blueprint Templates | ❌ Post-MVP | ✅ V2 |
 | Centralized Inventory Stock Accounting | ❌ Out of Scope | Not needed |
-| Multi-role RBAC (Designer vs Vendor) | ❌ Out of Scope | Not needed |
-| Automated WhatsApp / SMS Notifications | ❌ Out of Scope | Evaluated in V2 |
+| Automated WhatsApp / SMS Notifications | ❌ Out of Scope | Not needed |
 
 ---
 
-## 8. Implementation Steps for the Builder AI
+## 8. Recommended Implementation Order for Builder AI
 
-When the user or building agent begins coding this system, execute in the following sequential order:
+The autonomous builder AI should execute the build following these **7 sequential steps**:
 
-1. **Step 1: Database Migration**
-   - Initialize PostgreSQL database `reworkzone_stalls`.
-   - Run the DDL scripts to create all 8 tables (`users`, `events`, `booths`, `booth_files`, `booth_items`, `booth_tasks`, `booth_expenses`, `activity_logs`).
-   - Create initial admin/team seed accounts with hashed passwords.
+### Step 1: Inspect existing website, hosting setup, PHP version & admin auth
+- Inspect the existing website structure, Hostinger Apache `.htaccess` rules, and PHP runtime.
+- Verify that persistent storage path `../reworkzone_data/` is writable.
+- Confirm zero modifications to the public portfolio landing page and `/send-enquiry.php`.
 
-2. **Step 2: NestJS Backend Service**
-   - Setup NestJS project with TypeORM or Prisma ORM.
-   - Implement Auth module (JWT + bcrypt).
-   - Implement Events, Booths, Items, Tasks, and Expenses CRUD modules.
-   - Implement File Storage service with streaming endpoint and `is_final` version logic.
+### Step 2: Create the SQLite database and secure PIN authentication
+- Create SQLite database `reworkzone_stalls.sqlite` with the 8 relational tables.
+- Seed the initial Master 6-Digit PIN account (and configure the schema for the 2nd Operations PIN).
+- Build the PIN verification API endpoint and session management with brute-force rate limiting.
 
-3. **Step 3: Frontend Client Integration**
-   - Mount `/manage` route in React router.
-   - Build Dashboard view with KPI metric tiles and recent booths table.
-   - Build Booth Detail page with the 8 tabbed controllers.
-   - Build file upload modal with category selector and version tracker.
-   - Build checklist and inline item status toggle.
+### Step 3: Build dashboard, event management, and booth management pages
+- Build the `/manage` PIN gate UI (clean numeric keypad + keyboard support).
+- Build the Dashboard overview with KPI tiles (Active Events, Total Booths, In Production, Pending Tasks).
+- Build the Event management interface (create, list, edit event dates and venues).
+- Build the Booth listing with event filtering, status badges, and search.
 
-4. **Step 4: Nginx & Production Deployment**
-   - Configure Nginx reverse proxy to route `/manage` and `/api/v1` to the respective Vite build and NestJS port.
-   - Secure private file storage directory permissions.
-   - Verify mobile responsiveness and on-site photo upload workflow.
+### Step 4: Add design uploads, print files, production, furniture, and electrical management
+- Implement the Booth Details screen with the 8 interactive tabs.
+- Implement file upload with category tagging (`client_assets`, `3d_design`, `artwork`, `print_ready`, etc.).
+- Add the version tracker and the **"Mark as Approved Print File"** (`is_final`) toggle.
+- Build editable item tables for Furniture, Electrical, and Fabrication materials.
+
+### Step 5: Implement checklists, costing, search, and activity logging
+- Implement the 10-step progress checklist with auto-calculated percentage completion.
+- Build the Costing module (Estimated vs. Actual table with auto-calculated difference).
+- Implement activity logging (`activity_logs`) to track updates and changes.
+
+### Step 6: Test permissions, file security, mobile layout, backups, and complete workflow
+- Test that unauthenticated users cannot access any `/manage` views or `/api/manage/*` endpoints.
+- Test that uploaded files cannot be accessed via direct browser URL.
+- Verify mobile responsiveness on venue/mobile screens for on-site checklist updates and photo uploads.
+- Test SQLite backup creation in `../reworkzone_data/backups/`.
+
+### Step 7: Deploy under `/manage` without disturbing the public website or enquiry system
+- Mount `/manage` in the React frontend (or dedicated SPA bundle).
+- Add `.htaccess` routing rules for `/manage` without affecting `/` or `/admin`.
+- Run final production build and sync to repository root for seamless Hostinger Git deployment.
