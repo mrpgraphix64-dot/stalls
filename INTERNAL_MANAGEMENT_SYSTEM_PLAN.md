@@ -13,41 +13,58 @@
 Reworkzone designs, fabricates, and installs bespoke exhibition stalls and pavilions across trade shows in India and internationally. Currently, stall project information—3D renders, working artwork, print-ready files, structural fabrication drawings, furniture orders, electrical requirements, and on-site handovers—is scattered across WhatsApp chats, email threads, and spreadsheets.
 
 ### The Objective
-Build a lightweight, centralized, internal operations workspace where the entire Reworkzone event management team can track every exhibition from preparation through installation:
+Build a lightweight, centralized, internal operations workspace where the Reworkzone event management team can track every exhibition from preparation through installation:
 - **Hierarchy:** `Event / Exhibition` &rarr; `Stall / Booth` &rarr; `Detailed Modules` (Design, Print, Production, Furniture, Electrical, Checklist, Expenses, Files).
-- **Core Principle:** This is an **operations workspace**, not a bloated enterprise ERP/CRM. No complex role hierarchies, no payment gateways, no accounting engines, no automated vendor RFQs in V1.
-- **Access Model:** Unified management team access with individual user logins for auditability (`created_by`, `updated_by`).
+- **Core Principle:** This is an **operations workspace**, not a complicated enterprise ERP/CRM. No complex role hierarchies, no payment gateways, no accounting engines, and no SMS/Email integrations.
+- **Access Model (6-Digit PIN Authentication):**
+  - **Phase 1 (Current):** Single shared account protected by a **6-Digit Security PIN** (e.g. `840106`).
+  - **Phase 2 (Future-Ready):** Structured for **two accounts / PINs**:
+    - **Master / Admin PIN:** Full access to all events, booths, files, checklists, and costing/financials.
+    - **Operations / Staff PIN:** Restricted access (can view booths, upload files, update checklist tasks and furniture/electrical items, but cannot view costing/expenses or delete events).
 
 ---
 
-## 2. Technical Architecture & Stack
+## 2. Technical Architecture & Database
+
+### Current Website Architecture & Database Context
+The existing portfolio website (`stalls.reworkzone.in`) does **NOT** use PostgreSQL, MySQL, or any external database server:
+- Enquiries are saved in a persistent CSV file (`enquiries.csv` in `../reworkzone_leads/`).
+- Settings are saved in JSON (`smtp_config.json`).
+- Admin access at `/admin` is protected by a simple PIN.
+
+### The Management System Architecture: SQLite
+To maintain zero maintenance, zero database hosting fees, and seamless compatibility with Hostinger:
+- **Database:** **SQLite 3** (`reworkzone_stalls.sqlite` stored securely outside `public_html` in `../reworkzone_data/`).
+  - Native in PHP (`pdo_sqlite`) and Node.js (`better-sqlite3` or `sqlite3`).
+  - Single file database with full relational SQL capabilities, transactions, and foreign keys.
+  - Zero daemon configuration, zero connection timeouts, instant backups by copying the single `.sqlite` file.
+- **Backend Options:**
+  - **Option 1 (PHP REST API / Native Hostinger):** Zero extra server or VPS required. Runs directly on the current Hostinger shared hosting using lightweight PHP endpoints (`/api/events.php`, `/api/booths.php`, etc.).
+  - **Option 2 (Node.js / Express or NestJS on VPS):** Runs on Node.js using SQLite.
+- **Frontend:** React 18 + Vite + Tailwind CSS mounted at `/manage/*`.
+- **File Storage:** Private folder on disk (e.g. `../reworkzone_data/booth_files/`) served through authenticated streaming scripts. No public URLs.
 
 ```
-                              [ Client Browser ]
-                     (React + Vite + Tailwind UI at /manage/*)
+                         [ Team Member Browser ]
+                     (React + Tailwind UI at /manage/*)
                                      │
-                                HTTPS / WSS
+                             [ 6-Digit PIN Gate ]
                                      │
-                             [ Nginx Reverse Proxy ]
-               ┌─────────────────────┴─────────────────────┐
-               ▼                                           ▼
-      [ Public Static Site ]                    [ NestJS API Gateway ]
-   (stalls.reworkzone.in /)                  (stalls.reworkzone.in/api/v1)
-                                                           │
-                                   ┌───────────────────────┴───────────────────────┐
-                                   ▼                                               ▼
-                         [ PostgreSQL 16 DB ]                           [ Private Object Store ]
-                         (Relational Data)                           (/var/reworkzone_storage/files)
+                            [ Lightweight API ]
+                                     │
+                    ┌────────────────┴────────────────┐
+                    ▼                                 ▼
+         [ SQLite Database File ]            [ Private Storage ]
+      (../reworkzone_data/stalls.sqlite)     (../reworkzone_data/files/)
 ```
 
 | Component | Selected Technology | Rationale |
 | :--- | :--- | :--- |
-| **Frontend** | React 18 + Vite + Tailwind CSS + Lucide Icons | High-speed build, matches existing website aesthetics, responsive desktop & mobile. |
-| **Backend** | Node.js + NestJS (TypeScript) | Modular architecture, strong schema validation (class-validator), built-in OpenAPI/Swagger. |
-| **Database** | PostgreSQL 16 (or Supabase / Managed PG) | Relational integrity, UUID primary keys, JSONB for flexible item metadata, ACID transactions. |
-| **File Storage** | Private Local/S3-compatible Object Storage | Private bucket / secured disk directory served through signed streaming tokens (NOT public URLs). |
-| **Authentication** | JWT (HttpOnly cookies) + bcrypt password hashing | Single team permission level, persistent sessions, individual accounts for edit logs. |
-| **Hosting & OS** | Hostinger VPS (Ubuntu 22.04 LTS / 24.04 LTS) | Runs Node.js runtime, PostgreSQL daemon, Nginx reverse proxy, and SSL via Let's Encrypt. |
+| **Frontend** | React 18 + Vite + Tailwind CSS + Lucide Icons | Matches existing site aesthetics; fast, responsive mobile & desktop. |
+| **Database** | SQLite 3 (`reworkzone_stalls.sqlite`) | **No PostgreSQL needed.** Single file, ACID compliant, native on Hostinger. |
+| **Authentication** | 6-Digit PIN Session | Simple, frictionless team access. Expandable to 2 accounts later. |
+| **File Storage** | Private Disk Storage | Stored outside public root, accessed via auth session. |
+| **Notifications** | None | No email or SMS overhead. Pure internal dashboard. |
 
 ---
 
@@ -179,31 +196,34 @@ erDiagram
     }
 ```
 
-### Table Definitions & Enums
+### Table Definitions (SQLite Schema)
 
-#### 1. `users`
-- `id` (UUID, PK, Default: `gen_random_uuid()`)
-- `full_name` (VARCHAR(150), NOT NULL)
-- `email` (VARCHAR(255), UNIQUE, NOT NULL)
-- `password_hash` (TEXT, NOT NULL)
-- `phone` (VARCHAR(30))
-- `is_active` (BOOLEAN, Default: `true`)
-- `created_at` (TIMESTAMPTZ, Default: `NOW()`)
-- `updated_at` (TIMESTAMPTZ, Default: `NOW()`)
+#### 1. `auth_accounts` (Simple 6-Digit PIN Accounts)
+- `id` (INTEGER PRIMARY KEY)
+- `account_name` (TEXT NOT NULL) — e.g. "Primary Admin", "Operations Team"
+- `pin_hash` (TEXT NOT NULL) — SHA256 / bcrypt hash of the 6-digit PIN
+- `role` (TEXT NOT NULL DEFAULT 'master') — `'master'` (full access) or `'operations'` (restricted: cannot view expenses or delete records)
+- `is_active` (INTEGER DEFAULT 1)
+- `last_login_at` (TEXT)
+
+*Initial Seed:*
+- Account 1: Role `'master'`, 6-digit PIN (e.g. `840106`).
+- Account 2 (Ready for future activation): Role `'operations'`, 6-digit PIN (e.g. `898000`).
 
 #### 2. `events`
-- `id` (UUID, PK)
-- `name` (VARCHAR(200), NOT NULL) — e.g. "Tech Expo 2026"
-- `venue` (VARCHAR(255), NOT NULL) — e.g. "Exhibition Centre, Ahmedabad"
-- `city` (VARCHAR(100), NOT NULL)
-- `start_date` (DATE, NOT NULL)
-- `end_date` (DATE, NOT NULL)
-- `setup_date` (DATE, NOT NULL)
-- `dismantling_date` (DATE, NOT NULL)
-- `coordinator_id` (UUID, FK &rarr; `users.id`, NULLABLE)
+- `id` (TEXT PRIMARY KEY) — UUIDv4 or nanoId
+- `name` (TEXT NOT NULL) — e.g. "Tech Expo 2026"
+- `venue` (TEXT NOT NULL) — e.g. "Exhibition Centre, Ahmedabad"
+- `city` (TEXT NOT NULL)
+- `start_date` (TEXT NOT NULL) — ISO format YYYY-MM-DD
+- `end_date` (TEXT NOT NULL)
+- `setup_date` (TEXT NOT NULL)
+- `dismantling_date` (TEXT NOT NULL)
+- `coordinator_name` (TEXT) — e.g. "Chintan", "Rahul"
 - `notes` (TEXT)
-- `status` (VARCHAR(30), Default: `'upcoming'`) — `upcoming`, `in_progress`, `completed`, `archived`
-- `created_at` / `updated_at` (TIMESTAMPTZ)
+- `status` (TEXT DEFAULT 'upcoming') — `upcoming`, `in_progress`, `completed`, `archived`
+- `created_at` (TEXT DEFAULT CURRENT_TIMESTAMP)
+- `updated_at` (TEXT DEFAULT CURRENT_TIMESTAMP)
 
 #### 3. `booths`
 - `id` (UUID, PK)
