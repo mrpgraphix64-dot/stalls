@@ -1,10 +1,10 @@
-# Reworkzone Stalls — Internal Operations Management System (V1 Architecture & Implementation Specification)
+# Reworkzone Stalls — Internal Operations Management System (V1 Final Approved Specification)
 
 > **Document Type:** System Architecture & Implementation Blueprint for Autonomous AI Builder  
 > **Target Scope:** Version 1 (MVP) Internal Operations Workspace  
 > **Client / Business:** Reworkzone (`stalls.reworkzone.in`)  
 > **Audience:** Development AI / Engineering Team  
-> **Status:** Final Approved Specification (Baseline for Implementation)
+> **Status:** FROZEN & APPROVED FOR IMPLEMENTATION (Baseline Locked)
 
 ---
 
@@ -19,10 +19,12 @@ Build a lightweight, centralized, internal operations workspace where the Rework
 - **File Management Principle (Google Drive Links Only):**
   - **No binary file uploads to the server:** Large design files (`.ai`, `.psd`, `.cdr`), 3D renders, and high-res print PDFs are hosted on Google Drive where the team already works.
   - The system saves and organizes **Google Drive URLs and metadata** (Main Folder + categorized links with explicit `is_final` approval flags). Google Drive manages file permissions, storage capacity, and bandwidth.
-- **Access Model (6-Digit PIN Authentication):**
+- **Access Model (One Shared 6-Digit Master PIN):**
   - **Version 1 Scope:** Single shared Master account protected by a **6-Digit Security PIN**.
-  - **No Default PIN in Repository:** No default PIN is hardcoded into the code or repository. The initial PIN is configured securely during installation / first-run setup.
+  - **No Default PIN in Repository:** No default PIN is hardcoded into the code or repository.
+  - **Secure First-Run Setup Gate:** The setup endpoint is accessible only when the database is uninitialized (`COUNT(*) === 0`). Once the Master PIN is set, the setup endpoint is permanently locked (`403 Forbidden`).
   - **Future-Ready Schema:** The database schema includes a `role` column (`'master'` vs `'operations'`) so a second restricted account can be activated in the future without schema migrations, but **only the Master account is seeded or active in Version 1**.
+  - **Understood V1 Audit Limitation:** Because the entire team shares one Master PIN in Version 1, `activity_logs` tracks actions, modified fields, and timestamps, but does not provide a per-person biometric identity. This is an intentional design tradeoff for V1 simplicity.
 
 ---
 
@@ -137,6 +139,7 @@ erDiagram
         string drive_url
         integer version
         integer is_final
+        string approved_at
         string notes
         string created_at
         string updated_at
@@ -199,9 +202,9 @@ erDiagram
 - `is_active` (INTEGER DEFAULT 1)
 - `last_login_at` (TEXT)
 
-*V1 Account Seed:*
-- **Only Account 1 (Master Admin) is seeded in Version 1.**
-- No default PIN is written in this document or the repo. The initial PIN is prompted / configured on first run.
+*V1 Account Scope:*
+- **Only Account 1 (Master Admin) is created in Version 1.**
+- No default PIN is written in this document or the repo. The initial PIN is configured securely on first run.
 - Account 2 (`operations`) is not seeded in V1, but the table schema is ready for it when needed.
 
 #### 2. `events`
@@ -246,10 +249,15 @@ erDiagram
 - `title` (TEXT NOT NULL) — e.g. "Front Fascia Approved Print PDF", "3D Stall Render V2", "Electrical Layout DWG"
 - `drive_url` (TEXT NOT NULL) — Full Google Drive URL
 - `version` (INTEGER DEFAULT 1) — Optional revision number
-- `is_final` (INTEGER DEFAULT 0) — **0 = Draft, 1 = Final Approved Link.** *Rule:* New links always default to 0. An explicit user approval action is required to promote to 1.
+- `is_final` (INTEGER DEFAULT 0) — **0 = Draft, 1 = Final Approved Link.**
+- `approved_at` (TEXT) — ISO timestamp when `is_final` was set to 1.
 - `notes` (TEXT) — e.g. "Approved by client on WhatsApp 9 Dec; CMYK 300 DPI"
 - `created_at` (TEXT DEFAULT CURRENT_TIMESTAMP)
 - `updated_at` (TEXT DEFAULT CURRENT_TIMESTAMP)
+
+*Approval Safety Rules for `booth_links`:*
+1. **Never Auto-Approve:** Newly created links always default to Draft (`is_final = 0`). Explicit button action is required to promote to Approved (`is_final = 1`).
+2. **URL Modification Auto-Invalidation:** If a user edits or updates the `drive_url` of an approved link, the system **automatically invalidates the approval** (`is_final = 0`, `approved_at = NULL`). The link must be explicitly re-approved.
 
 #### 5. `booth_items`
 - `id` (TEXT PRIMARY KEY)
@@ -307,10 +315,15 @@ erDiagram
 
 ---
 
-## 4. 6-Digit PIN Authentication Flow & Security
+## 4. 6-Digit PIN Authentication Flow & Setup Security
 
 ```
 [ User visits /manage ]
+         │
+         ▼
+[ Is database initialized? ] ──► NO ──► [ First-Run Setup Gate ] (Configure Master PIN)
+         │                                       │
+        YES                             (Locks permanently once set)
          │
          ▼
 [ Is session active? ] ──► YES ──► [ Open Operations Dashboard ]
@@ -333,6 +346,10 @@ erDiagram
   └── Valid Master PIN ──► Create Secure Session (Role: 'master')
 ```
 
+- **First-Run Setup Protection:**
+  - The setup endpoint `/manage/api/setup.php` is only accessible if `COUNT(*) === 0` in `auth_accounts`.
+  - Once the Master PIN is initialized, the setup endpoint locks permanently and returns `403 Forbidden`.
+  - Re-setting requires authorized server access (e.g. deleting the database or updating via hPanel / SSH).
 - **Clean keypad interface:** Numeric touch-pad for mobile and standard keyboard entry on desktop.
 - **Auto-submission:** Submits automatically upon entering the 6th digit.
 - **Server-Side Brute-Force Rate Limiting:**
@@ -375,11 +392,11 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
   - *Title:* e.g. "Approved Backwall Banner 6x3m (Print PDF)".
   - *Google Drive URL:* `https://drive.google.com/...`
   - *Version / Revision:* e.g. `v2`.
-  - *Approval Safety Rule:* **All new links default to Draft (`is_final = 0`).** A separate, intentional click on "Approve for Print" is required to promote to `is_final = 1`.
   - *Notes:* Optional notes for printer or fabricator.
-- **Visual Safety Badges:**
-  - `is_final = 1`: Highlighted with an emerald badge **"APPROVED FOR PRINT"**.
+- **Visual Safety Badges & Invalidation:**
+  - `is_final = 1`: Highlighted with an emerald badge **"APPROVED FOR PRINT"** (shows `approved_at` date).
   - `is_final = 0`: Highlighted with an amber badge **"WORKING DRAFT"**.
+  - Changing the URL instantly reverts badge to amber ("WORKING DRAFT") until explicitly re-approved.
 
 ---
 
@@ -404,10 +421,10 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
        Require all denied
      </FilesMatch>
      ```
-3. **Consistent Backups & Server-Side Protected Download**:
-   - Automated daily SQLite snapshot created via SQLite's safe backup API (`sqlite3_backup` or atomic transaction copy) stored in `../reworkzone_data/backups/`.
-   - **Endpoint Security on Backup Download:** The backup download API endpoint (`/manage/api/backup.php`) **strictly validates server-side** that the session is authenticated and has `role === 'master'`. Unauthenticated or unauthorized requests receive `HTTP 403 Forbidden`.
-   - **Offsite Redundancy:** The Master administrator can download the `.sqlite` snapshot locally with 1 click from `/manage/settings` to maintain an offsite copy.
+3. **Online SQLite Backups & Server-Side Protected Download**:
+   - Automated daily snapshots created via SQLite's **Online Backup API** (`sqlite3_backup` in PHP PDO/SQLite3 extensions) ensuring atomic, non-locking snapshots while the database is live. Stored in `../reworkzone_data/backups/`.
+   - **Endpoint Security on Backup Download:** The backup download API endpoint (`/manage/api/backup.php`) **strictly validates server-side** that the session is authenticated with `role === 'master'`. Unauthenticated or unauthorized requests receive `HTTP 403 Forbidden`.
+   - **Offsite Redundancy:** The Master administrator can download the `.sqlite` snapshot locally with 1 click from `/manage/settings` to maintain an essential offsite copy outside the hosting provider.
 
 ---
 
@@ -421,13 +438,13 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
 | Booth Creation with 8 Tab Views | ✅ Yes | — |
 | Main Google Drive Folder per Booth | ✅ Yes | — |
 | Categorized Google Drive File Links | ✅ Yes | — |
-| Explicit "Final" Link Approval Action | ✅ Yes | — |
+| Explicit Approval Action + URL Invalidation | ✅ Yes | — |
 | Furniture & Material Items Checklist | ✅ Yes | — |
 | 10-Step Default Checklist with Auto % | ✅ Yes | — |
 | Basic Costing (Estimated vs Actual) | ✅ Yes | — |
 | Search & Multi-Filter by Event/Status | ✅ Yes | — |
 | Responsive Mobile & Desktop Layout | ✅ Yes | — |
-| Automated Daily SQLite Backups | ✅ Yes | — |
+| Automated Online SQLite Daily Backups | ✅ Yes | — |
 | Server-Protected 1-Click DB Backup Download | ✅ Yes (Master only) | — |
 | Direct Server File Uploads | ❌ Removed | Replaced by Google Drive Links |
 | Excel / CSV Export of Stall Summaries | ❌ Post-MVP | ✅ V2 |
@@ -448,7 +465,7 @@ The autonomous builder AI should execute the build following these **7 sequentia
 
 ### Step 2: Create the SQLite database and secure PIN authentication
 - Create SQLite database `reworkzone_stalls.sqlite` with the 8 relational tables (including `booth_links` and `main_drive_folder_url`).
-- Seed **only the Master account**; prompt for or configure the initial PIN securely (no hardcoded PIN in repo).
+- Seed **only the Master account**; provide first-run setup that permanently locks once configured.
 - Build the PIN verification API endpoint with 5-attempt rate-limiting lockout and secure session cookies.
 
 ### Step 3: Build dashboard, event management, and booth management pages
@@ -461,7 +478,7 @@ The autonomous builder AI should execute the build following these **7 sequentia
 - Implement the Booth Details screen with the 8 interactive tabs.
 - Build the **Main Google Drive Folder** input and 1-click redirect button.
 - Build the **Google Drive Links Library** (`booth_links`) with category filtering (`Print Ready`, `3D Design`, `Working Artwork`, `Production`, `References`, `Installation`).
-- Enforce the **Approval Safety Rule**: new links default to draft (`is_final = 0`); explicit button click required to promote to approved final link (`is_final = 1`).
+- Enforce the **Approval Safety Rule**: new links default to draft (`is_final = 0`); explicit button click required to promote to approved final link (`is_final = 1`, records `approved_at`); URL modification resets approval.
 - Build editable item tables for Furniture, Electrical, and Fabrication materials.
 
 ### Step 5: Implement checklists, costing, search, and activity logging
@@ -474,7 +491,7 @@ The autonomous builder AI should execute the build following these **7 sequentia
 - Test that the backup download endpoint strictly denies non-master access (`HTTP 403 Forbidden`).
 - Verify that opening Google Drive links opens correctly in new tabs.
 - Verify mobile responsiveness on venue/mobile screens for on-site checklist updates.
-- Test SQLite daily backup creation and the 1-click **Download DB Backup** feature.
+- Test SQLite online backup creation and the 1-click **Download DB Backup** feature.
 
 ### Step 7: Deploy under `/manage` without disturbing the public website or enquiry system
 - Mount `/manage` in the React frontend (or dedicated SPA bundle).
