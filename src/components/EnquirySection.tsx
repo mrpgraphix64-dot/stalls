@@ -89,20 +89,19 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall =
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
-    // For phone field, restrict input characters and allow 10, 11, or 12 digits (for domestic and foreign numbers)
+    // For phone field, restrict input characters and hard-cap digit length
     let cleanedValue = value;
     if (name === 'phone') {
+      // Strip everything except digits, +, spaces, dashes, parens
       cleanedValue = value.replace(/[^0-9+\s\-()]/g, '');
       const digitsOnly = cleanedValue.replace(/\D/g, '');
-      // If doesn't start with +, cap at 12 digits (permitting 10, 11, or 12 digits)
-      if (!cleanedValue.trim().startsWith('+')) {
-        if (digitsOnly.length > 12) {
-          cleanedValue = digitsOnly.slice(0, 12);
-        }
-      } else {
-        if (digitsOnly.length > 13) {
-          cleanedValue = '+' + digitsOnly.slice(0, 13);
-        }
+      const hasPlus = cleanedValue.trim().startsWith('+');
+      const maxDigits = hasPlus ? 13 : 12;
+
+      // Hard cap: if digits exceed limit, rebuild from digits only
+      if (digitsOnly.length > maxDigits) {
+        const cappedDigits = digitsOnly.slice(0, maxDigits);
+        cleanedValue = hasPlus ? '+' + cappedDigits : cappedDigits;
       }
     }
 
@@ -114,10 +113,13 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall =
     // LIVE VALIDATION: Run immediately on change as user types
     if (name === 'phone') {
       const rawDigits = cleanedValue.replace(/\D/g, '');
-      if (rawDigits.length >= 10 && rawDigits.length <= 12 && !/^(\d)\1{9,}$/.test(rawDigits)) {
-        // Valid 10-12 digits: clear error immediately
+      const hasPlus = cleanedValue.trim().startsWith('+');
+      const maxDigits = hasPlus ? 13 : 12;
+      if (rawDigits.length >= 10 && rawDigits.length <= maxDigits && !/^(\d)\1{9,}$/.test(rawDigits)) {
+        // Valid: clear error immediately
         setFieldErrors((prev) => ({ ...prev, phone: undefined }));
-      } else if (fieldErrors.phone || (touchedFields.phone && rawDigits.length > 0)) {
+      } else if (rawDigits.length > 0) {
+        // Show error live while typing
         const err = validateField(name, cleanedValue);
         setFieldErrors((prev) => ({ ...prev, phone: err }));
       }
@@ -415,7 +417,7 @@ export const EnquirySection: React.FC<EnquirySectionProps> = ({ prefilledStall =
                       <input
                         type="tel"
                         name="phone"
-                        maxLength={15}
+                        maxLength={16}
                         value={formData.phone}
                         onChange={handleChange}
                         onBlur={handleBlur}
