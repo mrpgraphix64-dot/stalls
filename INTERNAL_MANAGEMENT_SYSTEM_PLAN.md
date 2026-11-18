@@ -4,7 +4,7 @@
 > **Target Scope:** Version 1 (MVP) Internal Operations Workspace  
 > **Client / Business:** Reworkzone (`stalls.reworkzone.in`)  
 > **Audience:** Development AI / Engineering Team  
-> **Status:** Approved for Implementation (6-Digit PIN Auth + SQLite Database + Google Drive Links)
+> **Status:** Final Approved Specification (Baseline for Implementation)
 
 ---
 
@@ -18,12 +18,11 @@ Build a lightweight, centralized, internal operations workspace where the Rework
 - **Core Principle:** This is an **operations workspace**, not a complicated enterprise ERP/CRM. No complex role hierarchies, no payment gateways, no accounting engines, and no SMS/Email integrations.
 - **File Management Principle (Google Drive Links Only):**
   - **No binary file uploads to the server:** Large design files (`.ai`, `.psd`, `.cdr`), 3D renders, and high-res print PDFs are hosted on Google Drive where the team already works.
-  - The system saves and organizes **Google Drive URLs and metadata** (Main Folder + categorized links with `is_final` approval flags). Google Drive manages file permissions, storage capacity, and bandwidth.
+  - The system saves and organizes **Google Drive URLs and metadata** (Main Folder + categorized links with explicit `is_final` approval flags). Google Drive manages file permissions, storage capacity, and bandwidth.
 - **Access Model (6-Digit PIN Authentication):**
-  - **Phase 1 (Current):** Single shared account protected by a **6-Digit Security PIN** (e.g. `840106`).
-  - **Phase 2 (Future-Ready):** Structured for **two accounts / PINs**:
-    - **Master / Admin PIN:** Full access to all events, booths, drive links, checklists, and costing/financials.
-    - **Operations / Staff PIN:** Restricted access (can view booths, add/view drive links, update checklist tasks and furniture/electrical items, but cannot view costing/expenses or delete events).
+  - **Version 1 Scope:** Single shared Master account protected by a **6-Digit Security PIN**.
+  - **No Default PIN in Repository:** No default PIN is hardcoded into the code or repository. The initial PIN is configured securely during installation / first-run setup.
+  - **Future-Ready Schema:** The database schema includes a `role` column (`'master'` vs `'operations'`) so a second restricted account can be activated in the future without schema migrations, but **only the Master account is seeded or active in Version 1**.
 
 ---
 
@@ -64,7 +63,7 @@ To maintain zero maintenance, zero database hosting fees, and seamless compatibi
 | :--- | :--- | :--- |
 | **Frontend** | React 18 + Vite + Tailwind CSS + Lucide Icons | Matches existing site aesthetics; fast, responsive mobile & desktop. |
 | **Database** | SQLite 3 (`reworkzone_stalls.sqlite`) | **No PostgreSQL needed.** Single file, ACID compliant, native on Hostinger. |
-| **Authentication** | 6-Digit PIN Session | Secure `password_hash()` (bcrypt/Argon2id) with attempt limits. |
+| **Authentication** | 6-Digit PIN Session | Secure `password_hash()` (bcrypt/Argon2id) with server-side attempt limits. |
 | **File Management** | **Google Drive Links Only** | **No server uploads.** Saves Drive URLs; team uses existing Google Drive storage. |
 | **Notifications** | None | No email or SMS overhead. Pure internal dashboard. |
 
@@ -192,17 +191,18 @@ erDiagram
 
 ### Table Definitions (SQLite Schema)
 
-#### 1. `auth_accounts` (Simple 6-Digit PIN Accounts)
+#### 1. `auth_accounts` (PIN Account Schema)
 - `id` (INTEGER PRIMARY KEY)
-- `account_name` (TEXT NOT NULL) — e.g. "Primary Admin", "Operations Team"
-- `pin_hash` (TEXT NOT NULL) — Hash created using PHP `password_hash()` with `PASSWORD_BCRYPT` or `PASSWORD_ARGON2ID`
-- `role` (TEXT NOT NULL DEFAULT 'master') — `'master'` (full access) or `'operations'` (restricted: cannot view expenses or delete records)
+- `account_name` (TEXT NOT NULL) — e.g. "Master Admin"
+- `pin_hash` (TEXT NOT NULL) — Hash generated using PHP `password_hash()` with `PASSWORD_BCRYPT` (cost 12) or `PASSWORD_ARGON2ID`
+- `role` (TEXT NOT NULL DEFAULT 'master') — `'master'` (full access) or `'operations'` (restricted access)
 - `is_active` (INTEGER DEFAULT 1)
 - `last_login_at` (TEXT)
 
-*Initial Seed:*
-- Account 1: Role `'master'`, 6-digit PIN (e.g. `840106`).
-- Account 2 (Ready for future activation): Role `'operations'`, 6-digit PIN (e.g. `898000`).
+*V1 Account Seed:*
+- **Only Account 1 (Master Admin) is seeded in Version 1.**
+- No default PIN is written in this document or the repo. The initial PIN is prompted / configured on first run.
+- Account 2 (`operations`) is not seeded in V1, but the table schema is ready for it when needed.
 
 #### 2. `events`
 - `id` (TEXT PRIMARY KEY) — UUIDv4 or nanoId
@@ -246,7 +246,7 @@ erDiagram
 - `title` (TEXT NOT NULL) — e.g. "Front Fascia Approved Print PDF", "3D Stall Render V2", "Electrical Layout DWG"
 - `drive_url` (TEXT NOT NULL) — Full Google Drive URL
 - `version` (INTEGER DEFAULT 1) — Optional revision number
-- `is_final` (INTEGER DEFAULT 0) — **1 = Final Approved Link, 0 = Working Draft**
+- `is_final` (INTEGER DEFAULT 0) — **0 = Draft, 1 = Final Approved Link.** *Rule:* New links always default to 0. An explicit user approval action is required to promote to 1.
 - `notes` (TEXT) — e.g. "Approved by client on WhatsApp 9 Dec; CMYK 300 DPI"
 - `created_at` (TEXT DEFAULT CURRENT_TIMESTAMP)
 - `updated_at` (TEXT DEFAULT CURRENT_TIMESTAMP)
@@ -301,13 +301,13 @@ erDiagram
 - `id` (TEXT PRIMARY KEY)
 - `booth_id` (TEXT)
 - `action_type` (TEXT)
-- `actor_label` (TEXT) — e.g. "Master Admin" or "Operations"
+- `actor_label` (TEXT) — e.g. "Master Admin"
 - `description` (TEXT)
 - `created_at` (TEXT DEFAULT CURRENT_TIMESTAMP)
 
 ---
 
-## 4. Simple 6-Digit PIN Authentication Flow
+## 4. 6-Digit PIN Authentication Flow & Security
 
 ```
 [ User visits /manage ]
@@ -330,14 +330,17 @@ erDiagram
          │
          ▼
 [ Verify via password_verify() ]
-  ├── PIN 1 (Master)     ──► Role: 'master'     (Full Read/Write/Costing)
-  └── PIN 2 (Operations) ──► Role: 'operations' (Checklists, items, links; costing hidden)
+  └── Valid Master PIN ──► Create Secure Session (Role: 'master')
 ```
 
-- Clean numeric keypad on mobile or standard keyboard on desktop.
-- 6-digit auto-submit on 6th digit.
-- **Brute-Force Lockout**: 5 consecutive failed attempts lock submissions for 15 minutes.
-- Encrypted HTTP-only session cookie (`SameSite=Lax`, `Secure`).
+- **Clean keypad interface:** Numeric touch-pad for mobile and standard keyboard entry on desktop.
+- **Auto-submission:** Submits automatically upon entering the 6th digit.
+- **Server-Side Brute-Force Rate Limiting:**
+  - Track consecutive failed attempts per IP / session in a transient log.
+  - If 5 failed attempts occur within 10 minutes, lock out submissions from that client for 15 minutes.
+- **Session Security:**
+  - Encrypted, HttpOnly, SameSite=Lax cookie.
+  - Session automatically expires after 7 days of inactivity.
 
 ---
 
@@ -360,19 +363,19 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
   ├── Tab 5: Furniture        (Editable table: item, pcs, status, vendor)
   ├── Tab 6: Electrical       (Lights, power sockets, load specs, status)
   ├── Tab 7: Drive Links      (Complete Google Drive Link Library: Add Link, category filter, 1-click open)
-  └── Tab 8: Checklist & Cost (10-step progress checklist + Estimated vs Actual expenses; role-protected)
-/manage/settings              --> PIN management & Manual SQLite Database Backup Download
+  └── Tab 8: Checklist & Cost (10-step progress checklist + Estimated vs Actual expenses)
+/manage/settings              --> PIN management & Server-Protected SQLite Backup Download (Master only)
 ```
 
-### Google Drive Links UI Component
-- **Main Drive Folder Card:** Displayed prominently at top of booth page:  
+### Google Drive Links UI & Approval Safety Rule
+- **Main Drive Folder Card:** Prominent header button:  
   `[ 📁 Open Google Drive Master Folder ↗ ]`
 - **Link Entry Form Modal:**
   - *Category:* Select from `Print Ready`, `3D Design`, `Working Artwork`, `Production`, `References`, `Installation`.
   - *Title:* e.g. "Approved Backwall Banner 6x3m (Print PDF)".
   - *Google Drive URL:* `https://drive.google.com/...`
   - *Version / Revision:* e.g. `v2`.
-  - *Is Final:* Checkbox `[x] Mark as Final Approved Print File`.
+  - *Approval Safety Rule:* **All new links default to Draft (`is_final = 0`).** A separate, intentional click on "Approve for Print" is required to promote to `is_final = 1`.
   - *Notes:* Optional notes for printer or fabricator.
 - **Visual Safety Badges:**
   - `is_final = 1`: Highlighted with an emerald badge **"APPROVED FOR PRINT"**.
@@ -401,9 +404,10 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
        Require all denied
      </FilesMatch>
      ```
-3. **Consistent Backups & Offsite Redundancy**:
-   - Automated daily SQLite snapshot stored in `../reworkzone_data/backups/`.
-   - **Manual Offsite Backup Download:** A dedicated **"Download Database Backup"** button in `/manage/settings` allows the administrator to download a `.sqlite` snapshot to their local computer with a single click.
+3. **Consistent Backups & Server-Side Protected Download**:
+   - Automated daily SQLite snapshot created via SQLite's safe backup API (`sqlite3_backup` or atomic transaction copy) stored in `../reworkzone_data/backups/`.
+   - **Endpoint Security on Backup Download:** The backup download API endpoint (`/manage/api/backup.php`) **strictly validates server-side** that the session is authenticated and has `role === 'master'`. Unauthenticated or unauthorized requests receive `HTTP 403 Forbidden`.
+   - **Offsite Redundancy:** The Master administrator can download the `.sqlite` snapshot locally with 1 click from `/manage/settings` to maintain an offsite copy.
 
 ---
 
@@ -411,20 +415,20 @@ Theme: Clean, high-contrast, professional admin aesthetic matching Reworkzone br
 
 | Feature | Version 1 (Build First) | Version 2 (Future / Out of Scope) |
 | :--- | :---: | :---: |
-| 6-Digit PIN Authentication (1 Account) | ✅ Yes | — |
-| Multi-Account Access (2 Accounts: Master vs Ops) | Ready in DB | ✅ Role distinction activated |
+| 6-Digit PIN Authentication (Master Account Only) | ✅ Yes | — |
+| Multi-Account Access (Operations Account) | Schema Ready | ✅ Role distinction activated |
 | Event Creation & Scheduling | ✅ Yes | — |
 | Booth Creation with 8 Tab Views | ✅ Yes | — |
 | Main Google Drive Folder per Booth | ✅ Yes | — |
 | Categorized Google Drive File Links | ✅ Yes | — |
-| Approved "Final" File Flagging | ✅ Yes | — |
+| Explicit "Final" Link Approval Action | ✅ Yes | — |
 | Furniture & Material Items Checklist | ✅ Yes | — |
 | 10-Step Default Checklist with Auto % | ✅ Yes | — |
 | Basic Costing (Estimated vs Actual) | ✅ Yes | — |
 | Search & Multi-Filter by Event/Status | ✅ Yes | — |
 | Responsive Mobile & Desktop Layout | ✅ Yes | — |
-| Automated SQLite Daily Backups | ✅ Yes | — |
-| 1-Click SQLite Backup Download | ✅ Yes | — |
+| Automated Daily SQLite Backups | ✅ Yes | — |
+| Server-Protected 1-Click DB Backup Download | ✅ Yes (Master only) | — |
 | Direct Server File Uploads | ❌ Removed | Replaced by Google Drive Links |
 | Excel / CSV Export of Stall Summaries | ❌ Post-MVP | ✅ V2 |
 | PDF Stall Handover Sheet Generation | ❌ Post-MVP | ✅ V2 |
@@ -444,7 +448,7 @@ The autonomous builder AI should execute the build following these **7 sequentia
 
 ### Step 2: Create the SQLite database and secure PIN authentication
 - Create SQLite database `reworkzone_stalls.sqlite` with the 8 relational tables (including `booth_links` and `main_drive_folder_url`).
-- Seed the initial Master 6-Digit PIN account using `password_hash()` with `PASSWORD_BCRYPT`.
+- Seed **only the Master account**; prompt for or configure the initial PIN securely (no hardcoded PIN in repo).
 - Build the PIN verification API endpoint with 5-attempt rate-limiting lockout and secure session cookies.
 
 ### Step 3: Build dashboard, event management, and booth management pages
@@ -457,7 +461,7 @@ The autonomous builder AI should execute the build following these **7 sequentia
 - Implement the Booth Details screen with the 8 interactive tabs.
 - Build the **Main Google Drive Folder** input and 1-click redirect button.
 - Build the **Google Drive Links Library** (`booth_links`) with category filtering (`Print Ready`, `3D Design`, `Working Artwork`, `Production`, `References`, `Installation`).
-- Add the **"Mark as Final Approved Print File"** toggle with visual safety badges.
+- Enforce the **Approval Safety Rule**: new links default to draft (`is_final = 0`); explicit button click required to promote to approved final link (`is_final = 1`).
 - Build editable item tables for Furniture, Electrical, and Fabrication materials.
 
 ### Step 5: Implement checklists, costing, search, and activity logging
@@ -466,7 +470,8 @@ The autonomous builder AI should execute the build following these **7 sequentia
 - Implement activity logging (`activity_logs`) to track updates and changes.
 
 ### Step 6: Test permissions, drive links, mobile layout, backups, and complete workflow
-- Test that unauthenticated users cannot access any `/manage` views or `/api/manage/*` endpoints.
+- Test that unauthenticated users cannot access any `/manage` views or `/manage/api/*` endpoints.
+- Test that the backup download endpoint strictly denies non-master access (`HTTP 403 Forbidden`).
 - Verify that opening Google Drive links opens correctly in new tabs.
 - Verify mobile responsiveness on venue/mobile screens for on-site checklist updates.
 - Test SQLite daily backup creation and the 1-click **Download DB Backup** feature.
