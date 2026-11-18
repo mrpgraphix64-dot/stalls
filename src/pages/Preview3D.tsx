@@ -420,7 +420,7 @@ function buildItem(it: PlacedItem, brand: string, accent: string, wallH: number,
 }
 
 function disposeTree(o: THREE.Object3D) {
-  o.traverse((c) => {
+  o.traverse((c: THREE.Object3D) => {
     if ((c as THREE.Light).isLight) (c as THREE.SpotLight).shadow?.dispose?.();
     const m = c as THREE.Mesh;
     if (m.geometry) m.geometry.dispose();
