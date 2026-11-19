@@ -1,0 +1,307 @@
+<?php
+/**
+ * Reworkzone Stalls Operations System - Booth Tasks & Checklist API
+ *
+ * Manages 10-step default execution checklist, custom tasks,
+ * completion timestamps, and auto-calculated progress metrics.
+ */
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth-helper.php';
+
+// Authenticate session
+$auth = reworkzone_require_auth();
+$pdo = reworkzone_get_db();
+
+$method = $_SERVER['REQUEST_METHOD'];
+$action = $_GET['action'] ?? '';
+
+// Default 10 Checklist Tasks
+$defaultTasks = [
+    'Client details confirmed',
+    'Design approved',
+    'Print files finalized',
+    'Printing completed',
+    'Structure fabricated',
+    'Furniture arranged',
+    'Electrical items ready',
+    'Material dispatched',
+    'Stall installation completed',
+    'Final handover completed',
+];
+
+// Helper: Seed 10 default tasks if booth has 0 tasks
+function reworkzone_seed_default_tasks(PDO $pdo, string $boothId, array $defaultTasks) {
+    $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM booth_tasks WHERE booth_id = :booth_id");
+    $checkStmt->execute([':booth_id' => $boothId]);
+    $count = (int)$checkStmt->fetchColumn();
+
+    if ($count === 0) {
+        $insertStmt = $pdo->prepare("
+            INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, created_at, updated_at)
+            VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :display_order, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ");
+
+        $pdo->beginTransaction();
+        try {
+            foreach ($defaultTasks as $idx => $taskName) {
+                $taskId = 'tsk_' . bin2hex(random_bytes(6));
+                $order = $idx + 1;
+                $phase = ($order <= 3) ? 'Pre-Production' : (($order <= 7) ? 'Production & Sourcing' : 'Site Execution');
+                $insertStmt->execute([
+                    ':id'            => $taskId,
+                    ':booth_id'      => $boothId,
+                    ':phase'         => $phase,
+                    ':task_name'     => $taskName,
+                    ':sort_order'    => $order,
+                    ':display_order' => $order,
+                ]);
+            }
+            $pdo->commit();
+            reworkzone_log_activity($pdo, $boothId, 'checklist_initialized', 'Default 10-step checklist initialized');
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            error_log('Failed to seed default tasks: ' . $e->getMessage());
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// GET: Fetch tasks and checklist progress metrics for a booth
+// -------------------------------------------------------------
+if ($method === 'GET') {
+    $boothId = trim($_GET['booth_id'] ?? '');
+
+    if (empty($boothId)) {
+        reworkzone_json_response(['success' => false, 'error' => 'Booth ID is required.'], 400);
+    }
+
+    // Verify booth exists
+    $boothCheck = $pdo->prepare("SELECT id, booth_number, client_name FROM booths WHERE id = :id");
+    $boothCheck->execute([':id' => $boothId]);
+    $booth = $boothCheck->fetch();
+
+    if (!$booth) {
+        reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
+    }
+
+    // Seed if empty
+    reworkzone_seed_default_tasks($pdo, $boothId, $defaultTasks);
+
+    // Fetch tasks ordered by sort_order
+    $stmt = $pdo->prepare("
+        SELECT id, booth_id, phase, task_name, assigned_to, completed_by, is_completed, completed_at, due_date, notes, sort_order, display_order, created_at, updated_at
+        FROM booth_tasks
+        WHERE booth_id = :booth_id
+        ORDER BY sort_order ASC, created_at ASC
+    ");
+    $stmt->execute([':booth_id' => $boothId]);
+    $tasks = $stmt->fetchAll();
+
+    $total = count($tasks);
+    $completed = 0;
+    foreach ($tasks as $t) {
+        if ((int)$t['is_completed'] === 1) {
+            $completed++;
+        }
+    }
+    $percentage = $total > 0 ? round(($completed / $total) * 100, 1) : 0;
+
+    reworkzone_json_response([
+        'success'    => true,
+        'booth'      => $booth,
+        'total'      => $total,
+        'completed'  => $completed,
+        'percentage' => $percentage,
+        'tasks'      => $tasks,
+    ]);
+}
+
+// -------------------------------------------------------------
+// POST: Actions (toggle, create, update, delete)
+// -------------------------------------------------------------
+if ($method === 'POST') {
+    reworkzone_verify_csrf();
+
+    $raw = file_get_contents('php://input');
+    $data = json_decode($raw, true) ?? [];
+
+    // 1. TOGGLE TASK COMPLETION
+    if ($action === 'toggle') {
+        $taskId = trim($data['id'] ?? '');
+        if (empty($taskId)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task ID is required.'], 400);
+        }
+
+        $taskStmt = $pdo->prepare("SELECT id, booth_id, task_name, is_completed FROM booth_tasks WHERE id = :id");
+        $taskStmt->execute([':id' => $taskId]);
+        $task = $taskStmt->fetch();
+
+        if (!$task) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task not found.'], 404);
+        }
+
+        $newCompleted = (int)$task['is_completed'] === 1 ? 0 : 1;
+        $completedAt = $newCompleted === 1 ? date('Y-m-d H:i:s') : null;
+        $completedBy = $newCompleted === 1 ? 'Master' : null;
+
+        $updateStmt = $pdo->prepare("
+            UPDATE booth_tasks
+            SET is_completed = :is_completed, completed_at = :completed_at, completed_by = :completed_by, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        ");
+        $updateStmt->execute([
+            ':is_completed' => $newCompleted,
+            ':completed_at' => $completedAt,
+            ':completed_by' => $completedBy,
+            ':id'           => $taskId,
+        ]);
+
+        $logAction = $newCompleted === 1 ? 'task_completed' : 'task_reopened';
+        $logDesc = ($newCompleted === 1 ? 'Completed' : 'Reopened') . " task: {$task['task_name']}";
+        reworkzone_log_activity($pdo, $task['booth_id'], $logAction, $logDesc);
+
+        // Fetch refreshed task
+        $freshStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE id = :id");
+        $freshStmt->execute([':id' => $taskId]);
+        $refreshed = $freshStmt->fetch();
+
+        // Calculate refreshed stats for the booth
+        $statsStmt = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed FROM booth_tasks WHERE booth_id = :b_id");
+        $statsStmt->execute([':b_id' => $task['booth_id']]);
+        $stats = $statsStmt->fetch();
+        $total = (int)$stats['total'];
+        $completed = (int)$stats['completed'];
+        $percentage = $total > 0 ? round(($completed / $total) * 100, 1) : 0;
+
+        reworkzone_json_response([
+            'success'    => true,
+            'task'       => $refreshed,
+            'total'      => $total,
+            'completed'  => $completed,
+            'percentage' => $percentage,
+            'message'    => "Task status updated successfully.",
+        ]);
+    }
+
+    // 2. CREATE CUSTOM TASK
+    if ($action === 'create') {
+        $boothId = trim($data['booth_id'] ?? '');
+        $taskName = trim($data['task_name'] ?? '');
+        $phase = trim($data['phase'] ?? 'General Execution');
+        $notes = trim($data['notes'] ?? '');
+        $dueDate = trim($data['due_date'] ?? '');
+
+        if (empty($boothId) || empty($taskName)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Booth ID and task name are required.'], 400);
+        }
+
+        // Verify booth
+        $bCheck = $pdo->prepare("SELECT id FROM booths WHERE id = :id");
+        $bCheck->execute([':id' => $boothId]);
+        if (!$bCheck->fetch()) {
+            reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
+        }
+
+        // Determine next sort order
+        $orderStmt = $pdo->prepare("SELECT MAX(sort_order) FROM booth_tasks WHERE booth_id = :booth_id");
+        $orderStmt->execute([':booth_id' => $boothId]);
+        $maxOrder = (int)$orderStmt->fetchColumn();
+        $nextOrder = $maxOrder + 1;
+
+        $taskId = 'tsk_' . bin2hex(random_bytes(6));
+        $insertStmt = $pdo->prepare("
+            INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, due_date, notes, is_completed, created_at, updated_at)
+            VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :sort_order, :due_date, :notes, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ");
+        $insertStmt->execute([
+            ':id'         => $taskId,
+            ':booth_id'   => $boothId,
+            ':phase'      => $phase,
+            ':task_name'  => $taskName,
+            ':sort_order' => $nextOrder,
+            ':due_date'   => !empty($dueDate) ? $dueDate : null,
+            ':notes'      => !empty($notes) ? $notes : null,
+        ]);
+
+        reworkzone_log_activity($pdo, $boothId, 'task_created', "Added custom task: {$taskName}");
+
+        $freshStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE id = :id");
+        $freshStmt->execute([':id' => $taskId]);
+        $createdTask = $freshStmt->fetch();
+
+        reworkzone_json_response(['success' => true, 'task' => $createdTask], 201);
+    }
+
+    // 3. UPDATE TASK
+    if ($action === 'update') {
+        $taskId = trim($data['id'] ?? '');
+        $taskName = trim($data['task_name'] ?? '');
+        $phase = trim($data['phase'] ?? '');
+        $notes = trim($data['notes'] ?? '');
+        $dueDate = trim($data['due_date'] ?? '');
+
+        if (empty($taskId) || empty($taskName)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task ID and name are required.'], 400);
+        }
+
+        $existingStmt = $pdo->prepare("SELECT id, booth_id FROM booth_tasks WHERE id = :id");
+        $existingStmt->execute([':id' => $taskId]);
+        $existing = $existingStmt->fetch();
+
+        if (!$existing) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task not found.'], 404);
+        }
+
+        $updateStmt = $pdo->prepare("
+            UPDATE booth_tasks
+            SET task_name = :task_name,
+                phase = COALESCE(NULLIF(:phase, ''), phase),
+                due_date = :due_date,
+                notes = :notes,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        ");
+        $updateStmt->execute([
+            ':task_name' => $taskName,
+            ':phase'     => $phase,
+            ':due_date'  => !empty($dueDate) ? $dueDate : null,
+            ':notes'     => !empty($notes) ? $notes : null,
+            ':id'        => $taskId,
+        ]);
+
+        reworkzone_log_activity($pdo, $existing['booth_id'], 'task_updated', "Updated task: {$taskName}");
+
+        $freshStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE id = :id");
+        $freshStmt->execute([':id' => $taskId]);
+
+        reworkzone_json_response(['success' => true, 'task' => $freshStmt->fetch()]);
+    }
+
+    // 4. DELETE CUSTOM TASK
+    if ($action === 'delete') {
+        $taskId = trim($data['id'] ?? '');
+        if (empty($taskId)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task ID is required.'], 400);
+        }
+
+        $taskStmt = $pdo->prepare("SELECT id, booth_id, task_name FROM booth_tasks WHERE id = :id");
+        $taskStmt->execute([':id' => $taskId]);
+        $task = $taskStmt->fetch();
+
+        if (!$task) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task not found.'], 404);
+        }
+
+        $delStmt = $pdo->prepare("DELETE FROM booth_tasks WHERE id = :id");
+        $delStmt->execute([':id' => $taskId]);
+
+        reworkzone_log_activity($pdo, $task['booth_id'], 'task_deleted', "Deleted task: {$task['task_name']}");
+
+        reworkzone_json_response(['success' => true, 'message' => 'Task removed successfully.']);
+    }
+
+    reworkzone_json_response(['success' => false, 'error' => 'Invalid action.'], 400);
+}
+
+reworkzone_json_response(['success' => false, 'error' => 'Method not allowed.'], 405);

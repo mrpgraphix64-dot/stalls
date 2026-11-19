@@ -1,0 +1,358 @@
+/**
+ * API Client for Reworkzone Stalls Operations System
+ * Handles session cookies, CSRF tokens, and error parsing.
+ */
+
+import {
+  AuthStatus,
+  DashboardData,
+  EventItem,
+  BoothItem,
+  BoothLink,
+  BoothItemRecord,
+  BoothTask,
+  TasksSummary,
+  BoothExpense,
+  ExpensesSummary,
+  ActivityLog,
+} from './types';
+
+let cachedCsrfToken: string | null = null;
+
+export function setCsrfToken(token: string | null) {
+  cachedCsrfToken = token;
+}
+
+export function getCsrfToken(): string | null {
+  return cachedCsrfToken;
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (cachedCsrfToken && (options.method === 'POST' || options.method === 'PUT' || options.method === 'DELETE')) {
+    headers['X-CSRF-Token'] = cachedCsrfToken;
+  }
+
+  if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetch(endpoint, {
+    ...options,
+    headers,
+    credentials: 'include', // Ensure cookies are sent
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const errorMsg = data.error || `Server returned error HTTP ${response.status}`;
+    const err = new Error(errorMsg) as Error & { status: number; data: any };
+    err.status = response.status;
+    err.data = data;
+    throw err;
+  }
+
+  return data as T;
+}
+
+// -------------------------------------------------------------
+// Authentication API
+// -------------------------------------------------------------
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  const res = await request<AuthStatus & { success: boolean }>('/manage/api/auth.php?action=status');
+  if (res.csrf_token) {
+    setCsrfToken(res.csrf_token);
+  }
+  return res;
+}
+
+export async function loginWithPin(pin: string): Promise<{ success: boolean; role: string; csrf_token: string; account_name: string }> {
+  const res = await request<{ success: boolean; role: string; csrf_token: string; account_name: string }>('/manage/api/auth.php?action=login', {
+    method: 'POST',
+    body: JSON.stringify({ pin }),
+  });
+  if (res.csrf_token) {
+    setCsrfToken(res.csrf_token);
+  }
+  return res;
+}
+
+export async function logout(): Promise<void> {
+  await request('/manage/api/auth.php?action=logout', { method: 'POST' });
+  setCsrfToken(null);
+}
+
+export async function changePin(currentPin: string, newPin: string): Promise<{ success: boolean; message: string }> {
+  return request<{ success: boolean; message: string }>('/manage/api/change-pin.php', {
+    method: 'POST',
+    body: JSON.stringify({ current_pin: currentPin, new_pin: newPin }),
+  });
+}
+
+// -------------------------------------------------------------
+// Dashboard API
+// -------------------------------------------------------------
+export async function fetchDashboard(): Promise<DashboardData> {
+  const res = await request<{ success: boolean; data: DashboardData }>('/manage/api/dashboard.php');
+  return res.data;
+}
+
+// -------------------------------------------------------------
+// Events API
+// -------------------------------------------------------------
+export async function fetchEvents(params?: { search?: string; status?: string }): Promise<EventItem[]> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.status) query.set('status', params.status);
+
+  const res = await request<{ success: boolean; events: EventItem[] }>(`/manage/api/events.php?${query.toString()}`);
+  return res.events;
+}
+
+export async function fetchEvent(id: string): Promise<EventItem> {
+  const res = await request<{ success: boolean; event: EventItem }>(`/manage/api/events.php?id=${encodeURIComponent(id)}`);
+  return res.event;
+}
+
+export async function createEvent(eventData: Partial<EventItem>): Promise<EventItem> {
+  const res = await request<{ success: boolean; event: EventItem }>('/manage/api/events.php?action=create', {
+    method: 'POST',
+    body: JSON.stringify(eventData),
+  });
+  return res.event;
+}
+
+export async function updateEvent(id: string, eventData: Partial<EventItem>): Promise<EventItem> {
+  const res = await request<{ success: boolean; event: EventItem }>('/manage/api/events.php?action=update', {
+    method: 'POST',
+    body: JSON.stringify({ ...eventData, id }),
+  });
+  return res.event;
+}
+
+export async function archiveEvent(id: string): Promise<void> {
+  await request('/manage/api/events.php?action=archive', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+// -------------------------------------------------------------
+// Booths API
+// -------------------------------------------------------------
+export async function fetchBooths(params?: { event_id?: string; status?: string; search?: string }): Promise<BoothItem[]> {
+  const query = new URLSearchParams();
+  if (params?.event_id) query.set('event_id', params.event_id);
+  if (params?.status) query.set('status', params.status);
+  if (params?.search) query.set('search', params.search);
+
+  const res = await request<{ success: boolean; booths: BoothItem[] }>(`/manage/api/booths.php?${query.toString()}`);
+  return res.booths;
+}
+
+export async function fetchBooth(id: string): Promise<BoothItem> {
+  const res = await request<{ success: boolean; booth: BoothItem }>(`/manage/api/booths.php?id=${encodeURIComponent(id)}`);
+  return res.booth;
+}
+
+export async function createBooth(boothData: Partial<BoothItem>): Promise<BoothItem> {
+  const res = await request<{ success: boolean; booth: BoothItem }>('/manage/api/booths.php?action=create', {
+    method: 'POST',
+    body: JSON.stringify(boothData),
+  });
+  return res.booth;
+}
+
+export async function updateBooth(id: string, boothData: Partial<BoothItem>): Promise<BoothItem> {
+  const res = await request<{ success: boolean; booth: BoothItem }>('/manage/api/booths.php?action=update', {
+    method: 'POST',
+    body: JSON.stringify({ ...boothData, id }),
+  });
+  return res.booth;
+}
+
+export async function archiveBooth(id: string): Promise<void> {
+  await request('/manage/api/booths.php?action=archive', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+// -------------------------------------------------------------
+// Google Drive Links API
+// -------------------------------------------------------------
+export async function fetchLinks(boothId: string, category?: string): Promise<BoothLink[]> {
+  const query = new URLSearchParams({ booth_id: boothId });
+  if (category && category !== 'all') query.set('category', category);
+
+  const res = await request<{ success: boolean; links: BoothLink[] }>(`/manage/api/links.php?${query.toString()}`);
+  return res.links;
+}
+
+export async function createLink(linkData: Partial<BoothLink>): Promise<BoothLink> {
+  const res = await request<{ success: boolean; link: BoothLink }>('/manage/api/links.php?action=create', {
+    method: 'POST',
+    body: JSON.stringify(linkData),
+  });
+  return res.link;
+}
+
+export async function updateLink(id: string, linkData: Partial<BoothLink>): Promise<BoothLink> {
+  const res = await request<{ success: boolean; link: BoothLink }>('/manage/api/links.php?action=update', {
+    method: 'POST',
+    body: JSON.stringify({ ...linkData, id }),
+  });
+  return res.link;
+}
+
+export async function approveLink(id: string): Promise<BoothLink> {
+  const res = await request<{ success: boolean; link: BoothLink }>('/manage/api/links.php?action=approve', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+  return res.link;
+}
+
+export async function unapproveLink(id: string): Promise<BoothLink> {
+  const res = await request<{ success: boolean; link: BoothLink }>('/manage/api/links.php?action=unapprove', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+  return res.link;
+}
+
+export async function deleteLink(id: string): Promise<void> {
+  await request('/manage/api/links.php?action=delete', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+// -------------------------------------------------------------
+// Booth Items API (Furniture, Electrical, Production, Print)
+// -------------------------------------------------------------
+export async function fetchItems(boothId: string, category?: string): Promise<BoothItemRecord[]> {
+  const query = new URLSearchParams({ booth_id: boothId });
+  if (category && category !== 'all') query.set('category', category);
+
+  const res = await request<{ success: boolean; items: BoothItemRecord[] }>(`/manage/api/items.php?${query.toString()}`);
+  return res.items;
+}
+
+export async function createItem(itemData: Partial<BoothItemRecord>): Promise<BoothItemRecord> {
+  const res = await request<{ success: boolean; item: BoothItemRecord }>('/manage/api/items.php?action=create', {
+    method: 'POST',
+    body: JSON.stringify(itemData),
+  });
+  return res.item;
+}
+
+export async function updateItem(id: string, itemData: Partial<BoothItemRecord>): Promise<BoothItemRecord> {
+  const res = await request<{ success: boolean; item: BoothItemRecord }>('/manage/api/items.php?action=update', {
+    method: 'POST',
+    body: JSON.stringify({ ...itemData, id }),
+  });
+  return res.item;
+}
+
+export async function toggleItemStatus(id: string, field: 'is_delivered' | 'is_installed'): Promise<BoothItemRecord> {
+  const res = await request<{ success: boolean; item: BoothItemRecord }>('/manage/api/items.php?action=toggle_status', {
+    method: 'POST',
+    body: JSON.stringify({ id, field }),
+  });
+  return res.item;
+}
+
+export async function deleteItem(id: string): Promise<void> {
+  await request('/manage/api/items.php?action=delete', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+// -------------------------------------------------------------
+// Booth Tasks / Checklist API
+// -------------------------------------------------------------
+export async function fetchTasks(boothId: string): Promise<TasksSummary> {
+  return request<TasksSummary>(`/manage/api/tasks.php?booth_id=${encodeURIComponent(boothId)}`);
+}
+
+export async function toggleTask(id: string): Promise<{
+  success: boolean;
+  task: BoothTask;
+  total: number;
+  completed: number;
+  percentage: number;
+}> {
+  return request('/manage/api/tasks.php?action=toggle', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+export async function createTask(taskData: Partial<BoothTask>): Promise<BoothTask> {
+  const res = await request<{ success: boolean; task: BoothTask }>('/manage/api/tasks.php?action=create', {
+    method: 'POST',
+    body: JSON.stringify(taskData),
+  });
+  return res.task;
+}
+
+export async function updateTask(id: string, taskData: Partial<BoothTask>): Promise<BoothTask> {
+  const res = await request<{ success: boolean; task: BoothTask }>('/manage/api/tasks.php?action=update', {
+    method: 'POST',
+    body: JSON.stringify({ ...taskData, id }),
+  });
+  return res.task;
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  await request('/manage/api/tasks.php?action=delete', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+// -------------------------------------------------------------
+// Booth Costing & Expenses API
+// -------------------------------------------------------------
+export async function fetchExpenses(boothId: string): Promise<ExpensesSummary> {
+  return request<ExpensesSummary>(`/manage/api/expenses.php?booth_id=${encodeURIComponent(boothId)}`);
+}
+
+export async function createExpense(expData: Partial<BoothExpense>): Promise<BoothExpense> {
+  const res = await request<{ success: boolean; expense: BoothExpense }>('/manage/api/expenses.php?action=create', {
+    method: 'POST',
+    body: JSON.stringify(expData),
+  });
+  return res.expense;
+}
+
+export async function updateExpense(id: string, expData: Partial<BoothExpense>): Promise<BoothExpense> {
+  const res = await request<{ success: boolean; expense: BoothExpense }>('/manage/api/expenses.php?action=update', {
+    method: 'POST',
+    body: JSON.stringify({ ...expData, id }),
+  });
+  return res.expense;
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  await request('/manage/api/expenses.php?action=delete', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+// -------------------------------------------------------------
+// Activity Logs API
+// -------------------------------------------------------------
+export async function fetchLogs(boothId?: string): Promise<ActivityLog[]> {
+  const query = boothId ? `?booth_id=${encodeURIComponent(boothId)}` : '';
+  const res = await request<{ success: boolean; logs: ActivityLog[] }>(`/manage/api/logs.php${query}`);
+  return res.logs;
+}

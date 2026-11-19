@@ -1,0 +1,187 @@
+/**
+ * TypeScript Interfaces for Reworkzone Stalls Operations Management
+ */
+
+export type EventStatus = 'upcoming' | 'in_progress' | 'live' | 'completed' | 'archived';
+
+export type BoothStatus =
+  | 'draft'
+  | 'design'
+  | 'approved'
+  | 'in_production'
+  | 'installed'
+  | 'handover'
+  | 'completed'
+  | 'archived';
+
+export interface EventItem {
+  id: string;
+  name: string;
+  venue: string;
+  city: string;
+  start_date: string;
+  end_date: string;
+  setup_date: string;
+  dismantling_date: string;
+  status: EventStatus;
+  notes?: string;
+  booth_count?: number;
+  created_at?: string;
+  updated_at?: string;
+  booths?: BoothItem[];
+}
+
+export interface BoothItem {
+  id: string;
+  event_id: string;
+  booth_number: string;
+  client_name: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  stand_size?: string;
+  booth_type?: string;
+  budget?: number;
+  quoted_amount?: number;
+  main_drive_folder_url?: string;
+  status: BoothStatus;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Joined from event
+  event_name?: string;
+  event_venue?: string;
+  event_city?: string;
+  event_start_date?: string;
+  event_end_date?: string;
+  event_setup_date?: string;
+  event_dismantling_date?: string;
+  link_count?: number;
+  task_count?: number;
+  tasks_completed?: number;
+}
+
+export interface DashboardData {
+  total_events: number;
+  active_events: number;
+  total_booths: number;
+  booths_in_production: number;
+  pending_tasks: number;
+  recent_booths: BoothItem[];
+  upcoming_events: EventItem[];
+}
+
+export interface AuthStatus {
+  is_initialized: boolean;
+  authenticated: boolean;
+  role: string | null;
+  account_name: string | null;
+  csrf_token: string | null;
+  rate_limited?: boolean;
+  retry_after?: number;
+}
+
+export type LinkCategory = 'render_3d' | 'working_artwork' | 'print_ready' | 'photo' | 'production' | 'other';
+
+export type ItemCategory = 'furniture' | 'electrical' | 'production' | 'print' | 'av' | 'other';
+
+export interface BoothLink {
+  id: string;
+  booth_id: string;
+  category: LinkCategory;
+  title: string;
+  drive_url: string;
+  version: string;
+  is_final: number; // 0: Draft, 1: Approved
+  approved_at?: string | null;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BoothItemRecord {
+  id: string;
+  booth_id: string;
+  category: ItemCategory;
+  item_name: string;
+  quantity: number;
+  unit: string;
+  specification?: string;
+  vendor_name?: string;
+  unit_cost?: number;
+  total_cost?: number;
+  is_delivered: number;
+  is_installed: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BoothTask {
+  id: string;
+  booth_id: string;
+  phase: string;
+  task_name: string;
+  assigned_to?: string;
+  completed_by?: string;
+  is_completed: number;
+  completed_at?: string | null;
+  due_date?: string | null;
+  notes?: string;
+  sort_order: number;
+  display_order?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TasksSummary {
+  success: boolean;
+  total: number;
+  completed: number;
+  percentage: number;
+  tasks: BoothTask[];
+}
+
+export type ExpenseCategory =
+  | 'printing'
+  | 'structure'
+  | 'furniture'
+  | 'electrical'
+  | 'transport'
+  | 'labor'
+  | 'other';
+
+export interface BoothExpense {
+  id: string;
+  booth_id: string;
+  category: ExpenseCategory;
+  description: string;
+  estimated_cost: number;
+  actual_cost: number;
+  amount?: number;
+  vendor_name?: string;
+  paid_to?: string;
+  payment_status: 'unpaid' | 'partial' | 'paid';
+  is_paid?: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ExpensesSummary {
+  success: boolean;
+  total_estimated: number;
+  total_actual: number;
+  variance: number;
+  expense_count: number;
+  expenses: BoothExpense[];
+}
+
+export interface ActivityLog {
+  id: string;
+  booth_id?: string | null;
+  action_type: string;
+  actor_label: string;
+  description: string;
+  created_at: string;
+}

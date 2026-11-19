@@ -1,9 +1,26 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-  # Block direct web access to private data directory
+
+  # 1. Block direct web access to private data directory, CLI scripts, and helpers
   RewriteRule ^data/ - [F,L]
+  RewriteRule ^reworkzone_data/ - [F,L]
+  RewriteRule ^manage/.*cli\.php$ - [F,L]
+  RewriteRule ^manage/api/(config|auth-helper)\.php$ - [F,L]
+
+  # 2. Existing Admin Portal rewrite (/admin -> /admin.php)
   RewriteRule ^admin/?$ admin.php [L]
+
+  # 3. Route clean API URLs: /manage/api/<endpoint> to /manage/api/<endpoint>.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME}.php -f
+  RewriteRule ^manage/api/([^/]+)/?$ manage/api/$1.php [L,QSA]
+
+  # 4. Route all non-API /manage requests to SPA index.html
+  RewriteCond %{REQUEST_URI} !^/manage/api/
+  RewriteRule ^manage(?:/.*)?$ /index.html [L]
+
+  # 5. SPA Fallback for other frontend routes
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
@@ -27,7 +44,7 @@
   </FilesMatch>
 </IfModule>
 
-# Block direct web access to sensitive inquiry data
-<FilesMatch "^(enquiries.*|.*\.csv|.*\.log)$">
+# Block direct web access to sensitive inquiry data, databases, secrets, and logs
+<FilesMatch "^(enquiries.*|.*\.csv|.*\.log|.*\.sqlite|.*\.db|.*\.bak|.*\.env|.*\.sql|.*\.sh)$">
   Require all denied
 </FilesMatch>

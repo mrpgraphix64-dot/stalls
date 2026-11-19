@@ -20,7 +20,21 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
-    open: false
+    open: false,
+    proxy: {
+      '/manage/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/send-enquiry.php': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/admin.php': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',

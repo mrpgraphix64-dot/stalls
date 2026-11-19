@@ -20,6 +20,10 @@ extracted_pdf
 
 # Editor directories and files
 data/
+reworkzone_data/
+reworkzone_leads/
+*.sqlite*
+*.db
 *.log
 
 .vscode/*

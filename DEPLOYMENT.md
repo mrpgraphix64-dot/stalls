@@ -1,122 +1,78 @@
-# Deployment Guide for Reworkzone Stalls Portfolio
+# Deployment Guide for Reworkzone Stalls Portfolio & Management System
 
-**Target Subdomain**: `stalls.reworkzone.in`  
-**Architecture**: Fully standalone, static-optimized React + Vite + Tailwind application  
-**Output Bundle**: `c:\Users\user\Downloads\TEchexpo\Web\dist`
-
----
-
-## 1. Domain & DNS Configuration
-
-To point `stalls.reworkzone.in` to this standalone website without touching or affecting the main `reworkzone.in` website:
-
-1. Log in to your DNS provider (e.g., Cloudflare, GoDaddy, Namecheap, Hostinger).
-2. Add a new **CNAME** record:
-   - **Type**: `CNAME`
-   - **Name / Host**: `stalls`
-   - **Target / Value**: `<your-hosting-target>` (e.g., `cname.vercel-dns.com` or `<project>.pages.dev` or `<project>.netlify.app`)
-   - **TTL**: Auto or 3600
-3. SSL will be automatically provisioned via Let's Encrypt / Cloudflare / Vercel.
+**Target Subdomain**: `https://stalls.reworkzone.in/`  
+**Internal Operations System**: `https://stalls.reworkzone.in/manage`  
+**Hosting Environment**: Hostinger Shared Web Hosting (Apache + PHP 8.2 + SQLite 3)  
+**Document Root**: `/home/u131504528/domains/stalls.reworkzone.in/public_html`  
+**Persistent Data**: `/home/u131504528/domains/stalls.reworkzone.in/reworkzone_data` (Outside `public_html`)  
+**Leads Data**: `/home/u131504528/domains/stalls.reworkzone.in/reworkzone_leads` (Outside `public_html`)  
 
 ---
 
-## 2. Deployment Options
+## 1. Hosting Architecture
 
-### Option A: Cloudflare Pages (Recommended for India & Global Speed)
-1. Push the code to a Git repository (GitHub / GitLab) or run Cloudflare Wrangler.
-2. In Cloudflare Dashboard → **Workers & Pages** → **Create Application** → **Pages**.
-3. Connect your repository:
-   - **Root directory**: `Web` (or repository root)
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-4. In Custom Domains, add `stalls.reworkzone.in`.
-5. Cloudflare will automatically route, provision SSL, and cache WebP images at edge POPs across India (Mumbai, Chennai, Delhi) and London.
+The system operates seamlessly on Hostinger Web Hosting without requiring external database servers, VPS daemons, Node.js background services, or Docker:
 
-### Option B: Vercel
-1. Install Vercel CLI (`npm i -g vercel`) or import Git repository on [vercel.com](https://vercel.com).
-2. Configure project settings:
-   - **Framework Preset**: Vite
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-3. In Project Settings → **Domains**, add `stalls.reworkzone.in`.
-4. Update DNS CNAME as instructed by Vercel.
+- **Frontend:** React 18 + Vite SPA compiled into static assets in `assets/`, served via Apache root `index.html`.
+- **Backend API:** Lightweight PHP endpoints in `manage/api/*.php` communicating via JSON.
+- **Database:** Server-side file-based SQLite 3 database (`reworkzone_stalls.sqlite`) residing in `reworkzone_data/` strictly outside `public_html`.
+- **Google Drive Integration:** All high-resolution artworks, 3D designs, print files, and photographs remain stored on Google Drive. The system manages categorized Drive URLs and explicit revision approval states.
+- **Routing:** Handled via Apache `.htaccess` with SPA fallback for `/manage/*` and clean execution of `/manage/api/*.php`.
+- **Security:** `.htaccess` actively returns `403 Forbidden` for all CLI scripts (`*cli.php`), internal helper files (`config.php`, `auth-helper.php`), and sensitive file extensions (`.sqlite`, `.db`, `.log`, `.csv`, `.env`).
 
-### Option C: Netlify
-1. Connect Git repository on [netlify.com](https://netlify.com).
-2. Build command: `npm run build`
-3. Publish directory: `dist`
-4. The repository already includes `public/_redirects` which handles client-side routing.
-5. In Domain Management, add `stalls.reworkzone.in`.
+---
 
-### Option D: Traditional VPS / Nginx Server
-If hosting on your existing Linux/Nginx server:
-1. Build the project locally or via CI:
+## 2. Deployment Procedure
+
+Hostinger Web Hosting deploys automatically via Git integration:
+
+1. **Build Frontend Locally:**
    ```bash
    npm run build
    ```
-2. Copy the contents of `dist/` to your server:
+   *Compiles TypeScript/Vite into `dist/` and synchronizes production assets, HTML, and `manage/` PHP endpoints directly to the repository root.*
+
+2. **Commit and Push:**
    ```bash
-   scp -r dist/* user@your-server-ip:/var/www/stalls.reworkzone.in/html/
+   git add .
+   git commit -m "Deploy: Live production release for Hostinger Web Hosting"
+   git push origin main
    ```
-3. Nginx Server Block (`/etc/nginx/sites-available/stalls.reworkzone.in`):
-   ```nginx
-   server {
-       listen 80;
-       listen [::]:80;
-       server_name stalls.reworkzone.in;
-       return 301 https://$host$request_uri;
-   }
 
-   server {
-       listen 443 ssl http2;
-       listen [::]:443 ssl http2;
-       server_name stalls.reworkzone.in;
-
-       ssl_certificate /etc/letsencrypt/live/stalls.reworkzone.in/fullchain.pem;
-       ssl_certificate_key /etc/letsencrypt/live/stalls.reworkzone.in/privkey.pem;
-
-       root /var/www/stalls.reworkzone.in/html;
-       index index.html;
-
-       # Static asset caching
-       location ~* \.(webp|jpg|jpeg|png|svg|ico|css|js)$ {
-           expires 30d;
-           add_header Cache-Control "public, no-transform";
-       }
-
-       # SPA routing fallback
-       location / {
-           try_files $uri $uri/ /index.html;
-       }
-
-       error_page 404 /404.html;
-   }
-   ```
+3. **Deploy in Hostinger hPanel:**
+   - In **hPanel** &rarr; **Advanced** &rarr; **Git**, click **Deploy** (or let automatic webhook deployment trigger).
+   - Hostinger pulls `origin/main` into `/public_html`.
+   - Existing inquiry leads (`reworkzone_leads/`) and the persistent SQLite database (`reworkzone_data/`) reside in the parent directory outside `public_html` and are never overwritten or deleted by Git pulls.
 
 ---
 
-## 3. Image Pipeline & Adding Future Projects
+## 3. Master PIN Initialization
 
-To add future exhibition stalls or expo photography:
-1. Save high-resolution photography or 3D renders into a folder.
-2. Update or run `process_and_manifest.py`:
+The operations management workspace is protected by a single 6-digit Master PIN.
+
+1. **Initialization:**
+   Run the CLI initializer once on the server or locally:
    ```bash
-   python process_and_manifest.py
+   php manage/init-cli.php
    ```
-   This will automatically:
-   - Generate WebP thumbnails (`public/images/thumbs/`)
-   - Generate optimized display images (`public/images/optimized/`)
-   - Update `public/projectsManifest.json` and `src/data/projectsData.ts`
-3. Rebuild the application:
-   ```bash
-   npm run build
-   ```
+   *The prompt masks the PIN input. Once initialized, the Master account is created with Bcrypt hashing and the setup gate is permanently locked.*
+
+2. **Updating PIN:**
+   Any authenticated Master can update the PIN anytime at:
+   `https://stalls.reworkzone.in/manage#/settings` &rarr; **Security & PIN**.
+   *All existing events, booths, items, links, tasks, and costing data are 100% preserved.*
 
 ---
 
-## 4. Enquiry Form Handling
+## 4. Backups & Disaster Recovery
 
-The lead enquiry form in `src/components/EnquirySection.tsx` is configured with:
-- Web3Forms API endpoint connected to `info@reworkzone.in`.
-- Direct one-click WhatsApp fallback with pre-formatted booth specifications (+91 84010 60482).
-- Client-side validation, anti-spam honeypot, and loading/success confirmation cards.
+- **1-Click Web Backup:** Navigate to **Settings** &rarr; **Download Database Backup** to download a live `.sqlite` snapshot.
+- **Server CLI Backup:**
+  ```bash
+  php manage/backup-cli.php
+  ```
+  *Creates timestamped snapshots in `../reworkzone_data/backups/` with rolling 7-day retention.*
+- **Restore Database:**
+  ```bash
+  php manage/backup-cli.php --restore=../reworkzone_data/backups/reworkzone_backup_YYYY-MM-DD_HHMMSS.sqlite
+  ```

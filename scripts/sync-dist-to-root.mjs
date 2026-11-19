@@ -35,13 +35,28 @@ function copyDir(src, dest) {
 
 // 3. Copy assets & images to root
 if (fs.existsSync(path.join(distDir, 'assets'))) {
-  copyDir(path.join(distDir, 'assets'), path.join(rootDir, 'assets'));
+  const rootAssets = path.join(rootDir, 'assets');
+  const distAssets = path.join(distDir, 'assets');
+  if (fs.existsSync(rootAssets)) {
+    const distFiles = new Set(fs.readdirSync(distAssets));
+    for (const f of fs.readdirSync(rootAssets)) {
+      if (!distFiles.has(f)) {
+        try { fs.unlinkSync(path.join(rootAssets, f)); } catch (e) {}
+      }
+    }
+  }
+  copyDir(distAssets, rootAssets);
   console.log('✓ Synced assets/ to root');
 }
 
 if (fs.existsSync(path.join(distDir, 'images'))) {
   copyDir(path.join(distDir, 'images'), path.join(rootDir, 'images'));
   console.log('✓ Synced images/ to root');
+}
+
+if (fs.existsSync(path.join(distDir, 'manage'))) {
+  copyDir(path.join(distDir, 'manage'), path.join(rootDir, 'manage'));
+  console.log('✓ Synced manage/ to root');
 }
 
 // 4. Copy root files from dist (favicon, manifest, etc.)

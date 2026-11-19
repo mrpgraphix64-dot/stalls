@@ -1,0 +1,343 @@
+<?php
+/**
+ * Reworkzone Stalls Operations System - Event Management API
+ * 
+ * Handles listing, creating, reading, updating, and archiving events.
+ * Read operations require Master session auth.
+ * Write operations require Master session auth + CSRF validation.
+ */
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth-helper.php';
+
+header('Content-Type: application/json; charset=UTF-8');
+
+$pdo = reworkzone_get_db();
+$sessionUser = reworkzone_require_master_auth($pdo);
+
+$method = $_SERVER['REQUEST_METHOD'];
+
+// =========================================================================
+// 1. GET: Fetch list of events OR single event by ID
+// =========================================================================
+if ($method === 'GET') {
+    $id = trim($_GET['id'] ?? '');
+
+    // 1A. Fetch Single Event
+    if (!empty($id)) {
+        $stmt = $pdo->prepare("
+            SELECT 
+                e.*,
+                COUNT(b.id) AS booth_count
+            FROM events e
+            LEFT JOIN booths b ON e.id = b.event_id AND b.status != 'archived'
+            WHERE e.id = :id
+            GROUP BY e.id
+            LIMIT 1
+        ");
+        $stmt->execute([':id' => $id]);
+        $event = $stmt->fetch();
+
+        if (!$event) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event not found.'], 404);
+        }
+
+        // Fetch booths registered under this event
+        $boothStmt = $pdo->prepare("
+            SELECT 
+                b.*,
+                (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1) AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id) AS tasks_total
+            FROM booths b
+            WHERE b.event_id = :event_id AND b.status != 'archived'
+            ORDER BY b.booth_number ASC, b.created_at DESC
+        ");
+        $boothStmt->execute([':event_id' => $id]);
+        $booths = $boothStmt->fetchAll();
+
+        $event['booths'] = $booths;
+
+        reworkzone_json_response([
+            'success' => true,
+            'event'   => $event
+        ]);
+    }
+
+    // 1B. Fetch Event List (with filters & search)
+    $search = trim($_GET['search'] ?? '');
+    $status = trim($_GET['status'] ?? '');
+
+    $sql = "
+        SELECT 
+            e.*,
+            COUNT(b.id) AS booth_count
+        FROM events e
+        LEFT JOIN booths b ON e.id = b.event_id AND b.status != 'archived'
+        WHERE 1=1
+    ";
+    $params = [];
+
+    if ($status === 'archived') {
+        $sql .= " AND e.status = 'archived'";
+    } elseif (!empty($status) && $status !== 'all') {
+        $sql .= " AND e.status = :status";
+        $params[':status'] = $status;
+    } else {
+        $sql .= " AND e.status != 'archived'";
+    }
+
+    if (!empty($search)) {
+        $sql .= " AND (e.name LIKE :s1 OR e.venue LIKE :s2 OR e.city LIKE :s3)";
+        $params[':s1'] = "%{$search}%";
+        $params[':s2'] = "%{$search}%";
+        $params[':s3'] = "%{$search}%";
+    }
+
+    $sql .= " GROUP BY e.id ORDER BY e.start_date DESC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $events = $stmt->fetchAll();
+
+    reworkzone_json_response([
+        'success' => true,
+        'events'  => $events,
+        'count'   => count($events)
+    ]);
+}
+
+// =========================================================================
+// 2. POST / PUT: Mutating actions (Create, Update, Archive)
+// =========================================================================
+if ($method === 'POST') {
+    // Enforce CSRF protection on all state mutations
+    reworkzone_verify_csrf();
+
+    $raw = file_get_contents('php://input');
+    $body = json_decode($raw, true) ?: $_POST;
+
+    $action = trim($_GET['action'] ?? ($body['action'] ?? 'create'));
+
+    // ---------------------------------------------------------------------
+    // 2A. CREATE EVENT
+    // ---------------------------------------------------------------------
+    if ($action === 'create') {
+        $name            = trim($body['name'] ?? '');
+        $venue           = trim($body['venue'] ?? '');
+        $city            = trim($body['city'] ?? '');
+        $startDate       = trim($body['start_date'] ?? '');
+        $endDate         = trim($body['end_date'] ?? '');
+        $setupDate       = trim($body['setup_date'] ?? '');
+        $dismantlingDate = trim($body['dismantling_date'] ?? '');
+        $status          = trim($body['status'] ?? 'upcoming');
+        $notes           = trim($body['notes'] ?? '');
+
+        // Validation
+        if (strlen($name) < 2) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event name must be at least 2 characters.'], 400);
+        }
+        if (strlen($venue) < 2) {
+            reworkzone_json_response(['success' => false, 'error' => 'Venue is required.'], 400);
+        }
+        if (strlen($city) < 2) {
+            reworkzone_json_response(['success' => false, 'error' => 'City is required.'], 400);
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Valid start date (YYYY-MM-DD) is required.'], 400);
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Valid end date (YYYY-MM-DD) is required.'], 400);
+        }
+        if (empty($setupDate)) {
+            $setupDate = date('Y-m-d', strtotime($startDate . ' -1 day'));
+        }
+        if (empty($dismantlingDate)) {
+            $dismantlingDate = date('Y-m-d', strtotime($endDate . ' +1 day'));
+        }
+
+        $validStatuses = ['upcoming', 'in_progress', 'live', 'completed', 'archived'];
+        if (!in_array($status, $validStatuses, true)) {
+            $status = 'upcoming';
+        }
+
+        $id = 'evt_' . bin2hex(random_bytes(6));
+        $now = date('Y-m-d H:i:s');
+
+        $stmt = $pdo->prepare("
+            INSERT INTO events (id, name, venue, city, start_date, end_date, setup_date, dismantling_date, status, notes, created_at, updated_at)
+            VALUES (:id, :name, :venue, :city, :start_date, :end_date, :setup_date, :dismantling_date, :status, :notes, :created_at, :updated_at)
+        ");
+        $stmt->execute([
+            ':id'               => $id,
+            ':name'             => $name,
+            ':venue'            => $venue,
+            ':city'             => $city,
+            ':start_date'       => $startDate,
+            ':end_date'         => $endDate,
+            ':setup_date'       => $setupDate,
+            ':dismantling_date' => $dismantlingDate,
+            ':status'           => $status,
+            ':notes'            => $notes,
+            ':created_at'       => $now,
+            ':updated_at'       => $now,
+        ]);
+
+        // Audit Log
+        $logStmt = $pdo->prepare("
+            INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+            VALUES (:id, NULL, 'event_created', 'Master Admin', :desc)
+        ");
+        $logStmt->execute([
+            ':id'   => bin2hex(random_bytes(16)),
+            ':desc' => "Created exhibition event '{$name}' at {$venue}, {$city}."
+        ]);
+
+        // Fetch inserted record
+        $getStmt = $pdo->prepare("SELECT * FROM events WHERE id = :id");
+        $getStmt->execute([':id' => $id]);
+        $created = $getStmt->fetch();
+
+        reworkzone_json_response([
+            'success' => true,
+            'message' => 'Event created successfully.',
+            'event'   => $created
+        ], 201);
+    }
+
+    // ---------------------------------------------------------------------
+    // 2B. UPDATE EVENT
+    // ---------------------------------------------------------------------
+    if ($action === 'update') {
+        $id = trim($body['id'] ?? ($_GET['id'] ?? ''));
+
+        if (empty($id)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event ID is required.'], 400);
+        }
+
+        // Check existence
+        $check = $pdo->prepare("SELECT id, name FROM events WHERE id = :id");
+        $check->execute([':id' => $id]);
+        $existing = $check->fetch();
+
+        if (!$existing) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event not found.'], 404);
+        }
+
+        $name            = trim($body['name'] ?? $existing['name']);
+        $venue           = trim($body['venue'] ?? '');
+        $city            = trim($body['city'] ?? '');
+        $startDate       = trim($body['start_date'] ?? '');
+        $endDate         = trim($body['end_date'] ?? '');
+        $setupDate       = trim($body['setup_date'] ?? '');
+        $dismantlingDate = trim($body['dismantling_date'] ?? '');
+        $status          = trim($body['status'] ?? 'upcoming');
+        $notes           = trim($body['notes'] ?? '');
+
+        if (strlen($name) < 2) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event name must be at least 2 characters.'], 400);
+        }
+        if (strlen($venue) < 2) {
+            reworkzone_json_response(['success' => false, 'error' => 'Venue is required.'], 400);
+        }
+        if (strlen($city) < 2) {
+            reworkzone_json_response(['success' => false, 'error' => 'City is required.'], 400);
+        }
+
+        $validStatuses = ['upcoming', 'in_progress', 'live', 'completed', 'archived'];
+        if (!in_array($status, $validStatuses, true)) {
+            $status = 'upcoming';
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $stmt = $pdo->prepare("
+            UPDATE events 
+            SET name = :name,
+                venue = :venue,
+                city = :city,
+                start_date = :start_date,
+                end_date = :end_date,
+                setup_date = :setup_date,
+                dismantling_date = :dismantling_date,
+                status = :status,
+                notes = :notes,
+                updated_at = :updated_at
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':name'             => $name,
+            ':venue'            => $venue,
+            ':city'             => $city,
+            ':start_date'       => $startDate,
+            ':end_date'         => $endDate,
+            ':setup_date'       => $setupDate,
+            ':dismantling_date' => $dismantlingDate,
+            ':status'           => $status,
+            ':notes'            => $notes,
+            ':updated_at'       => $now,
+            ':id'               => $id,
+        ]);
+
+        // Audit Log
+        $logStmt = $pdo->prepare("
+            INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+            VALUES (:id, NULL, 'event_updated', 'Master Admin', :desc)
+        ");
+        $logStmt->execute([
+            ':id'   => bin2hex(random_bytes(16)),
+            ':desc' => "Updated exhibition event '{$name}'."
+        ]);
+
+        $getStmt = $pdo->prepare("SELECT * FROM events WHERE id = :id");
+        $getStmt->execute([':id' => $id]);
+        $updated = $getStmt->fetch();
+
+        reworkzone_json_response([
+            'success' => true,
+            'message' => 'Event updated successfully.',
+            'event'   => $updated
+        ]);
+    }
+
+    // ---------------------------------------------------------------------
+    // 2C. ARCHIVE EVENT (Safe Archiving, Never Destructive)
+    // ---------------------------------------------------------------------
+    if ($action === 'archive') {
+        $id = trim($body['id'] ?? ($_GET['id'] ?? ''));
+
+        if (empty($id)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event ID is required.'], 400);
+        }
+
+        $check = $pdo->prepare("SELECT id, name FROM events WHERE id = :id");
+        $check->execute([':id' => $id]);
+        $existing = $check->fetch();
+
+        if (!$existing) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event not found.'], 404);
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $stmt = $pdo->prepare("UPDATE events SET status = 'archived', updated_at = :now WHERE id = :id");
+        $stmt->execute([':now' => $now, ':id' => $id]);
+
+        // Audit Log
+        $logStmt = $pdo->prepare("
+            INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+            VALUES (:id, NULL, 'event_archived', 'Master Admin', :desc)
+        ");
+        $logStmt->execute([
+            ':id'   => bin2hex(random_bytes(16)),
+            ':desc' => "Archived exhibition event '{$existing['name']}'."
+        ]);
+
+        reworkzone_json_response([
+            'success' => true,
+            'message' => "Event '{$existing['name']}' archived successfully."
+        ]);
+    }
+
+    reworkzone_json_response(['success' => false, 'error' => 'Invalid action.'], 400);
+}
+
+reworkzone_json_response(['success' => false, 'error' => 'Method not allowed.'], 405);
