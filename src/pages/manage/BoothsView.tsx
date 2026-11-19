@@ -11,12 +11,15 @@ import {
   ChevronRight,
   AlertTriangle,
   Check,
+  Trash2,
+  FileText,
 } from 'lucide-react';
-import { fetchBooths, fetchEvents, updateBooth, archiveBooth } from './api';
+import { fetchBooths, fetchEvents, updateBooth, updateEvent, archiveBooth, deleteBooth } from './api';
 import { BoothItem, EventItem } from './types';
 import { Modal } from './Modal';
 import { AddBoothModal } from './AddBoothModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 interface BoothsViewProps {
   onNavigate: (route: string) => void;
@@ -54,6 +57,7 @@ export function BoothsView({
   const [isAddOpen, setIsAddOpen] = useState<boolean>(createModalOpen);
   const [editingBooth, setEditingBooth] = useState<BoothItem | null>(null);
   const [archivingBooth, setArchivingBooth] = useState<BoothItem | null>(null);
+  const [deletingBooth, setDeletingBooth] = useState<BoothItem | null>(null);
   const [isFloorplanOpen, setIsFloorplanOpen] = useState<boolean>(false);
 
   // Edit Form State
@@ -403,10 +407,22 @@ export function BoothsView({
                               e.stopPropagation();
                               setArchivingBooth(b);
                             }}
-                            className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
-                            title="Archive Booth"
+                            className="p-1.5 hover:bg-amber-500/10 text-zinc-500 hover:text-amber-400 rounded-lg transition-colors cursor-pointer"
+                            title="Archive Stall"
                           >
                             <Archive className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingBooth(b);
+                            }}
+                            className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Stall"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -588,6 +604,39 @@ export function BoothsView({
       <FloorplanViewerModal
         isOpen={isFloorplanOpen}
         onClose={() => setIsFloorplanOpen(false)}
+        eventId={events.find((e) => e.id === selectedEventId)?.id || events[0]?.id}
+        eventName={events.find((e) => e.id === selectedEventId)?.name || events[0]?.name || 'Exhibition Floor Plan'}
+        pdfUrl={events.find((e) => e.id === selectedEventId)?.floor_plan_url || events[0]?.floor_plan_url || null}
+        onUpdatePdfUrl={async (newUrl) => {
+          const targetEvt = events.find((e) => e.id === selectedEventId) || events[0];
+          if (targetEvt) {
+            await updateEvent(targetEvt.id, { floor_plan_url: newUrl });
+            await loadData();
+          }
+        }}
+      />
+
+      {/* Delete Stall Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deletingBooth !== null}
+        onClose={() => setDeletingBooth(null)}
+        type="stall"
+        itemName={`Stall #${deletingBooth?.booth_number || ''} — ${deletingBooth?.client_name || ''}`}
+        itemSubtext={`${deletingBooth?.event_name || 'Exhibition'} • ${deletingBooth?.stand_size || ''}`}
+        onConfirmDelete={async () => {
+          if (deletingBooth) {
+            await deleteBooth(deletingBooth.id);
+            setDeletingBooth(null);
+            await loadData();
+          }
+        }}
+        onArchiveInstead={async () => {
+          if (deletingBooth) {
+            await archiveBooth(deletingBooth.id);
+            setDeletingBooth(null);
+            await loadData();
+          }
+        }}
       />
     </div>
   );

@@ -59,6 +59,11 @@ if (fs.existsSync(path.join(distDir, 'manage'))) {
   console.log('✓ Synced manage/ to root');
 }
 
+if (fs.existsSync(path.join(distDir, 'floorplans'))) {
+  copyDir(path.join(distDir, 'floorplans'), path.join(rootDir, 'floorplans'));
+  console.log('✓ Synced floorplans/ to root');
+}
+
 // 4. Copy root files from dist (favicon, manifest, etc.)
 for (const file of fs.readdirSync(distDir)) {
   const full = path.join(distDir, file);

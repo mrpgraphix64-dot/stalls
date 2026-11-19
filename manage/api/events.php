@@ -131,6 +131,7 @@ if ($method === 'POST') {
         $setupDate       = !empty($body['setup_date']) ? trim($body['setup_date']) : null;
         $dismantlingDate = !empty($body['dismantling_date']) ? trim($body['dismantling_date']) : null;
         $notes           = !empty($body['notes']) ? trim($body['notes']) : null;
+        $floorPlanUrl    = array_key_exists('floor_plan_url', $body) ? (trim((string)$body['floor_plan_url']) ?: null) : null;
         $status          = 'upcoming';
 
         if (!empty($body['status']) && in_array(trim($body['status']), ['upcoming', 'in_progress', 'live', 'completed', 'archived'], true)) {
@@ -167,8 +168,8 @@ if ($method === 'POST') {
         $now = date('Y-m-d H:i:s');
 
         $stmt = $pdo->prepare("
-            INSERT INTO events (id, name, venue, city, start_date, end_date, setup_date, dismantling_date, status, notes, created_at, updated_at)
-            VALUES (:id, :name, :venue, :city, :start_date, :end_date, :setup_date, :dismantling_date, :status, :notes, :created_at, :updated_at)
+            INSERT INTO events (id, name, venue, city, start_date, end_date, setup_date, dismantling_date, status, notes, floor_plan_url, created_at, updated_at)
+            VALUES (:id, :name, :venue, :city, :start_date, :end_date, :setup_date, :dismantling_date, :status, :notes, :floor_plan_url, :created_at, :updated_at)
         ");
         $stmt->execute([
             ':id'               => $id,
@@ -181,6 +182,7 @@ if ($method === 'POST') {
             ':dismantling_date' => $dismantlingDate,
             ':status'           => $status,
             ':notes'            => $notes,
+            ':floor_plan_url'   => $floorPlanUrl,
             ':created_at'       => $now,
             ':updated_at'       => $now,
         ]);
@@ -235,6 +237,7 @@ if ($method === 'POST') {
         $dismantlingDate = array_key_exists('dismantling_date', $body) ? (trim((string)$body['dismantling_date']) ?: null) : $existing['dismantling_date'];
         $status          = array_key_exists('status', $body) ? trim($body['status']) : $existing['status'];
         $notes           = array_key_exists('notes', $body) ? (trim((string)$body['notes']) ?: null) : $existing['notes'];
+        $floorPlanUrl    = array_key_exists('floor_plan_url', $body) ? (trim((string)$body['floor_plan_url']) ?: null) : ($existing['floor_plan_url'] ?? null);
 
         if (strlen($name) < 2) {
             reworkzone_json_response(['success' => false, 'error' => 'Event name must be at least 2 characters.'], 400);
@@ -272,6 +275,7 @@ if ($method === 'POST') {
                 dismantling_date = :dismantling_date,
                 status = :status,
                 notes = :notes,
+                floor_plan_url = :floor_plan_url,
                 updated_at = :updated_at
             WHERE id = :id
         ");
@@ -285,6 +289,7 @@ if ($method === 'POST') {
             ':dismantling_date' => $dismantlingDate,
             ':status'           => $status,
             ':notes'            => $notes,
+            ':floor_plan_url'   => $floorPlanUrl,
             ':updated_at'       => $now,
             ':id'               => $id,
         ]);
@@ -348,7 +353,165 @@ if ($method === 'POST') {
         ]);
     }
 
+    // ---------------------------------------------------------------------
+    // 2D. DELETE EVENT (Destructive with Safe Transaction & Foreign Keys)
+    // ---------------------------------------------------------------------
+    if ($action === 'delete') {
+        $id = trim($body['id'] ?? ($_GET['id'] ?? ''));
+
+        if (empty($id)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event ID is required.'], 400);
+        }
+
+        $check = $pdo->prepare("SELECT id, name FROM events WHERE id = :id");
+        $check->execute([':id' => $id]);
+        $existing = $check->fetch();
+
+        if (!$existing) {
+            reworkzone_json_response(['success' => false, 'error' => 'Event not found.'], 404);
+        }
+
+        $pdo->beginTransaction();
+        try {
+            $bStmt = $pdo->prepare("SELECT id FROM booths WHERE event_id = :event_id");
+            $bStmt->execute([':event_id' => $id]);
+            $boothIds = $bStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $boothCount = count($boothIds);
+            if ($boothCount > 0) {
+                $placeholders = implode(',', array_fill(0, $boothCount, '?'));
+
+                $delExp = $pdo->prepare("DELETE FROM booth_expenses WHERE booth_id IN ($placeholders)");
+                $delExp->execute($boothIds);
+
+                $delItm = $pdo->prepare("DELETE FROM booth_items WHERE booth_id IN ($placeholders)");
+                $delItm->execute($boothIds);
+
+                $delLnk = $pdo->prepare("DELETE FROM booth_links WHERE booth_id IN ($placeholders)");
+                $delLnk->execute($boothIds);
+
+                $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id IN ($placeholders)");
+                $delTsk->execute($boothIds);
+
+                $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id IN ($placeholders)");
+                $delAct->execute($boothIds);
+
+                $delBth = $pdo->prepare("DELETE FROM booths WHERE id IN ($placeholders)");
+                $delBth->execute($boothIds);
+            }
+
+            $delEvt = $pdo->prepare("DELETE FROM events WHERE id = :id");
+            $delEvt->execute([':id' => $id]);
+
+            $logStmt = $pdo->prepare("
+                INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+                VALUES (:id, NULL, 'event_deleted', 'Master Admin', :desc)
+            ");
+            $logStmt->execute([
+                ':id'   => bin2hex(random_bytes(16)),
+                ':desc' => "Permanently deleted exhibition event '{$existing['name']}' with {$boothCount} associated stall(s)."
+            ]);
+
+            $pdo->commit();
+
+            reworkzone_json_response([
+                'success'              => true,
+                'message'              => "Event '{$existing['name']}' and {$boothCount} associated stall(s) deleted permanently.",
+                'deleted_id'           => $id,
+                'booths_deleted_count' => $boothCount
+            ]);
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Event delete error: ' . $e->getMessage());
+            reworkzone_json_response(['success' => false, 'error' => 'Failed to delete event: ' . $e->getMessage()], 500);
+        }
+    }
+
     reworkzone_json_response(['success' => false, 'error' => 'Invalid action.'], 400);
+}
+
+// =========================================================================
+// 3. DELETE: Delete single event by ID
+// =========================================================================
+if ($method === 'DELETE') {
+    reworkzone_require_csrf();
+    $id = trim($_GET['id'] ?? '');
+    if (empty($id)) {
+        $raw = file_get_contents('php://input');
+        $body = json_decode($raw, true) ?? [];
+        $id = trim($body['id'] ?? '');
+    }
+
+    if (empty($id)) {
+        reworkzone_json_response(['success' => false, 'error' => 'Event ID is required.'], 400);
+    }
+
+    $check = $pdo->prepare("SELECT id, name FROM events WHERE id = :id");
+    $check->execute([':id' => $id]);
+    $existing = $check->fetch();
+
+    if (!$existing) {
+        reworkzone_json_response(['success' => false, 'error' => 'Event not found.'], 404);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $bStmt = $pdo->prepare("SELECT id FROM booths WHERE event_id = :event_id");
+        $bStmt->execute([':event_id' => $id]);
+        $boothIds = $bStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $boothCount = count($boothIds);
+        if ($boothCount > 0) {
+            $placeholders = implode(',', array_fill(0, $boothCount, '?'));
+
+            $delExp = $pdo->prepare("DELETE FROM booth_expenses WHERE booth_id IN ($placeholders)");
+            $delExp->execute($boothIds);
+
+            $delItm = $pdo->prepare("DELETE FROM booth_items WHERE booth_id IN ($placeholders)");
+            $delItm->execute($boothIds);
+
+            $delLnk = $pdo->prepare("DELETE FROM booth_links WHERE booth_id IN ($placeholders)");
+            $delLnk->execute($boothIds);
+
+            $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id IN ($placeholders)");
+            $delTsk->execute($boothIds);
+
+            $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id IN ($placeholders)");
+            $delAct->execute($boothIds);
+
+            $delBth = $pdo->prepare("DELETE FROM booths WHERE id IN ($placeholders)");
+            $delBth->execute($boothIds);
+        }
+
+        $delEvt = $pdo->prepare("DELETE FROM events WHERE id = :id");
+        $delEvt->execute([':id' => $id]);
+
+        $logStmt = $pdo->prepare("
+            INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+            VALUES (:id, NULL, 'event_deleted', 'Master Admin', :desc)
+        ");
+        $logStmt->execute([
+            ':id'   => bin2hex(random_bytes(16)),
+            ':desc' => "Permanently deleted exhibition event '{$existing['name']}' with {$boothCount} associated stall(s)."
+        ]);
+
+        $pdo->commit();
+
+        reworkzone_json_response([
+            'success'              => true,
+            'message'              => "Event '{$existing['name']}' and {$boothCount} associated stall(s) deleted permanently.",
+            'deleted_id'           => $id,
+            'booths_deleted_count' => $boothCount
+        ]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Event delete error: ' . $e->getMessage());
+        reworkzone_json_response(['success' => false, 'error' => 'Failed to delete event: ' . $e->getMessage()], 500);
+    }
 }
 
 reworkzone_json_response(['success' => false, 'error' => 'Method not allowed.'], 405);

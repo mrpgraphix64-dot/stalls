@@ -450,6 +450,8 @@ export function DashboardView({
       <FloorplanViewerModal
         isOpen={isFloorplanOpen}
         onClose={() => setIsFloorplanOpen(false)}
+        eventName={data?.upcoming_events?.[0]?.name || 'Exhibition Floor Plan'}
+        pdfUrl={data?.upcoming_events?.[0]?.floor_plan_url || null}
       />
     </div>
   );

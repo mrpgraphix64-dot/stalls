@@ -25,6 +25,7 @@ export interface EventItem {
   dismantling_date?: string | null;
   status: EventStatus;
   notes?: string | null;
+  floor_plan_url?: string | null;
   booth_count?: number;
   created_at?: string;
   updated_at?: string;
@@ -56,6 +57,7 @@ export interface BoothItem {
   event_end_date?: string;
   event_setup_date?: string;
   event_dismantling_date?: string;
+  event_floor_plan_url?: string | null;
   link_count?: number;
   task_count?: number;
   tasks_completed?: number;

@@ -21,10 +21,15 @@ import {
   Check,
   Ban,
   Layers,
+  Archive,
+  FileText,
 } from 'lucide-react';
 import {
   fetchBooth,
   updateBooth,
+  updateEvent,
+  archiveBooth,
+  deleteBooth,
   fetchTasks,
   setTaskStatus,
   fetchLinks,
@@ -37,6 +42,8 @@ import {
 } from './api';
 import { BoothItem, BoothTask, BoothLink, BoothItemRecord } from './types';
 import { Modal } from './Modal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { FloorplanViewerModal } from './FloorplanViewerModal';
 
 interface ChecklistProgress {
   total: number;
@@ -118,6 +125,9 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   // Edit Booth Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState<boolean>(false);
+  const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
   const [editBoothNumber, setEditBoothNumber] = useState<string>('');
   const [editCompanyName, setEditCompanyName] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
@@ -424,7 +434,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       )}
 
       {/* Top Navigation & Breadcrumb */}
-      <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.07]">
         <button
           onClick={() => (booth.event_id ? onNavigate(`event:${booth.event_id}`) : onNavigate('booths'))}
           className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
@@ -433,13 +443,42 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
           <span>Back to {booth.event_name ? booth.event_name : 'Stalls Directory'}</span>
         </button>
 
-        <button
-          onClick={openEditModal}
-          className="px-3.5 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-        >
-          <Edit2 className="w-3.5 h-3.5" />
-          <span>Edit Booth</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsFloorplanModalOpen(true)}
+            className="px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Floor Plan</span>
+          </button>
+
+          <button
+            onClick={openEditModal}
+            className="px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            <span>Edit</span>
+          </button>
+
+          {booth.status !== 'archived' && (
+            <button
+              onClick={() => setIsArchiveConfirmOpen(true)}
+              className="p-1.5 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-xl transition-colors cursor-pointer border border-white/[0.08]"
+              title="Archive Stall"
+            >
+              <Archive className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="p-1.5 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-xl transition-colors cursor-pointer border border-white/[0.08]"
+            title="Delete Stall Permanently"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Simplified Top Header */}
@@ -1119,20 +1158,91 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
             <button
               type="button"
               onClick={() => setIsEditModalOpen(false)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-semibold"
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-semibold cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={editSubmitting}
-              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl"
+              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl cursor-pointer"
             >
               {editSubmitting ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
       </Modal>
+
+      {/* Delete Stall Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        type="stall"
+        itemName={`Stall #${booth.booth_number} — ${booth.client_name}`}
+        itemSubtext={`${booth.event_name || 'Exhibition'} • ${booth.stand_size || ''}`}
+        onConfirmDelete={async () => {
+          await deleteBooth(boothId);
+          setIsDeleteModalOpen(false);
+          onNavigate(booth.event_id ? `event:${booth.event_id}` : 'booths');
+        }}
+        onArchiveInstead={async () => {
+          await archiveBooth(boothId);
+          setIsDeleteModalOpen(false);
+          onNavigate(booth.event_id ? `event:${booth.event_id}` : 'booths');
+        }}
+      />
+
+      {/* Archive Stall Confirmation Modal */}
+      <Modal
+        isOpen={isArchiveConfirmOpen}
+        onClose={() => setIsArchiveConfirmOpen(false)}
+        title="Confirm Safe Archiving"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-zinc-300">
+            Are you sure you want to archive booth{' '}
+            <span className="font-bold text-zinc-100">{booth.booth_number}</span> (
+            {booth.client_name})?
+          </p>
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setIsArchiveConfirmOpen(false)}
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-xl cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await archiveBooth(boothId);
+                setIsArchiveConfirmOpen(false);
+                onNavigate(booth.event_id ? `event:${booth.event_id}` : 'booths');
+              }}
+              className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold rounded-xl cursor-pointer"
+            >
+              Archive Booth
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Floor Plan Viewer Modal */}
+      <FloorplanViewerModal
+        isOpen={isFloorplanModalOpen}
+        onClose={() => setIsFloorplanModalOpen(false)}
+        eventId={booth.event_id}
+        eventName={booth.event_name || 'Exhibition Floor Plan'}
+        pdfUrl={booth.event_floor_plan_url || null}
+        highlightStall={booth.booth_number}
+        onUpdatePdfUrl={async (newUrl) => {
+          if (booth.event_id) {
+            await updateEvent(booth.event_id, { floor_plan_url: newUrl });
+            await loadAllData();
+          }
+        }}
+      />
     </div>
   );
 }

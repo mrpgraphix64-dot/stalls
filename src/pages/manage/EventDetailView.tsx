@@ -15,12 +15,14 @@ import {
   ExternalLink,
   Layers,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react';
-import { fetchEvent, updateEvent, archiveEvent } from './api';
-import { EventItem, EventStatus } from './types';
+import { fetchEvent, updateEvent, archiveEvent, deleteEvent, deleteBooth, archiveBooth } from './api';
+import { EventItem, EventStatus, BoothItem } from './types';
 import { Modal } from './Modal';
 import { AddBoothModal } from './AddBoothModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 interface EventDetailViewProps {
   eventId: string;
@@ -40,6 +42,8 @@ export function EventDetailView({
   // Modals
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState<boolean>(false);
+  const [isDeleteEventOpen, setIsDeleteEventOpen] = useState<boolean>(false);
+  const [deletingBooth, setDeletingBooth] = useState<BoothItem | null>(null);
   const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
   const [isAddBoothOpen, setIsAddBoothOpen] = useState<boolean>(false);
 
@@ -53,6 +57,7 @@ export function EventDetailView({
   const [formDismantlingDate, setFormDismantlingDate] = useState<string>('');
   const [formStatus, setFormStatus] = useState<EventStatus>('upcoming');
   const [formNotes, setFormNotes] = useState<string>('');
+  const [formFloorPlanUrl, setFormFloorPlanUrl] = useState<string>('');
   const [formError, setFormError] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<{
     name?: string;
@@ -60,6 +65,7 @@ export function EventDetailView({
     city?: string;
     startDate?: string;
     endDate?: string;
+    floorPlanUrl?: string;
   }>({});
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
 
@@ -91,6 +97,7 @@ export function EventDetailView({
     setFormDismantlingDate(event.dismantling_date || '');
     setFormStatus(event.status);
     setFormNotes(event.notes || '');
+    setFormFloorPlanUrl(event.floor_plan_url || '');
     setFormError('');
     setFieldErrors({});
     setIsEditOpen(true);
@@ -118,6 +125,15 @@ export function EventDetailView({
       errors.endDate = 'End date cannot be earlier than start date.';
     }
 
+    if (formFloorPlanUrl.trim()) {
+      const trimmedPdf = formFloorPlanUrl.trim();
+      if (!trimmedPdf.startsWith('http://') && !trimmedPdf.startsWith('https://') && !trimmedPdf.startsWith('/')) {
+        errors.floorPlanUrl = 'Floor plan URL must start with http://, https://, or /';
+      } else if (!/\.pdf($|\?|#)/i.test(trimmedPdf) && !/drive\.google\.com/i.test(trimmedPdf)) {
+        errors.floorPlanUrl = 'Floor plan link must be a direct PDF file (.pdf) or authorized document link.';
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setFormError('Please resolve the highlighted field errors.');
@@ -139,6 +155,7 @@ export function EventDetailView({
         dismantling_date: formDismantlingDate || undefined,
         status: formStatus,
         notes: formNotes.trim() || undefined,
+        floor_plan_url: formFloorPlanUrl.trim() || undefined,
       });
       setIsEditOpen(false);
       await loadEvent();
@@ -210,6 +227,16 @@ export function EventDetailView({
           </button>
 
           <button
+            type="button"
+            onClick={() => setIsFloorplanModalOpen(true)}
+            className="px-3.5 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-amber-400 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            title="View Official Vector Floor Plan"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Floor Plan</span>
+          </button>
+
+          <button
             onClick={openEditModal}
             className="px-3.5 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
           >
@@ -220,12 +247,21 @@ export function EventDetailView({
           {event.status !== 'archived' && (
             <button
               onClick={() => setIsArchiveConfirmOpen(true)}
-              className="px-3 py-2 bg-white/[0.04] hover:bg-red-500/10 border border-white/[0.08] text-zinc-400 hover:text-red-400 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-2 bg-white/[0.04] hover:bg-amber-500/10 border border-white/[0.08] text-zinc-400 hover:text-amber-400 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
               title="Archive Event"
             >
               <Archive className="w-3.5 h-3.5" />
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsDeleteEventOpen(true)}
+            className="px-3 py-2 bg-white/[0.04] hover:bg-red-500/10 border border-white/[0.08] text-zinc-400 hover:text-red-400 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Delete Event"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
 
           {/* Prominent + Add Booth button */}
           <button
@@ -391,14 +427,27 @@ export function EventDetailView({
                       </td>
 
                       <td className="py-3 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => onNavigate(`booth:${b.id}`)}
-                          className="px-2.5 py-1 bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 text-[11px] font-semibold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>Open</span>
-                          <ChevronRight className="w-3 h-3 text-amber-400" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onNavigate(`booth:${b.id}`)}
+                            className="px-2.5 py-1 bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 text-[11px] font-semibold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Open</span>
+                            <ChevronRight className="w-3 h-3 text-amber-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingBooth(b);
+                            }}
+                            className="p-1 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Stall"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -498,6 +547,23 @@ export function EventDetailView({
           </div>
 
           <div className="space-y-1.5">
+            <label className="block text-zinc-300 font-semibold">Floor Plan PDF URL (Optional)</label>
+            <input
+              type="text"
+              value={formFloorPlanUrl}
+              onChange={(e) => {
+                setFormFloorPlanUrl(e.target.value);
+                if (fieldErrors.floorPlanUrl) setFieldErrors((prev) => ({ ...prev, floorPlanUrl: undefined }));
+              }}
+              placeholder="e.g. https://.../layout.pdf or /floorplans/..."
+              className={`w-full bg-zinc-950 border ${
+                fieldErrors.floorPlanUrl ? 'border-red-500/80' : 'border-zinc-800 focus:border-amber-500/80'
+              } rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 font-mono`}
+            />
+            {fieldErrors.floorPlanUrl && <p className="text-[11px] text-red-400">{fieldErrors.floorPlanUrl}</p>}
+          </div>
+
+          <div className="space-y-1.5">
             <label className="block text-zinc-300 font-semibold">Notes (Optional)</label>
             <textarea
               rows={2}
@@ -561,6 +627,62 @@ export function EventDetailView({
       <FloorplanViewerModal
         isOpen={isFloorplanModalOpen}
         onClose={() => setIsFloorplanModalOpen(false)}
+        eventId={event?.id}
+        eventName={event?.name || 'Exhibition Floor Plan'}
+        pdfUrl={event?.floor_plan_url || null}
+        onUpdatePdfUrl={async (newUrl) => {
+          if (event) {
+            await updateEvent(event.id, { floor_plan_url: newUrl });
+            await loadEvent();
+          }
+        }}
+      />
+
+      {/* Delete Event Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteEventOpen}
+        onClose={() => setIsDeleteEventOpen(false)}
+        type="event"
+        itemName={event.name}
+        itemSubtext={`${event.venue}, ${event.city}`}
+        stallsCount={boothsList.length}
+        onConfirmDelete={async () => {
+          if (event) {
+            await deleteEvent(event.id);
+            setIsDeleteEventOpen(false);
+            onNavigate('events');
+          }
+        }}
+        onArchiveInstead={async () => {
+          if (event) {
+            await archiveEvent(event.id);
+            setIsDeleteEventOpen(false);
+            onNavigate('events');
+          }
+        }}
+      />
+
+      {/* Delete Stall Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deletingBooth !== null}
+        onClose={() => setDeletingBooth(null)}
+        type="stall"
+        itemName={`Stall #${deletingBooth?.booth_number || ''} — ${deletingBooth?.client_name || ''}`}
+        itemSubtext={`${event.name} • ${deletingBooth?.stand_size || ''}`}
+        onConfirmDelete={async () => {
+          if (deletingBooth) {
+            await deleteBooth(deletingBooth.id);
+            setDeletingBooth(null);
+            await loadEvent();
+          }
+        }}
+        onArchiveInstead={async () => {
+          if (deletingBooth) {
+            await archiveBooth(deletingBooth.id);
+            setDeletingBooth(null);
+            await loadEvent();
+          }
+        }}
       />
     </div>
   );

@@ -214,6 +214,13 @@ function reworkzone_init_schema(PDO $pdo) {
         $pdo->exec("PRAGMA foreign_keys = ON;");
     }
 
+    // Safe column check for floor_plan_url in events
+    $eventColsAfter = $pdo->query("PRAGMA table_info(events)")->fetchAll(PDO::FETCH_ASSOC);
+    $eventColNames = array_column($eventColsAfter, 'name');
+    if (!in_array('floor_plan_url', $eventColNames, true)) {
+        $pdo->exec("ALTER TABLE events ADD COLUMN floor_plan_url TEXT DEFAULT NULL;");
+    }
+
     // 4. Booths Table (with main_drive_folder_url)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS booths (

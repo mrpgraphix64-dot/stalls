@@ -36,6 +36,7 @@ if ($method === 'GET') {
                 e.setup_date AS event_setup_date,
                 e.dismantling_date AS event_dismantling_date,
                 e.status AS event_status,
+                e.floor_plan_url AS event_floor_plan_url,
                 (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id) AS task_count,
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1) AS tasks_completed,
@@ -71,6 +72,7 @@ if ($method === 'GET') {
             e.city AS event_city,
             e.start_date AS event_start_date,
             e.setup_date AS event_setup_date,
+            e.floor_plan_url AS event_floor_plan_url,
             (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
             (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id) AS task_count,
             (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1) AS tasks_completed
@@ -408,7 +410,141 @@ if ($method === 'POST') {
         ]);
     }
 
+    // ---------------------------------------------------------------------
+    // 2D. DELETE BOOTH (Destructive with Safe Transaction & Foreign Keys)
+    // ---------------------------------------------------------------------
+    if ($action === 'delete') {
+        $id = trim($body['id'] ?? ($_GET['id'] ?? ''));
+
+        if (empty($id)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Booth ID is required.'], 400);
+        }
+
+        $check = $pdo->prepare("SELECT id, booth_number, client_name, event_id FROM booths WHERE id = :id");
+        $check->execute([':id' => $id]);
+        $existing = $check->fetch();
+
+        if (!$existing) {
+            reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
+        }
+
+        $pdo->beginTransaction();
+        try {
+            $delExp = $pdo->prepare("DELETE FROM booth_expenses WHERE booth_id = :id");
+            $delExp->execute([':id' => $id]);
+
+            $delItm = $pdo->prepare("DELETE FROM booth_items WHERE booth_id = :id");
+            $delItm->execute([':id' => $id]);
+
+            $delLnk = $pdo->prepare("DELETE FROM booth_links WHERE booth_id = :id");
+            $delLnk->execute([':id' => $id]);
+
+            $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id = :id");
+            $delTsk->execute([':id' => $id]);
+
+            $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id = :id");
+            $delAct->execute([':id' => $id]);
+
+            $delBth = $pdo->prepare("DELETE FROM booths WHERE id = :id");
+            $delBth->execute([':id' => $id]);
+
+            $logStmt = $pdo->prepare("
+                INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+                VALUES (:id, NULL, 'booth_deleted', 'Master Admin', :desc)
+            ");
+            $logStmt->execute([
+                ':id'   => bin2hex(random_bytes(16)),
+                ':desc' => "Permanently deleted stall '{$existing['booth_number']}' ({$existing['client_name']})."
+            ]);
+
+            $pdo->commit();
+
+            reworkzone_json_response([
+                'success'    => true,
+                'message'    => "Stall '{$existing['booth_number']}' deleted permanently.",
+                'deleted_id' => $id,
+                'event_id'   => $existing['event_id']
+            ]);
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Booth delete error: ' . $e->getMessage());
+            reworkzone_json_response(['success' => false, 'error' => 'Failed to delete booth: ' . $e->getMessage()], 500);
+        }
+    }
+
     reworkzone_json_response(['success' => false, 'error' => 'Invalid action.'], 400);
+}
+
+// =========================================================================
+// 3. DELETE: Permanent Stall Deletion by ID
+// =========================================================================
+if ($method === 'DELETE') {
+    reworkzone_require_csrf();
+    $id = trim($_GET['id'] ?? '');
+    if (empty($id)) {
+        $raw = file_get_contents('php://input');
+        $body = json_decode($raw, true) ?? [];
+        $id = trim($body['id'] ?? '');
+    }
+
+    if (empty($id)) {
+        reworkzone_json_response(['success' => false, 'error' => 'Booth ID is required.'], 400);
+    }
+
+    $check = $pdo->prepare("SELECT id, booth_number, client_name, event_id FROM booths WHERE id = :id");
+    $check->execute([':id' => $id]);
+    $existing = $check->fetch();
+
+    if (!$existing) {
+        reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $delExp = $pdo->prepare("DELETE FROM booth_expenses WHERE booth_id = :id");
+        $delExp->execute([':id' => $id]);
+
+        $delItm = $pdo->prepare("DELETE FROM booth_items WHERE booth_id = :id");
+        $delItm->execute([':id' => $id]);
+
+        $delLnk = $pdo->prepare("DELETE FROM booth_links WHERE booth_id = :id");
+        $delLnk->execute([':id' => $id]);
+
+        $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id = :id");
+        $delTsk->execute([':id' => $id]);
+
+        $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id = :id");
+        $delAct->execute([':id' => $id]);
+
+        $delBth = $pdo->prepare("DELETE FROM booths WHERE id = :id");
+        $delBth->execute([':id' => $id]);
+
+        $logStmt = $pdo->prepare("
+            INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+            VALUES (:id, NULL, 'booth_deleted', 'Master Admin', :desc)
+        ");
+        $logStmt->execute([
+            ':id'   => bin2hex(random_bytes(16)),
+            ':desc' => "Permanently deleted stall '{$existing['booth_number']}' ({$existing['client_name']})."
+        ]);
+
+        $pdo->commit();
+
+        reworkzone_json_response([
+            'success'    => true,
+            'message'    => "Stall '{$existing['booth_number']}' deleted permanently.",
+            'deleted_id' => $id,
+            'event_id'   => $existing['event_id']
+        ]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Booth delete error: ' . $e->getMessage());
+        reworkzone_json_response(['success' => false, 'error' => 'Failed to delete booth: ' . $e->getMessage()], 500);
+    }
 }
 
 reworkzone_json_response(['success' => false, 'error' => 'Method not allowed.'], 405);

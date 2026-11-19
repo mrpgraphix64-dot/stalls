@@ -13,11 +13,15 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
+  Trash2,
+  FileText,
 } from 'lucide-react';
-import { fetchEvents, createEvent, updateEvent, archiveEvent } from './api';
+import { fetchEvents, createEvent, updateEvent, archiveEvent, deleteEvent } from './api';
 import { EventItem, EventStatus } from './types';
 import { Modal } from './Modal';
 import { DateRangePicker } from './DateRangePicker';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { FloorplanViewerModal } from './FloorplanViewerModal';
 
 interface EventsViewProps {
   onNavigate: (route: string) => void;
@@ -36,6 +40,8 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
   const [isAddOpen, setIsAddOpen] = useState<boolean>(createModalOpen);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
   const [archivingEvent, setArchivingEvent] = useState<EventItem | null>(null);
+  const [deletingEvent, setDeletingEvent] = useState<EventItem | null>(null);
+  const [floorplanEvent, setFloorplanEvent] = useState<EventItem | null>(null);
 
   // Form State
   const [formName, setFormName] = useState<string>('');
@@ -47,6 +53,7 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
   const [formDismantlingDate, setFormDismantlingDate] = useState<string>('');
   const [formStatus, setFormStatus] = useState<EventStatus>('upcoming');
   const [formNotes, setFormNotes] = useState<string>('');
+  const [formFloorPlanUrl, setFormFloorPlanUrl] = useState<string>('');
   const [formError, setFormError] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<{
     name?: string;
@@ -54,6 +61,7 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
     city?: string;
     startDate?: string;
     endDate?: string;
+    floorPlanUrl?: string;
   }>({});
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string>('');
@@ -112,6 +120,7 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
     setFormDismantlingDate('');
     setFormStatus('upcoming');
     setFormNotes('');
+    setFormFloorPlanUrl('');
     setFormError('');
     setFieldErrors({});
     setIsAddOpen(true);
@@ -129,6 +138,7 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
     setFormDismantlingDate(evt.dismantling_date || '');
     setFormStatus(evt.status);
     setFormNotes(evt.notes || '');
+    setFormFloorPlanUrl(evt.floor_plan_url || '');
     setFormError('');
     setFieldErrors({});
   };
@@ -156,6 +166,15 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
       errors.endDate = 'End date cannot be earlier than start date.';
     }
 
+    if (formFloorPlanUrl.trim()) {
+      const trimmedPdf = formFloorPlanUrl.trim();
+      if (!trimmedPdf.startsWith('http://') && !trimmedPdf.startsWith('https://') && !trimmedPdf.startsWith('/')) {
+        errors.floorPlanUrl = 'Floor plan URL must start with http://, https://, or /';
+      } else if (!/\.pdf($|\?|#)/i.test(trimmedPdf) && !/drive\.google\.com/i.test(trimmedPdf)) {
+        errors.floorPlanUrl = 'Floor plan link must be a direct PDF file (.pdf) or authorized document link.';
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setFormError('Please resolve the errors highlighted below.');
@@ -174,6 +193,7 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
         start_date: formStartDate,
         end_date: formEndDate,
         notes: formNotes.trim() || undefined,
+        floor_plan_url: formFloorPlanUrl.trim() || undefined,
       };
 
       if (editingEvent) {
@@ -383,6 +403,16 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
 
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFloorplanEvent(evt);
+                    }}
+                    className="p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors cursor-pointer"
+                    title="View Floor Plan"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                  </button>
+                  <button
                     onClick={(e) => openEditModal(evt, e)}
                     className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
                     title="Edit Event"
@@ -395,12 +425,22 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
                         e.stopPropagation();
                         setArchivingEvent(evt);
                       }}
-                      className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      className="p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors cursor-pointer"
                       title="Archive Event"
                     >
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                   )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingEvent(evt);
+                    }}
+                    className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                    title="Delete Event"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -553,7 +593,27 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
             </div>
           )}
 
-          {/* 4. Notes (Optional) */}
+          {/* 4. Floor Plan PDF URL (Optional) */}
+          <div>
+            <label className="block text-xs text-zinc-300 font-medium mb-1.5">
+              Floor Plan PDF URL <span className="text-zinc-500 font-normal">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={formFloorPlanUrl}
+              onChange={(e) => {
+                setFormFloorPlanUrl(e.target.value);
+                if (fieldErrors.floorPlanUrl) setFieldErrors((prev) => ({ ...prev, floorPlanUrl: undefined }));
+              }}
+              placeholder="e.g. https://domain.com/layout.pdf or /floorplans/OVERALL_VENUE_LAYOUT_IT_EXPO_R5.pdf"
+              className={`w-full bg-zinc-950 border ${
+                fieldErrors.floorPlanUrl ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80'
+              } rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors h-10 font-mono`}
+            />
+            {fieldErrors.floorPlanUrl && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.floorPlanUrl}</p>}
+          </div>
+
+          {/* 5. Notes (Optional) */}
           <div>
             <label className="block text-xs text-zinc-400 font-medium mb-1.5">
               Notes <span className="text-zinc-600 font-normal">(Optional)</span>
@@ -631,6 +691,45 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
           </div>
         </div>
       </Modal>
+      {/* Delete Event Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deletingEvent !== null}
+        onClose={() => setDeletingEvent(null)}
+        type="event"
+        itemName={deletingEvent?.name || ''}
+        itemSubtext={`${deletingEvent?.venue || ''}, ${deletingEvent?.city || ''}`}
+        stallsCount={deletingEvent?.booth_count || 0}
+        onConfirmDelete={async () => {
+          if (deletingEvent) {
+            await deleteEvent(deletingEvent.id);
+            setDeletingEvent(null);
+            await loadEvents();
+          }
+        }}
+        onArchiveInstead={async () => {
+          if (deletingEvent) {
+            await archiveEvent(deletingEvent.id);
+            setDeletingEvent(null);
+            await loadEvents();
+          }
+        }}
+      />
+
+      {/* High-Resolution Floor Plan Viewer Modal */}
+      <FloorplanViewerModal
+        isOpen={floorplanEvent !== null}
+        onClose={() => setFloorplanEvent(null)}
+        eventId={floorplanEvent?.id}
+        eventName={floorplanEvent?.name || 'Exhibition Floor Plan'}
+        pdfUrl={floorplanEvent?.floor_plan_url || null}
+        onUpdatePdfUrl={async (newUrl) => {
+          if (floorplanEvent) {
+            await updateEvent(floorplanEvent.id, { floor_plan_url: newUrl });
+            setFloorplanEvent((prev) => (prev ? { ...prev, floor_plan_url: newUrl } : null));
+            await loadEvents();
+          }
+        }}
+      />
     </div>
   );
 }

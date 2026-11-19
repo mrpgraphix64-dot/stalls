@@ -143,6 +143,12 @@ export async function archiveEvent(id: string): Promise<void> {
   });
 }
 
+export async function deleteEvent(id: string): Promise<void> {
+  await request(`/manage/api/events.php?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 // -------------------------------------------------------------
 // Booths API
 // -------------------------------------------------------------
@@ -181,6 +187,12 @@ export async function archiveBooth(id: string): Promise<void> {
   await request('/manage/api/booths.php?action=archive', {
     method: 'POST',
     body: JSON.stringify({ id }),
+  });
+}
+
+export async function deleteBooth(id: string): Promise<void> {
+  await request(`/manage/api/booths.php?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   });
 }
 
