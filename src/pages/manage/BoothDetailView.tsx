@@ -25,6 +25,7 @@ import {
   Archive,
   FileText,
   Tv,
+  Box,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -38,8 +39,12 @@ import {
   createItem,
   deleteItem,
   updateItem,
+  fetchLinks,
+  createLink,
+  updateLink,
+  deleteLink,
 } from './api';
-import { BoothItem, BoothTask, BoothItemRecord, StallType } from './types';
+import { BoothItem, BoothTask, BoothItemRecord, StallType, BoothLink } from './types';
 import { Modal } from './Modal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
@@ -92,9 +97,20 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Section 1: Design State
+  // Section 1: Design State & 3D Stall Views
   const [designResp, setDesignResp] = useState<'Client Side' | 'Our Side'>('Client Side');
   const [isSavingDesign, setIsSavingDesign] = useState<boolean>(false);
+  const [views3D, setViews3D] = useState<BoothLink[]>([]);
+  const [showAdd3DForm, setShowAdd3DForm] = useState<boolean>(false);
+  const [title3D, setTitle3D] = useState<string>('');
+  const [url3D, setUrl3D] = useState<string>('');
+  const [note3D, setNote3D] = useState<string>('');
+  const [isSaving3D, setIsSaving3D] = useState<boolean>(false);
+  const [editingViewId, setEditingViewId] = useState<string | null>(null);
+  const [editTitle3D, setEditTitle3D] = useState<string>('');
+  const [editUrl3D, setEditUrl3D] = useState<string>('');
+  const [editNote3D, setEditNote3D] = useState<string>('');
+  const [isUpdating3D, setIsUpdating3D] = useState<boolean>(false);
 
   // Section 2: Print Files State
   const [printStatus, setPrintStatus] = useState<string>('Designs Pending');
@@ -176,17 +192,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     try {
       setLoading(true);
       setError('');
-      const [bth, tskRes, pItems, fItems, eItems, gItems] = await Promise.all([
+      const [bth, tskRes, pItems, fItems, eItems, gItems, d3dViews] = await Promise.all([
         fetchBooth(boothId),
         fetchTasks(boothId),
         fetchItems(boothId, 'production').catch(() => []),
         fetchItems(boothId, 'furniture').catch(() => []),
         fetchItems(boothId, 'electrical').catch(() => []),
         fetchItems(boothId, 'goodies').catch(() => []),
+        fetchLinks(boothId, 'render_3d').catch(() => []),
       ]);
 
       setBooth(bth);
       setDesignResp(bth.design_responsibility === 'Our Side' ? 'Our Side' : 'Client Side');
+      setViews3D(d3dViews || []);
       setPrintStatus(bth.print_file_status || 'Designs Pending');
       setPrintDriveUrl(bth.print_drive_url || '');
       setPrintRemark(bth.print_remark || '');
@@ -285,6 +303,98 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       alert(err.message || 'Failed to update design responsibility.');
     } finally {
       setIsSavingDesign(false);
+    }
+  };
+
+  // 1B. 3D View of Stall Handlers
+  const handleAdd3DView = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = title3D.trim();
+    const url = url3D.trim();
+    const note = note3D.trim();
+
+    if (!title) {
+      alert('Please enter a 3D view title (e.g. Front View, Perspective View).');
+      return;
+    }
+    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+      alert('Please enter a valid web URL starting with https:// or http://');
+      return;
+    }
+
+    setIsSaving3D(true);
+    try {
+      const created = await createLink({
+        booth_id: boothId,
+        category: 'render_3d',
+        title,
+        drive_url: url,
+        notes: note || undefined,
+      });
+      setViews3D((prev) => [created, ...prev]);
+      setTitle3D('');
+      setUrl3D('');
+      setNote3D('');
+      setShowAdd3DForm(false);
+      showToast(`Added 3D View: ${title}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save 3D view.');
+    } finally {
+      setIsSaving3D(false);
+    }
+  };
+
+  const handleStartEdit3DView = (view: BoothLink) => {
+    setEditingViewId(view.id);
+    setEditTitle3D(view.title);
+    setEditUrl3D(view.drive_url);
+    setEditNote3D(view.notes || '');
+  };
+
+  const handleCancelEdit3DView = () => {
+    setEditingViewId(null);
+  };
+
+  const handleSaveEdit3DView = async (id: string) => {
+    const title = editTitle3D.trim();
+    const url = editUrl3D.trim();
+    const note = editNote3D.trim();
+
+    if (!title) {
+      alert('Please enter a title.');
+      return;
+    }
+    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+      alert('Please enter a valid web URL starting with https:// or http://');
+      return;
+    }
+
+    setIsUpdating3D(true);
+    try {
+      const updated = await updateLink(id, {
+        category: 'render_3d',
+        title,
+        drive_url: url,
+        notes: note || undefined,
+      });
+      setViews3D((prev) => prev.map((v) => (v.id === id ? updated : v)));
+      setEditingViewId(null);
+      showToast(`Updated 3D View: ${title}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update 3D view.');
+    } finally {
+      setIsUpdating3D(false);
+    }
+  };
+
+  const handleDelete3DView = async (view: BoothLink) => {
+    if (!confirm(`Delete 3D View "${view.title}"?`)) return;
+    try {
+      await deleteLink(view.id);
+      setViews3D((prev) => prev.filter((v) => v.id !== view.id));
+      showToast('3D View removed.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove 3D view.');
     }
   };
 
@@ -999,6 +1109,293 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                             <span>Reworkzone fabrication team is responsible for preparing the 3D design and visual concepts.</span>
                           )}
                         </div>
+                      </div>
+
+                      {/* 3D View of Stall Area */}
+                      <div className="pt-4 border-t border-zinc-800/80 space-y-3.5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                              <Box className="w-3.5 h-3.5 text-amber-400" />
+                              <span>3D View of Stall</span>
+                            </h4>
+                            <p className="text-[11px] text-zinc-400">
+                              Store and display 3D reference views, design URLs & client renders for this stall.
+                            </p>
+                          </div>
+                          {views3D.length > 0 && (
+                            <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                              {views3D.length} {views3D.length === 1 ? 'view' : 'views'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Saved 3D Views List (Clean stacked cards) */}
+                        {views3D.length > 0 ? (
+                          <div className="space-y-2.5">
+                            {views3D.map((view) => {
+                              const isEditing = editingViewId === view.id;
+                              const isImageUrl = /\.(png|jpe?g|webp|svg|gif)(\?.*)?$/i.test(view.drive_url);
+
+                              if (isEditing) {
+                                return (
+                                  <div
+                                    key={view.id}
+                                    className="p-3.5 rounded-xl bg-zinc-900 border border-amber-500/50 space-y-3 animate-in fade-in duration-100"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                                        Edit 3D View
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={handleCancelEdit3DView}
+                                        className="text-zinc-400 hover:text-zinc-200 text-xs p-1"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <div>
+                                        <label className="text-[11px] text-zinc-400 block mb-1">View Title</label>
+                                        <input
+                                          type="text"
+                                          value={editTitle3D}
+                                          onChange={(e) => setEditTitle3D(e.target.value)}
+                                          placeholder="e.g. Front View, Perspective View"
+                                          className="w-full min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[11px] text-zinc-400 block mb-1">3D View Link / URL</label>
+                                        <input
+                                          type="url"
+                                          value={editUrl3D}
+                                          onChange={(e) => setEditUrl3D(e.target.value)}
+                                          placeholder="https://..."
+                                          className="w-full min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[11px] text-zinc-400 block mb-1">Note / Remark (Optional)</label>
+                                        <input
+                                          type="text"
+                                          value={editNote3D}
+                                          onChange={(e) => setEditNote3D(e.target.value)}
+                                          placeholder="e.g. Client-approved version, Latest update"
+                                          className="w-full min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-2 pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={handleCancelEdit3DView}
+                                        className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isUpdating3D}
+                                        onClick={() => handleSaveEdit3DView(view.id)}
+                                        className="min-h-[36px] px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                      >
+                                        {isUpdating3D ? 'Saving...' : 'Save Changes'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  key={view.id}
+                                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 transition-colors gap-3"
+                                >
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    {/* Preview Thumbnail or 3D Placeholder */}
+                                    <div className="w-14 h-14 rounded-lg bg-zinc-950 border border-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
+                                      {isImageUrl ? (
+                                        <img
+                                          src={view.drive_url}
+                                          alt={view.title}
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => {
+                                            (e.currentTarget as HTMLElement).style.display = 'none';
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="flex flex-col items-center justify-center text-amber-400/80">
+                                          <Box className="w-5 h-5" />
+                                          <span className="text-[9px] font-mono mt-0.5 text-zinc-500">3D</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Info: Title, Note, URL */}
+                                    <div className="flex-1 min-w-0 space-y-1">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-semibold text-zinc-200 text-xs truncate">
+                                          {view.title}
+                                        </span>
+                                        {view.notes && (
+                                          <span className="text-[11px] text-amber-300/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 font-medium">
+                                            {view.notes}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-zinc-400 font-mono truncate max-w-sm">
+                                        {view.drive_url}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Actions: Open View, Edit, Delete */}
+                                  <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60">
+                                    <a
+                                      href={view.drive_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="min-h-[36px] px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                                      title="Open 3D View in New Tab"
+                                    >
+                                      <span>Open View</span>
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEdit3DView(view)}
+                                      className="min-h-[36px] min-w-[36px] flex items-center justify-center p-2 text-zinc-400 hover:text-amber-400 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                                      title="Edit 3D View"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelete3DView(view)}
+                                      className="min-h-[36px] min-w-[36px] flex items-center justify-center p-2 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                                      title="Delete 3D View"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-500 italic">No 3D stall views added yet.</p>
+                        )}
+
+                        {/* + Add 3D View Button / Inline Form */}
+                        {!showAdd3DForm ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowAdd3DForm(true)}
+                            className="min-h-[40px] px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Add 3D View of Stall</span>
+                          </button>
+                        ) : (
+                          <form onSubmit={handleAdd3DView} className="p-3.5 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-3 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add 3D View of Stall</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShowAdd3DForm(false)}
+                                className="text-zinc-500 hover:text-zinc-300 text-xs p-1"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Title with fast preset pills */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-semibold text-zinc-300">View Title</label>
+                                <span className="text-[10px] text-zinc-500">Quick suggestions:</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                {['Front View', 'Perspective View', 'Option 1', 'Top View', 'Final 3D View'].map((preset) => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => setTitle3D(preset)}
+                                    className={`px-2 py-0.5 rounded-md text-[11px] border transition-colors cursor-pointer ${
+                                      title3D === preset
+                                        ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
+                                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                    }`}
+                                  >
+                                    {preset}
+                                  </button>
+                                ))}
+                              </div>
+                              <input
+                                type="text"
+                                value={title3D}
+                                onChange={(e) => setTitle3D(e.target.value)}
+                                placeholder="e.g. Front View, Perspective View"
+                                className="w-full min-h-[40px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                required
+                              />
+                            </div>
+
+                            {/* 3D View Link / URL */}
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-semibold text-zinc-300">3D View Link / URL</label>
+                              <input
+                                type="url"
+                                value={url3D}
+                                onChange={(e) => setUrl3D(e.target.value)}
+                                placeholder="https://drive.google.com/... or hosted preview URL"
+                                className="w-full min-h-[40px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                required
+                              />
+                            </div>
+
+                            {/* Note / Remark (Optional) */}
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-semibold text-zinc-300">Note / Remark (Optional)</label>
+                              <input
+                                type="text"
+                                value={note3D}
+                                onChange={(e) => setNote3D(e.target.value)}
+                                placeholder="e.g. Client-approved version, Latest update, Need size correction"
+                                className="w-full min-h-[40px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                              />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowAdd3DForm(false)}
+                                className="px-3.5 py-2 text-xs text-zinc-400 hover:text-zinc-200 font-medium"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={isSaving3D}
+                                className="min-h-[38px] px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
+                              >
+                                {isSaving3D ? 'Saving...' : 'Save 3D View'}
+                              </button>
+                            </div>
+                          </form>
+                        )}
                       </div>
                     </div>
                   )}

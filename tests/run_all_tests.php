@@ -9,6 +9,7 @@ $files = [
     __DIR__ . '/test_checklist_simplification.php',
     __DIR__ . '/test_quick_add_refinement.php',
     __DIR__ . '/test_goodies_promotional_printing.php',
+    __DIR__ . '/test_design_3d_views.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {
