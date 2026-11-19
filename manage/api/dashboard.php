@@ -52,10 +52,14 @@ try {
         GROUP BY booth_id
     ");
     $progressMap = [];
+    $completedChecklists = 0;
     while ($pRow = $progressStmt->fetch()) {
         $app = (int)$pRow['applicable_tasks'];
         $comp = (int)$pRow['completed_tasks'];
         $pct = $app > 0 ? round(($comp / $app) * 100, 1) : 0.0;
+        if ($app > 0 && $comp >= $app) {
+            $completedChecklists++;
+        }
         $progressMap[$pRow['booth_id']] = [
             'total'      => (int)$pRow['total_tasks'],
             'applicable' => $app,
@@ -103,6 +107,7 @@ try {
             'total_events'          => $totalEvents,
             'active_events'         => $activeEvents,
             'total_booths'          => $totalBooths,
+            'completed_checklists'  => $completedChecklists,
             'booths_in_production'  => $boothsInProduction,
             'work_in_progress'      => $workInProgress,
             'ready_completed'       => $readyCompleted,

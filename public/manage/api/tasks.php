@@ -16,21 +16,17 @@ $pdo = reworkzone_get_db();
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
-// Default 10 Checklist Tasks
+// Core 6 Checklist Tasks (Simple Everyday Operations)
 $defaultTasks = [
-    'Client details confirmed',
-    'Design approved',
-    'Print files finalized',
-    'Printing completed',
-    'Structure fabricated',
-    'Furniture arranged',
-    'Electrical items ready',
-    'Material dispatched',
-    'Stall installation completed',
-    'Final handover completed',
+    'Design',
+    'Print Files',
+    'Production',
+    'Furniture',
+    'Electrical',
+    'Installation',
 ];
 
-// Helper: Seed 10 default tasks if booth has 0 tasks
+// Helper: Seed 6 default tasks if booth has 0 tasks
 function reworkzone_seed_default_tasks(PDO $pdo, string $boothId, array $defaultTasks) {
     $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM booth_tasks WHERE booth_id = :booth_id");
     $checkStmt->execute([':booth_id' => $boothId]);
@@ -38,8 +34,8 @@ function reworkzone_seed_default_tasks(PDO $pdo, string $boothId, array $default
 
     if ($count === 0) {
         $insertStmt = $pdo->prepare("
-            INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, created_at, updated_at)
-            VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :display_order, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, status, created_at, updated_at)
+            VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :display_order, 0, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ");
 
         $pdo->beginTransaction();
@@ -47,7 +43,7 @@ function reworkzone_seed_default_tasks(PDO $pdo, string $boothId, array $default
             foreach ($defaultTasks as $idx => $taskName) {
                 $taskId = 'tsk_' . bin2hex(random_bytes(6));
                 $order = $idx + 1;
-                $phase = ($order <= 3) ? 'Pre-Production' : (($order <= 7) ? 'Production & Sourcing' : 'Site Execution');
+                $phase = $taskName;
                 $insertStmt->execute([
                     ':id'            => $taskId,
                     ':booth_id'      => $boothId,
@@ -58,7 +54,7 @@ function reworkzone_seed_default_tasks(PDO $pdo, string $boothId, array $default
                 ]);
             }
             $pdo->commit();
-            reworkzone_log_activity($pdo, $boothId, 'checklist_initialized', 'Default 10-step checklist initialized');
+            reworkzone_log_activity($pdo, $boothId, 'checklist_initialized', 'Default 6-step checklist initialized');
         } catch (Exception $e) {
             $pdo->rollBack();
             error_log('Failed to seed default tasks: ' . $e->getMessage());

@@ -17,6 +17,7 @@ import {
 import { fetchEvents, createEvent, updateEvent, archiveEvent } from './api';
 import { EventItem, EventStatus } from './types';
 import { Modal } from './Modal';
+import { DateRangePicker } from './DateRangePicker';
 
 interface EventsViewProps {
   onNavigate: (route: string) => void;
@@ -183,9 +184,13 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
         setEditingEvent(null);
         setSuccessToast('Exhibition updated successfully.');
       } else {
-        await createEvent(payload);
+        const created = await createEvent(payload);
         setIsAddOpen(false);
         if (onCloseCreateModal) onCloseCreateModal();
+        if (created && created.id) {
+          onNavigate(`event:${created.id}`);
+          return;
+        }
         setSuccessToast('Exhibition created successfully.');
       }
 
@@ -248,47 +253,47 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
         <div>
           <h1 className="text-2xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
             Exhibitions & Events
-            <span className="text-xs font-normal px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400">
+            <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
               {events.length}
             </span>
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">Manage scheduled trade shows, dates, venues, and registered stalls</p>
+          <p className="text-xs text-zinc-400 mt-1">Organize exhibitions, manage locus venues, and track assigned booths</p>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5 cursor-pointer"
+          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          Add Exhibition
+          <span>+ New Event</span>
         </button>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, venue, or city..."
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/60 transition-colors"
+            placeholder="Search exhibitions by name, venue, or city..."
+            className="w-full bg-[#15171e] border border-white/[0.08] rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 transition-all"
           />
         </form>
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {(['all', 'upcoming', 'live', 'in_progress', 'completed', 'archived'] as const).map((st) => (
+          {(['all', 'upcoming', 'live', 'completed'] as const).map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg capitalize whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-xl capitalize whitespace-nowrap transition-all cursor-pointer ${
                 statusFilter === st
-                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                  : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold'
+                  : 'bg-[#15171e] text-zinc-400 border border-white/[0.07] hover:text-zinc-200'
               }`}
             >
-              {st.replace('_', ' ')}
+              {st === 'all' ? 'All Events' : st}
             </button>
           ))}
         </div>
@@ -298,35 +303,35 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
       {loading ? (
         <div className="flex flex-col items-center justify-center min-h-[40vh] text-zinc-400 gap-3">
           <div className="w-8 h-8 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-          <span className="text-sm">Loading events...</span>
+          <span className="text-xs">Loading exhibitions...</span>
         </div>
       ) : error ? (
         <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center space-y-3">
           <p className="text-red-400 text-sm">{error}</p>
           <button
             onClick={loadEvents}
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-lg"
+            className="px-4 py-2 bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 text-xs font-semibold rounded-xl"
           >
             Retry
           </button>
         </div>
       ) : events.length === 0 ? (
-        <div className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl p-12 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center mx-auto text-zinc-500">
+        <div className="bg-[#15171e] border border-dashed border-white/[0.1] rounded-2xl p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/[0.04] flex items-center justify-center mx-auto text-zinc-500">
             <Calendar className="w-6 h-6" />
           </div>
           <p className="text-sm font-medium text-zinc-300">No events found</p>
           <p className="text-xs text-zinc-500 max-w-sm mx-auto">
             {search || statusFilter !== 'all'
-              ? 'Try adjusting your search keywords or status filter.'
+              ? 'Try adjusting your search keywords or filter.'
               : 'Get started by creating your first exhibition event.'}
           </p>
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs font-semibold rounded-xl transition-colors mt-2"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 mt-2"
           >
             <Plus className="w-4 h-4" />
-            Add First Event
+            <span>Create First Event</span>
           </button>
         </div>
       ) : (
@@ -335,25 +340,21 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
             <div
               key={evt.id}
               onClick={() => onNavigate(`event:${evt.id}`)}
-              className="group cursor-pointer bg-zinc-900/90 hover:bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-5 transition-all shadow-sm flex flex-col justify-between space-y-4"
+              className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-white/[0.07] hover:border-white/[0.14] rounded-2xl p-5 transition-all shadow-sm flex flex-col justify-between space-y-4"
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors line-clamp-1">
+                  <h3 className="text-sm sm:text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors line-clamp-1">
                     {evt.name}
                   </h3>
-                  <span
-                    className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-md border shrink-0 ${getStatusBadge(
-                      evt.status
-                    )}`}
-                  >
-                    {evt.status.replace('_', ' ')}
+                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                    {evt.booth_count ?? 0} {evt.booth_count === 1 ? 'booth' : 'booths'}
                   </span>
                 </div>
 
                 <div className="space-y-1.5 text-xs text-zinc-400">
                   <div className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-amber-500/80 shrink-0" />
+                    <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                     <span className="truncate">
                       {evt.venue}, {evt.city}
                     </span>
@@ -367,24 +368,23 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
                 </div>
 
                 {evt.notes && (
-                  <p className="text-xs text-zinc-500 line-clamp-2 italic pt-1 border-t border-zinc-800/40">
+                  <p className="text-xs text-zinc-500 line-clamp-2 italic pt-1 border-t border-white/[0.04]">
                     "{evt.notes}"
                   </p>
                 )}
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between pt-3 border-t border-zinc-800/60 text-xs">
-                <div className="flex items-center gap-1 text-zinc-400">
-                  <Building className="w-3.5 h-3.5 text-zinc-500" />
-                  <span className="font-semibold text-zinc-200">{evt.booth_count ?? 0}</span>
-                  <span className="text-zinc-500">{evt.booth_count === 1 ? 'stall' : 'stalls'}</span>
-                </div>
+              <div className="flex items-center justify-between pt-3 border-t border-white/[0.06] text-xs">
+                <span className="text-[11px] font-medium text-amber-400 group-hover:underline flex items-center gap-1">
+                  <span>Open Exhibition</span>
+                  <ChevronRight className="w-3 h-3" />
+                </span>
 
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={(e) => openEditModal(evt, e)}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors"
+                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
                     title="Edit Event"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -395,15 +395,12 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
                         e.stopPropagation();
                         setArchivingEvent(evt);
                       }}
-                      className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                      className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
                       title="Archive Event"
                     >
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <div className="pl-1 text-zinc-500 group-hover:text-amber-400 transition-colors">
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
                 </div>
               </div>
             </div>
@@ -498,56 +495,18 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
             </div>
           </div>
 
-          {/* 3. Event Dates (Two columns on desktop, stacked on mobile) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-              <label className="block text-xs text-zinc-300 font-medium mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-amber-500/80" />
-                Event Start Date <span className="text-amber-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={formStartDate}
-                onChange={(e) => {
-                  setFormStartDate(e.target.value);
-                  if (fieldErrors.startDate) setFieldErrors((prev) => ({ ...prev, startDate: undefined }));
-                  if (formEndDate && e.target.value && formEndDate < e.target.value) {
-                    setFieldErrors((prev) => ({ ...prev, endDate: 'End date cannot be earlier than start date.' }));
-                  } else if (fieldErrors.endDate === 'End date cannot be earlier than start date.') {
-                    setFieldErrors((prev) => ({ ...prev, endDate: undefined }));
-                  }
-                }}
-                className={`w-full bg-zinc-950 border ${
-                  fieldErrors.startDate ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30'
-                } rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none [color-scheme:dark] transition-colors h-10`}
-              />
-              {fieldErrors.startDate && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.startDate}</p>}
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-300 font-medium mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-amber-500/80" />
-                Event End Date <span className="text-amber-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                min={formStartDate || undefined}
-                value={formEndDate}
-                onChange={(e) => {
-                  setFormEndDate(e.target.value);
-                  if (fieldErrors.endDate) setFieldErrors((prev) => ({ ...prev, endDate: undefined }));
-                  if (formStartDate && e.target.value && e.target.value < formStartDate) {
-                    setFieldErrors((prev) => ({ ...prev, endDate: 'End date cannot be earlier than start date.' }));
-                  }
-                }}
-                className={`w-full bg-zinc-950 border ${
-                  fieldErrors.endDate ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30'
-                } rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none [color-scheme:dark] transition-colors h-10`}
-              />
-              {fieldErrors.endDate && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.endDate}</p>}
-            </div>
-          </div>
+          {/* 3. Event Dates via DateRangePicker */}
+          <DateRangePicker
+            startDate={formStartDate}
+            endDate={formEndDate}
+            onChange={(s, e) => {
+              setFormStartDate(s);
+              setFormEndDate(e);
+              if (fieldErrors.startDate) setFieldErrors((prev) => ({ ...prev, startDate: undefined }));
+              if (fieldErrors.endDate) setFieldErrors((prev) => ({ ...prev, endDate: undefined }));
+            }}
+            error={fieldErrors.startDate || fieldErrors.endDate}
+          />
 
           {/* Edit Only Optional Fields: Setup Date, Dismantling Date, and Status */}
           {editingEvent && (

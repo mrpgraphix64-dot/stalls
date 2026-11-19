@@ -1,304 +1,390 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
-  Layers,
-  FolderOpen,
-  ExternalLink,
-  Edit2,
-  Archive,
-  Calendar,
   Building,
-  User,
   Phone,
-  Mail,
-  Maximize2,
-  Clock,
-  Sparkles,
-  Palette,
-  Printer,
-  Hammer,
-  Armchair,
-  Link2,
-  CheckSquare,
-  AlertTriangle,
-  Zap,
+  Edit2,
   CheckCircle2,
   Circle,
   ChevronDown,
   ChevronUp,
-  Plus,
+  Palette,
+  Printer,
+  Hammer,
+  Armchair,
+  Zap,
   Truck,
+  ExternalLink,
+  Plus,
+  Trash2,
+  AlertTriangle,
   Check,
-  ShieldCheck,
-  DollarSign,
-  History,
+  Ban,
+  Layers,
 } from 'lucide-react';
 import {
   fetchBooth,
-  fetchEvents,
   updateBooth,
-  archiveBooth,
   fetchTasks,
   setTaskStatus,
-  createTask,
-  deleteTask,
+  fetchLinks,
+  createLink,
+  deleteLink,
+  fetchItems,
+  createItem,
+  deleteItem,
+  updateItem,
 } from './api';
-import { BoothItem, EventItem, BoothStatus, BoothTask, TasksSummary } from './types';
+import { BoothItem, BoothTask, BoothLink, BoothItemRecord } from './types';
 import { Modal } from './Modal';
-import { DesignTab } from './tabs/DesignTab';
-import { PrintTab } from './tabs/PrintTab';
-import { ProductionTab } from './tabs/ProductionTab';
-import { FurnitureTab } from './tabs/FurnitureTab';
-import { ElectricalTab } from './tabs/ElectricalTab';
-import { DriveLinksTab } from './tabs/DriveLinksTab';
-import { ChecklistCostingTab } from './tabs/ChecklistCostingTab';
-import { FloorplanViewerModal } from './FloorplanViewerModal';
-import { matchFloorplanStall } from './floorplanData';
+
+interface ChecklistProgress {
+  total: number;
+  applicable_count: number;
+  completed: number;
+  percentage: number;
+}
 
 interface BoothDetailViewProps {
   boothId: string;
   onNavigate: (route: string) => void;
 }
 
+const BOOTH_SIZE_OPTIONS = [
+  '3 × 3 m (9 sq.m)',
+  '6 × 3 m (18 sq.m)',
+  '6 × 6 m (36 sq.m)',
+  '27 sq. m',
+  'Startup Stall (2 × 2 m)',
+  'Custom Size',
+];
+
 export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [booth, setBooth] = useState<BoothItem | null>(null);
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const [tasks, setTasks] = useState<BoothTask[]>([]);
+  const [tasksSummary, setTasksSummary] = useState<ChecklistProgress>({
+    total: 6,
+    applicable_count: 6,
+    completed: 0,
+    percentage: 0,
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [successToast, setSuccessToast] = useState<string>('');
 
-  // Checklist State for the interactive top checklist
-  const [tasks, setTasks] = useState<BoothTask[]>([]);
-  const [taskSummary, setTaskSummary] = useState<{
-    total: number;
-    applicable: number;
-    completed: number;
-    percentage: number;
-  }>({ total: 10, applicable: 10, completed: 0, percentage: 0 });
-  const [tasksLoading, setTasksLoading] = useState<boolean>(false);
-  const [isAddTaskOpen, setIsAddTaskOpen] = useState<boolean>(false);
-  const [newTaskName, setNewTaskName] = useState<string>('');
-  const [newTaskPhase, setNewTaskPhase] = useState<string>('Site Execution');
-
-  // Accordion Expand/Collapse State
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    checklist: true,
+  // Expandable sections state
+  const [expanded, setExpanded] = useState<{ [key: string]: boolean }>({
     design: true,
     print: false,
     production: false,
     furniture: false,
+    electrical: false,
     installation: false,
-    moreDetails: false,
   });
 
-  const [furnitureSubCategory, setFurnitureSubCategory] = useState<'furniture' | 'electrical'>('furniture');
-  const [moreDetailsTab, setMoreDetailsTab] = useState<'drive' | 'costing' | 'logs'>('drive');
+  const toggleSection = (key: string) => {
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
-  // Modals
-  const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
-  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState<boolean>(false);
-  const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
+  // Section Data States
+  // 1. Design
+  const [designLinks, setDesignLinks] = useState<BoothLink[]>([]);
+  const [designUrlInput, setDesignUrlInput] = useState<string>('');
+  const [designTitleInput, setDesignTitleInput] = useState<string>('3D View / Render');
+  const [designNotes, setDesignNotes] = useState<string>('');
 
-  // Edit Form State
-  const [formEventId, setFormEventId] = useState<string>('');
-  const [formBoothNumber, setFormBoothNumber] = useState<string>('');
-  const [formClientName, setFormClientName] = useState<string>('');
-  const [formContactPerson, setFormContactPerson] = useState<string>('');
-  const [formPhone, setFormPhone] = useState<string>('');
-  const [formEmail, setFormEmail] = useState<string>('');
-  const [formStandSize, setFormStandSize] = useState<string>('');
-  const [formBoothType, setFormBoothType] = useState<string>('Custom Stall');
-  const [formBudget, setFormBudget] = useState<string>('');
-  const [formQuotedAmount, setFormQuotedAmount] = useState<string>('');
-  const [formMainDriveUrl, setFormMainDriveUrl] = useState<string>('');
-  const [formStatus, setFormStatus] = useState<BoothStatus>('draft');
-  const [formNotes, setFormNotes] = useState<string>('');
-  const [formError, setFormError] = useState<string>('');
-  const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
+  // 2. Print
+  const [printLinks, setPrintLinks] = useState<BoothLink[]>([]);
+  const [printTitleInput, setPrintTitleInput] = useState<string>('');
+  const [printUrlInput, setPrintUrlInput] = useState<string>('');
 
-  const loadBooth = async () => {
+  // 3. Production
+  const [prodItems, setProdItems] = useState<BoothItemRecord[]>([]);
+  const [prodNameInput, setProdNameInput] = useState<string>('');
+  const [prodQtyInput, setProdQtyInput] = useState<number>(1);
+
+  // 4. Furniture
+  const [furnItems, setFurnItems] = useState<BoothItemRecord[]>([]);
+  const [furnNameInput, setFurnNameInput] = useState<string>('');
+  const [furnQtyInput, setFurnQtyInput] = useState<number>(1);
+
+  // 5. Electrical
+  const [elecItems, setElecItems] = useState<BoothItemRecord[]>([]);
+  const [elecNameInput, setElecNameInput] = useState<string>('');
+  const [elecQtyInput, setElecQtyInput] = useState<number>(1);
+
+  // 6. Installation
+  const [installNotes, setInstallNotes] = useState<string>('');
+
+  // Edit Booth Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [editBoothNumber, setEditBoothNumber] = useState<string>('');
+  const [editCompanyName, setEditCompanyName] = useState<string>('');
+  const [editPhone, setEditPhone] = useState<string>('');
+  const [editSize, setEditSize] = useState<string>('');
+  const [editStructure, setEditStructure] = useState<'Wooden' | 'Octonorm'>('Wooden');
+  const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
+  const [editError, setEditError] = useState<string>('');
+
+  // Load booth data and section items
+  const loadAllData = async () => {
     try {
       setLoading(true);
       setError('');
-      const [boothData, eventsData] = await Promise.all([fetchBooth(boothId), fetchEvents()]);
-      setBooth(boothData);
-      setEvents(eventsData);
-      await loadChecklist(boothData.id);
+      const [bth, tskRes, dLinks, pLinks, pItems, fItems, eItems] = await Promise.all([
+        fetchBooth(boothId),
+        fetchTasks(boothId),
+        fetchLinks(boothId, 'render_3d').catch(() => []),
+        fetchLinks(boothId, 'print_ready').catch(() => []),
+        fetchItems(boothId, 'production').catch(() => []),
+        fetchItems(boothId, 'furniture').catch(() => []),
+        fetchItems(boothId, 'electrical').catch(() => []),
+      ]);
+
+      setBooth(bth);
+      setDesignNotes(bth.notes || '');
+      setTasks(tskRes.tasks);
+      setTasksSummary({
+        total: tskRes.total,
+        applicable_count: tskRes.applicable_count ?? tskRes.total,
+        completed: tskRes.completed,
+        percentage: tskRes.percentage,
+      });
+
+      setDesignLinks(dLinks);
+      setPrintLinks(pLinks);
+      setProdItems(pItems);
+      setFurnItems(fItems);
+      setElecItems(eItems);
     } catch (err: any) {
-      setError(err.message || 'Failed to load booth details.');
+      setError(err.message || 'Failed to load booth information.');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadChecklist = async (id: string) => {
-    try {
-      setTasksLoading(true);
-      const res = await fetchTasks(id);
-      setTasks(res.tasks || []);
-      const app = res.applicable_count ?? (res.tasks?.filter((t) => t.status !== 'not_applicable').length || res.total);
-      const comp = res.completed ?? (res.tasks?.filter((t) => t.status === 'completed' || t.is_completed === 1).length || 0);
-      const pct = app > 0 ? Math.round((comp / app) * 100) : 0;
-      setTaskSummary({
-        total: res.total,
-        applicable: app,
-        completed: comp,
-        percentage: pct,
-      });
-    } catch (e) {
-      console.warn('Failed to load tasks checklist:', e);
-    } finally {
-      setTasksLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadBooth();
+    loadAllData();
   }, [boothId]);
 
-  const toggleSection = (section: string) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  const showToast = (msg: string) => {
+    setSuccessToast(msg);
+    setTimeout(() => setSuccessToast(''), 3000);
   };
 
-  const handleTaskStatusChange = async (taskId: string, newStatus: 'pending' | 'completed' | 'not_applicable') => {
+  // Find task matching section key
+  const getTaskForSection = (sectionKey: string): BoothTask | undefined => {
+    const key = sectionKey.toLowerCase();
+    return tasks.find((t) => {
+      const name = t.task_name.toLowerCase();
+      if (key === 'design') return name.includes('design');
+      if (key === 'print') return name.includes('print');
+      if (key === 'production') return name.includes('production') || name.includes('structure');
+      if (key === 'furniture') return name.includes('furniture');
+      if (key === 'electrical') return name.includes('electrical');
+      if (key === 'installation') return name.includes('install') || name.includes('handover');
+      return false;
+    });
+  };
+
+  // Handle task status change (toggle completed or not_applicable)
+  const handleToggleTaskStatus = async (sectionKey: string, targetStatus?: 'pending' | 'completed' | 'not_applicable') => {
+    const task = getTaskForSection(sectionKey);
+    if (!task) return;
+
+    let newStatus: 'pending' | 'completed' | 'not_applicable' = 'completed';
+    const currentStatus = task.status || (task.is_completed ? 'completed' : 'pending');
+
+    if (targetStatus) {
+      newStatus = targetStatus;
+    } else {
+      if (currentStatus === 'completed') {
+        newStatus = 'pending';
+      } else {
+        newStatus = 'completed';
+      }
+    }
+
     try {
-      const res = await setTaskStatus(taskId, newStatus);
-      // Update local task state immediately
+      const res = await setTaskStatus(task.id, newStatus);
+      // Update local state immediately
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus, is_completed: newStatus === 'completed' ? 1 : 0 } : t))
+        prev.map((t) => (t.id === task.id ? { ...t, status: newStatus, is_completed: newStatus === 'completed' ? 1 : 0 } : t))
       );
-      const app = res.applicable_count ?? res.total;
-      setTaskSummary({
+      setTasksSummary({
         total: res.total,
-        applicable: app,
+        applicable_count: res.applicable_count ?? res.total,
         completed: res.completed,
-        percentage: Math.round(res.percentage),
+        percentage: res.percentage,
       });
+      showToast(`${sectionKey.toUpperCase()}: Marked as ${newStatus === 'not_applicable' ? 'Not Required' : newStatus}`);
     } catch (err: any) {
       alert(err.message || 'Failed to update task status.');
     }
   };
 
-  const handleCreateCustomTask = async (e: React.FormEvent) => {
+  // 1. Design Link Handlers
+  const handleAddDesignLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskName.trim()) return;
+    if (!designUrlInput.trim()) return;
+
     try {
-      await createTask({
+      const newLnk = await createLink({
         booth_id: boothId,
-        task_name: newTaskName.trim(),
-        phase: newTaskPhase,
+        category: 'render_3d',
+        title: designTitleInput.trim() || '3D View / Render',
+        drive_url: designUrlInput.trim(),
       });
-      setNewTaskName('');
-      setIsAddTaskOpen(false);
-      await loadChecklist(boothId);
+      setDesignLinks((prev) => [newLnk, ...prev]);
+      setDesignUrlInput('');
+      showToast('Design Drive link added.');
     } catch (err: any) {
-      alert(err.message || 'Failed to create task.');
+      alert(err.message || 'Failed to add design link.');
     }
   };
 
+  const handleDeleteLink = async (linkId: string, isDesign: boolean) => {
+    try {
+      await deleteLink(linkId);
+      if (isDesign) {
+        setDesignLinks((prev) => prev.filter((l) => l.id !== linkId));
+      } else {
+        setPrintLinks((prev) => prev.filter((l) => l.id !== linkId));
+      }
+      showToast('Link removed.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove link.');
+    }
+  };
+
+  // 2. Print Link Handlers
+  const handleAddPrintLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!printUrlInput.trim()) return;
+
+    try {
+      const newLnk = await createLink({
+        booth_id: boothId,
+        category: 'print_ready',
+        title: printTitleInput.trim() || 'Print Artwork',
+        drive_url: printUrlInput.trim(),
+      });
+      setPrintLinks((prev) => [...prev, newLnk]);
+      setPrintTitleInput('');
+      setPrintUrlInput('');
+      showToast('Print file link added.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to add print file link.');
+    }
+  };
+
+  // 3, 4, 5. Items Handlers (Production, Furniture, Electrical)
+  const handleAddItem = async (category: 'production' | 'furniture' | 'electrical') => {
+    let name = '';
+    let qty = 1;
+
+    if (category === 'production') {
+      name = prodNameInput.trim();
+      qty = prodQtyInput;
+    } else if (category === 'furniture') {
+      name = furnNameInput.trim();
+      qty = furnQtyInput;
+    } else if (category === 'electrical') {
+      name = elecNameInput.trim();
+      qty = elecQtyInput;
+    }
+
+    if (!name) return;
+
+    try {
+      const newItem = await createItem({
+        booth_id: boothId,
+        category,
+        item_name: name,
+        quantity: Math.max(1, qty),
+        unit: 'nos',
+      });
+
+      if (category === 'production') {
+        setProdItems((prev) => [...prev, newItem]);
+        setProdNameInput('');
+        setProdQtyInput(1);
+      } else if (category === 'furniture') {
+        setFurnItems((prev) => [...prev, newItem]);
+        setFurnNameInput('');
+        setFurnQtyInput(1);
+      } else if (category === 'electrical') {
+        setElecItems((prev) => [...prev, newItem]);
+        setElecNameInput('');
+        setElecQtyInput(1);
+      }
+
+      showToast(`Added ${name} (${qty})`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to add item.');
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string, category: 'production' | 'furniture' | 'electrical') => {
+    try {
+      await deleteItem(itemId);
+      if (category === 'production') setProdItems((prev) => prev.filter((i) => i.id !== itemId));
+      if (category === 'furniture') setFurnItems((prev) => prev.filter((i) => i.id !== itemId));
+      if (category === 'electrical') setElecItems((prev) => prev.filter((i) => i.id !== itemId));
+      showToast('Item removed.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove item.');
+    }
+  };
+
+  // Open Edit Modal
   const openEditModal = () => {
     if (!booth) return;
-    setFormEventId(booth.event_id);
-    setFormBoothNumber(booth.booth_number);
-    setFormClientName(booth.client_name);
-    setFormContactPerson(booth.contact_person || '');
-    setFormPhone(booth.phone || '');
-    setFormEmail(booth.email || '');
-    setFormStandSize(booth.stand_size || '');
-    setFormBoothType(booth.booth_type || 'Custom Stall');
-    setFormBudget(booth.budget ? String(booth.budget) : '');
-    setFormQuotedAmount(booth.quoted_amount ? String(booth.quoted_amount) : '');
-    setFormMainDriveUrl(booth.main_drive_folder_url || '');
-    setFormStatus(booth.status);
-    setFormNotes(booth.notes || '');
-    setFormError('');
-    setIsEditOpen(true);
+    setEditBoothNumber(booth.booth_number);
+    setEditCompanyName(booth.client_name);
+    setEditPhone(booth.phone || '');
+    setEditSize(booth.stand_size || '3 × 3 m (9 sq.m)');
+    const st = booth.booth_type?.toLowerCase().includes('octonorm') ? 'Octonorm' : 'Wooden';
+    setEditStructure(st);
+    setEditError('');
+    setIsEditModalOpen(true);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formEventId || !formBoothNumber.trim() || !formClientName.trim()) {
-      setFormError('Please select an event, and enter a booth number and client name.');
+    if (!editBoothNumber.trim()) {
+      setEditError('Booth number is required.');
+      return;
+    }
+    if (!editCompanyName.trim()) {
+      setEditError('Company name is required.');
       return;
     }
 
-    setFormSubmitting(true);
-    setFormError('');
-
+    setEditSubmitting(true);
     try {
-      const payload: Partial<BoothItem> = {
-        event_id: formEventId,
-        booth_number: formBoothNumber.trim(),
-        client_name: formClientName.trim(),
-        contact_person: formContactPerson.trim() || undefined,
-        phone: formPhone.trim() || undefined,
-        email: formEmail.trim() || undefined,
-        stand_size: formStandSize.trim() || undefined,
-        booth_type: formBoothType.trim() || undefined,
-        budget: formBudget ? parseFloat(formBudget) : undefined,
-        quoted_amount: formQuotedAmount ? parseFloat(formQuotedAmount) : undefined,
-        main_drive_folder_url: formMainDriveUrl.trim() || undefined,
-        status: formStatus,
-        notes: formNotes.trim() || undefined,
-      };
-
-      await updateBooth(boothId, payload);
-      setIsEditOpen(false);
-      await loadBooth();
+      const updated = await updateBooth(boothId, {
+        booth_number: editBoothNumber.trim(),
+        client_name: editCompanyName.trim(),
+        phone: editPhone.trim() || undefined,
+        stand_size: editSize,
+        booth_type: editStructure,
+      });
+      setBooth(updated);
+      setIsEditModalOpen(false);
+      showToast('Booth details updated.');
     } catch (err: any) {
-      setFormError(err.message || 'Failed to update booth.');
+      setEditError(err.message || 'Failed to update booth.');
     } finally {
-      setFormSubmitting(false);
-    }
-  };
-
-  const handleArchiveConfirm = async () => {
-    if (!booth) return;
-    try {
-      setFormSubmitting(true);
-      await archiveBooth(booth.id);
-      setIsArchiveConfirmOpen(false);
-      onNavigate('booths');
-    } catch (err: any) {
-      alert(err.message || 'Failed to archive booth.');
-    } finally {
-      setFormSubmitting(false);
-    }
-  };
-
-  const handleQuickStatusChange = async (newStatus: BoothStatus) => {
-    if (!booth) return;
-    try {
-      await updateBooth(booth.id, { status: newStatus });
-      setBooth((prev) => (prev ? { ...prev, status: newStatus } : null));
-    } catch (err: any) {
-      alert(err.message || 'Failed to update status.');
-    }
-  };
-
-  const getStatusBadge = (status: BoothStatus) => {
-    switch (status) {
-      case 'in_production':
-        return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
-      case 'approved':
-        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
-      case 'installed':
-      case 'completed':
-        return 'bg-purple-500/10 text-purple-400 border-purple-500/30';
-      case 'handover':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
-      case 'archived':
-        return 'bg-zinc-800 text-zinc-500 border-zinc-700';
-      case 'draft':
-      default:
-        return 'bg-zinc-800 text-zinc-400 border-zinc-700';
+      setEditSubmitting(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-400 gap-3">
+      <div className="py-20 flex flex-col items-center justify-center text-zinc-400 gap-3">
         <div className="w-8 h-8 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-        <span className="text-sm">Loading stall workspace...</span>
+        <span className="text-xs">Loading booth checklist...</span>
       </div>
     );
   }
@@ -306,721 +392,747 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   if (error || !booth) {
     return (
       <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center space-y-3">
-        <p className="text-red-400 text-sm">{error || 'Stall not found.'}</p>
+        <p className="text-red-400 text-sm">{error || 'Booth not found.'}</p>
         <button
           onClick={() => onNavigate('booths')}
           className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-lg"
         >
-          &larr; Return to Booths Directory
+          Back to Stalls Directory
         </button>
       </div>
     );
   }
 
-  const isVerified = Boolean(matchFloorplanStall(booth.booth_number));
+  // Calculate 6-card completion status
+  const sectionsList = [
+    { key: 'design', label: '1. Design', icon: Palette, desc: '3D concept render and client visual approval Drive link' },
+    { key: 'print', label: '2. Print Files', icon: Printer, desc: 'Print-ready graphics and backdrop artwork Drive links' },
+    { key: 'production', label: '3. Production', icon: Hammer, desc: 'Carpentry, structure framing specifications and paintwork' },
+    { key: 'furniture', label: '4. Furniture', icon: Armchair, desc: 'Chairs, tables, counters and display units' },
+    { key: 'electrical', label: '5. Electrical', icon: Zap, desc: 'Spotlights, 5A/15A power points and TV screens' },
+    { key: 'installation', label: '6. Installation', icon: Truck, desc: 'Dispatch, on-site erection and final client handover' },
+  ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* 1. Header & Navigation */}
-      <div className="space-y-4 pb-2 border-b border-zinc-800/80">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <button
-            onClick={() => onNavigate('booths')}
-            className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Stalls</span>
-          </button>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {booth.main_drive_folder_url ? (
-              <a
-                href={booth.main_drive_folder_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                <span>Open Drive Folder</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            ) : (
-              <button
-                onClick={openEditModal}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                <span>+ Add Drive Folder</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => setIsFloorplanModalOpen(true)}
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>View Floor Plan</span>
-              <ExternalLink className="w-3 h-3 text-amber-400" />
-            </button>
-
-            <button
-              onClick={openEditModal}
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>Edit Details</span>
-            </button>
-
-            {booth.status !== 'archived' && (
-              <button
-                onClick={() => setIsArchiveConfirmOpen(true)}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 hover:text-red-400 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Archive className="w-3.5 h-3.5" />
-                <span>Archive</span>
-              </button>
-            )}
-          </div>
+    <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl mx-auto pb-12">
+      {/* Toast Notification */}
+      {successToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-amber-500 text-zinc-950 px-4 py-2.5 rounded-xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom duration-200">
+          <Check className="w-4 h-4" />
+          <span>{successToast}</span>
         </div>
+      )}
 
-        {/* Stall & Exhibitor Main Hero Card */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-sm">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="px-3 py-1 rounded-xl bg-gradient-to-tr from-amber-500/20 to-amber-600/10 border border-amber-500/40 text-amber-300 font-mono font-bold text-sm">
-                  Stall {booth.booth_number}
-                </span>
+      {/* Top Navigation & Breadcrumb */}
+      <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
+        <button
+          onClick={() => (booth.event_id ? onNavigate(`event:${booth.event_id}`) : onNavigate('booths'))}
+          className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to {booth.event_name ? booth.event_name : 'Stalls Directory'}</span>
+        </button>
 
-                {isVerified && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                    Floor Plan Verified
-                  </span>
-                )}
+        <button
+          onClick={openEditModal}
+          className="px-3.5 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+          <span>Edit Booth</span>
+        </button>
+      </div>
 
-                <span className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold uppercase tracking-wider border ${getStatusBadge(booth.status)}`}>
-                  {booth.status.replace('_', ' ')}
-                </span>
-              </div>
-
-              <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-100 tracking-tight">
-                {booth.client_name}
-              </h1>
-
-              <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-zinc-400 pt-0.5">
-                {booth.event_name && (
-                  <button
-                    onClick={() => onNavigate(`event:${booth.event_id}`)}
-                    className="hover:text-amber-400 font-medium transition-colors inline-flex items-center gap-1 cursor-pointer"
+      {/* Simplified Top Header */}
+      <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <h1 className="text-xl sm:text-2xl font-bold text-zinc-100 tracking-tight">
+              {booth.client_name}
+            </h1>
+            <div className="flex flex-wrap items-center gap-2.5 text-xs text-zinc-400">
+              <span className="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md">
+                Booth #{booth.booth_number}
+              </span>
+              <span>•</span>
+              <span className="text-zinc-300 font-mono">{booth.stand_size || '3 × 3 m'}</span>
+              <span>•</span>
+              <span className="text-zinc-300 font-medium">
+                {booth.booth_type?.toLowerCase().includes('octonorm') ? 'Octonorm' : 'Wooden'}
+              </span>
+              {booth.event_name && (
+                <>
+                  <span>•</span>
+                  <span className="text-zinc-400 truncate max-w-xs">{booth.event_name}</span>
+                </>
+              )}
+              {booth.phone && (
+                <>
+                  <span>•</span>
+                  <a
+                    href={`tel:${booth.phone}`}
+                    className="text-amber-400 hover:underline flex items-center gap-1 font-mono"
                   >
-                    <Calendar className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>{booth.event_name}</span>
-                  </button>
-                )}
-                {booth.stand_size && (
-                  <span>• {booth.stand_size}</span>
-                )}
-                {booth.booth_type && (
-                  <span className="text-zinc-500">• {booth.booth_type}</span>
-                )}
-              </div>
+                    <Phone className="w-3 h-3" />
+                    <span>{booth.phone}</span>
+                  </a>
+                </>
+              )}
             </div>
+          </div>
 
-            {/* Overall Progress Widget */}
-            <div className="w-full lg:w-72 bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3.5 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-300">Operations Readiness</span>
-                <span className="font-mono font-bold text-amber-400">{taskSummary.percentage}%</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300"
-                  style={{ width: `${taskSummary.percentage}%` }}
-                />
-              </div>
-              <div className="text-[11px] text-zinc-400 flex items-center justify-between">
-                <span>{taskSummary.completed} of {taskSummary.applicable} applicable tasks completed</span>
-              </div>
+          {/* Overall Checklist Progress Badge */}
+          <div className="bg-[#121319] border border-white/[0.06] rounded-xl p-3.5 min-w-[210px] text-right space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-zinc-400 font-medium">Checklist Progress</span>
+              <span className="font-bold text-amber-400 font-mono">
+                {tasksSummary.completed} of {tasksSummary.applicable_count} ({tasksSummary.percentage}%)
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-white/[0.08] overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300"
+                style={{ width: `${tasksSummary.percentage}%` }}
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Interactive Operations Checklist Card */}
-      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckSquare className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-wider">
-              Operations Checklist
-            </h2>
-            <span className="text-xs font-mono text-zinc-400">
-              ({taskSummary.completed}/{taskSummary.applicable} Completed)
-            </span>
-          </div>
+      {/* Main Checklist: 6 Expandable Cards */}
+      <div className="space-y-3">
+        {sectionsList.map((sec) => {
+          const Icon = sec.icon;
+          const isExp = expanded[sec.key];
+          const task = getTaskForSection(sec.key);
+          const status = task?.status || (task?.is_completed ? 'completed' : 'pending');
+          const isDone = status === 'completed';
+          const isNA = status === 'not_applicable';
 
-          <button
-            type="button"
-            onClick={() => setIsAddTaskOpen(!isAddTaskOpen)}
-            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Task</span>
-          </button>
-        </div>
-
-        {/* Add custom task form */}
-        {isAddTaskOpen && (
-          <form onSubmit={handleCreateCustomTask} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex flex-wrap items-center gap-2 animate-in fade-in duration-100">
-            <input
-              type="text"
-              value={newTaskName}
-              onChange={(e) => setNewTaskName(e.target.value)}
-              placeholder="Enter requirement / task name..."
-              className="flex-1 min-w-[200px] bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 outline-none"
-            />
-            <select
-              value={newTaskPhase}
-              onChange={(e) => setNewTaskPhase(e.target.value)}
-              className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 outline-none cursor-pointer"
+          return (
+            <div
+              key={sec.key}
+              className={`bg-[#15171e] border rounded-2xl overflow-hidden transition-all shadow-sm ${
+                isDone
+                  ? 'border-emerald-500/30'
+                  : isNA
+                  ? 'border-white/[0.04] opacity-75'
+                  : 'border-white/[0.07] hover:border-white/[0.14]'
+              }`}
             >
-              <option value="Site Execution">Site Execution</option>
-              <option value="Design">Design</option>
-              <option value="Print">Print</option>
-              <option value="Production">Production</option>
-              <option value="Handover">Handover</option>
-            </select>
-            <button
-              type="submit"
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAddTaskOpen(false)}
-              className="px-2 py-1.5 text-zinc-400 hover:text-zinc-200 text-xs cursor-pointer"
-            >
-              Cancel
-            </button>
-          </form>
-        )}
-
-        {/* Checklist Tasks Table */}
-        <div className="divide-y divide-zinc-800/80">
-          {tasks.map((task) => {
-            const currentStatus = task.status || (task.is_completed === 1 ? 'completed' : 'pending');
-            return (
-              <div
-                key={task.id}
-                className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-zinc-800/30 px-2 rounded-lg transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      currentStatus === 'completed'
-                        ? 'bg-emerald-400'
-                        : currentStatus === 'not_applicable'
-                        ? 'bg-zinc-600'
-                        : 'bg-amber-400 animate-pulse'
-                    }`}
-                  />
-                  <span
-                    className={`text-xs font-medium ${
-                      currentStatus === 'completed'
-                        ? 'line-through text-zinc-500'
-                        : currentStatus === 'not_applicable'
-                        ? 'text-zinc-500 italic'
-                        : 'text-zinc-200'
+              {/* Card Header Row */}
+              <div className="px-5 py-3.5 flex items-center justify-between gap-3 bg-[#121319]/80 border-b border-white/[0.04]">
+                <div
+                  onClick={() => toggleSection(sec.key)}
+                  className="flex items-center gap-3.5 flex-1 cursor-pointer select-none"
+                >
+                  <div
+                    className={`p-2 rounded-xl border ${
+                      isDone
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        : isNA
+                        ? 'bg-white/[0.04] border-white/[0.08] text-zinc-500'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                     }`}
                   >
-                    {task.task_name}
-                  </span>
-                  <span className="text-[10px] text-zinc-500 hidden md:inline-block font-mono">
-                    [{task.phase}]
-                  </span>
+                    <Icon className="w-4 h-4" />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3
+                        className={`text-sm font-bold tracking-wide ${
+                          isDone ? 'text-zinc-100 line-through decoration-emerald-500/60' : 'text-zinc-100'
+                        }`}
+                      >
+                        {sec.label}
+                      </h3>
+                      {isDone && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Completed
+                        </span>
+                      )}
+                      {isNA && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white/[0.05] text-zinc-400 border border-white/[0.08]">
+                          Not Required
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">{sec.desc}</p>
+                  </div>
                 </div>
 
-                {/* 3-State Toggle: Pending | Completed | Not Applicable */}
-                <div className="flex items-center gap-1 self-end sm:self-auto shrink-0">
+                {/* Right Action Controls: Checkbox & NA Toggle */}
+                <div className="flex items-center gap-2">
+                  {/* Not Required Toggle */}
                   <button
                     type="button"
-                    onClick={() => handleTaskStatusChange(task.id, 'pending')}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
-                      currentStatus === 'pending'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    Pending
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleTaskStatusChange(task.id, 'completed')}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
-                      currentStatus === 'completed'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    Completed
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleTaskStatusChange(task.id, 'not_applicable')}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
-                      currentStatus === 'not_applicable'
-                        ? 'bg-zinc-700 text-zinc-300 border border-zinc-600'
-                        : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                    title={isNA ? 'Re-enable as required' : 'Mark as Not Required'}
+                    onClick={() => handleToggleTaskStatus(sec.key, isNA ? 'pending' : 'not_applicable')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                      isNA
+                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
+                        : 'bg-white/[0.04] text-zinc-400 border-white/[0.08] hover:text-zinc-200 hover:bg-white/[0.08]'
                     }`}
                   >
                     N/A
                   </button>
+
+                  {/* Completion Checkbox */}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleTaskStatus(sec.key)}
+                    disabled={isNA}
+                    className={`p-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+                      isDone
+                        ? 'bg-emerald-500 text-zinc-950 border-emerald-500 shadow-sm'
+                        : isNA
+                        ? 'bg-zinc-950 border-zinc-800 text-zinc-600 opacity-50 cursor-not-allowed'
+                        : 'bg-zinc-950 border-zinc-700 text-zinc-300 hover:border-amber-500 hover:text-amber-400'
+                    }`}
+                  >
+                    {isDone ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                    <span className="hidden sm:inline">{isDone ? 'Done' : 'Mark Done'}</span>
+                  </button>
+
+                  {/* Expand / Collapse Chevron */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(sec.key)}
+                    className="p-1 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                  >
+                    {isExp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* 3. The 5 Main Work Accordions */}
-      <div className="space-y-4">
-        {/* Accordion 1: Design & Artwork */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-          <button
-            type="button"
-            onClick={() => toggleSection('design')}
-            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                <Palette className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">Section 1 — Design & Artwork</h3>
-                <p className="text-xs text-zinc-400">3D Render Drive link, client reference files & approval status</p>
-              </div>
-            </div>
-            {expandedSections.design ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-          </button>
+              {/* Card Expanded Content */}
+              {isExp && (
+                <div className="p-5 border-t border-zinc-800 bg-zinc-950/40 space-y-4 animate-in fade-in duration-150">
+                  {/* SECTION 1: DESIGN */}
+                  {sec.key === 'design' && (
+                    <div className="space-y-4">
+                      {/* Existing Design Links */}
+                      {designLinks.length > 0 ? (
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                            Design Google Drive Files
+                          </span>
+                          <div className="space-y-2">
+                            {designLinks.map((lnk) => (
+                              <div
+                                key={lnk.id}
+                                className="flex items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <Palette className="w-4 h-4 text-amber-400 shrink-0" />
+                                  <span className="font-semibold text-zinc-200 truncate">{lnk.title}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <a
+                                    href={lnk.drive_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg font-medium inline-flex items-center gap-1.5 transition-colors"
+                                  >
+                                    <span>Open Drive</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLink(lnk.id, true)}
+                                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
+                                    title="Remove link"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
 
-          {expandedSections.design && (
-            <div className="p-5 border-t border-zinc-800 bg-zinc-950/40">
-              <DesignTab boothId={booth.id} />
-            </div>
-          )}
-        </div>
+                      {/* Add Design Link Form */}
+                      <form onSubmit={handleAddDesignLink} className="space-y-2.5">
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                          {designLinks.length > 0 ? '+ Add Another 3D Design Link' : 'Add Design Google Drive Link'}
+                        </span>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={designTitleInput}
+                            onChange={(e) => setDesignTitleInput(e.target.value)}
+                            placeholder="Title (e.g. 3D View / Render)"
+                            className="sm:w-1/3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                          />
+                          <input
+                            type="url"
+                            required
+                            value={designUrlInput}
+                            onChange={(e) => setDesignUrlInput(e.target.value)}
+                            placeholder="Paste Google Drive URL (https://drive.google.com/...)"
+                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                          />
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
+                          >
+                            Save Link
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
 
-        {/* Accordion 2: Printing & Graphics */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-          <button
-            type="button"
-            onClick={() => toggleSection('print')}
-            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
-                <Printer className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">Section 2 — Printing & Graphics</h3>
-                <p className="text-xs text-zinc-400">Print panels, dimensions, substrate material & print-ready Drive files</p>
-              </div>
-            </div>
-            {expandedSections.print ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-          </button>
+                  {/* SECTION 2: PRINT FILES */}
+                  {sec.key === 'print' && (
+                    <div className="space-y-4">
+                      {/* Existing Print Links */}
+                      {printLinks.length > 0 ? (
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                            Print-Ready Artwork Links
+                          </span>
+                          <div className="space-y-2">
+                            {printLinks.map((lnk) => (
+                              <div
+                                key={lnk.id}
+                                className="flex items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <Printer className="w-4 h-4 text-blue-400 shrink-0" />
+                                  <span className="font-semibold text-zinc-200 truncate">{lnk.title}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <a
+                                    href={lnk.drive_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg font-medium inline-flex items-center gap-1.5 transition-colors"
+                                  >
+                                    <span>Open Drive</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLink(lnk.id, false)}
+                                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
+                                    title="Remove link"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500">No print artwork links added yet.</p>
+                      )}
 
-          {expandedSections.print && (
-            <div className="p-5 border-t border-zinc-800 bg-zinc-950/40">
-              <PrintTab boothId={booth.id} />
-            </div>
-          )}
-        </div>
+                      {/* Add Print File Link Form */}
+                      <form onSubmit={handleAddPrintLink} className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                          + Add Print File Link
+                        </span>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            required
+                            value={printTitleInput}
+                            onChange={(e) => setPrintTitleInput(e.target.value)}
+                            placeholder="Panel Name (e.g. Back Wall, Side Banner, Fascia)"
+                            className="sm:w-1/3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                          />
+                          <input
+                            type="url"
+                            required
+                            value={printUrlInput}
+                            onChange={(e) => setPrintUrlInput(e.target.value)}
+                            placeholder="Paste Google Drive File Link..."
+                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                          />
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-blue-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-blue-400 transition-colors cursor-pointer shrink-0"
+                          >
+                            Add Print Link
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
 
-        {/* Accordion 3: Structure & Production */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-          <button
-            type="button"
-            onClick={() => toggleSection('production')}
-            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400">
-                <Hammer className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">Section 3 — Structure & Production</h3>
-                <p className="text-xs text-zinc-400">Carpentry, fabrication specs, structural drawings & readiness status</p>
-              </div>
-            </div>
-            {expandedSections.production ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-          </button>
+                  {/* SECTION 3: PRODUCTION */}
+                  {sec.key === 'production' && (
+                    <div className="space-y-4">
+                      {/* Production Items List */}
+                      {prodItems.length > 0 ? (
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                            Structure & Carpentry Requirements
+                          </span>
+                          <div className="space-y-1.5">
+                            {prodItems.map((itm) => (
+                              <div
+                                key={itm.id}
+                                className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
+                              >
+                                <span className="font-semibold text-zinc-200">{itm.item_name}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                                    Qty: {itm.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteItem(itm.id, 'production')}
+                                    className="p-1 text-zinc-500 hover:text-red-400"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500">No production items added yet.</p>
+                      )}
 
-          {expandedSections.production && (
-            <div className="p-5 border-t border-zinc-800 bg-zinc-950/40">
-              <ProductionTab boothId={booth.id} />
-            </div>
-          )}
-        </div>
+                      {/* Add Production Item Form */}
+                      <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                          + Add Production Requirement
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={prodNameInput}
+                            onChange={(e) => setProdNameInput(e.target.value)}
+                            placeholder="e.g. Backdrop Wooden Frame (10ft x 8ft)"
+                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                          />
+                          <input
+                            type="number"
+                            min="1"
+                            value={prodQtyInput}
+                            onChange={(e) => setProdQtyInput(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-20 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 text-center font-mono focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddItem('production')}
+                            className="px-4 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-        {/* Accordion 4: Furniture & Electrical */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-          <button
-            type="button"
-            onClick={() => toggleSection('furniture')}
-            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                <Armchair className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">Section 4 — Furniture & Electrical</h3>
-                <p className="text-xs text-zinc-400">Chairs, tables, counters, spot lights, power points & LED screens</p>
-              </div>
-            </div>
-            {expandedSections.furniture ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-          </button>
+                  {/* SECTION 4: FURNITURE */}
+                  {sec.key === 'furniture' && (
+                    <div className="space-y-4">
+                      {/* Furniture Items List */}
+                      {furnItems.length > 0 ? (
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                            Furniture Inventory
+                          </span>
+                          <div className="space-y-1.5">
+                            {furnItems.map((itm) => (
+                              <div
+                                key={itm.id}
+                                className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
+                              >
+                                <span className="font-semibold text-zinc-200">{itm.item_name}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                                    Qty: {itm.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteItem(itm.id, 'furniture')}
+                                    className="p-1 text-zinc-500 hover:text-red-400"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500">No furniture items assigned yet.</p>
+                      )}
 
-          {expandedSections.furniture && (
-            <div className="p-5 border-t border-zinc-800 bg-zinc-950/40 space-y-4">
-              <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
-                <button
-                  type="button"
-                  onClick={() => setFurnitureSubCategory('furniture')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    furnitureSubCategory === 'furniture'
-                      ? 'bg-amber-500 text-zinc-950 shadow'
-                      : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Armchair className="w-3.5 h-3.5" />
-                  <span>Furniture Inventory</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFurnitureSubCategory('electrical')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    furnitureSubCategory === 'electrical'
-                      ? 'bg-amber-500 text-zinc-950 shadow'
-                      : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>Electrical & AV/Screens</span>
-                </button>
-              </div>
+                      {/* Add Furniture Form with Quick Pills */}
+                      <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                          + Add Furniture Item
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pb-1">
+                          {['Executive Chair', 'Coffee Table', 'Reception Counter', 'Bar Stool', 'Lockable Cabinet'].map(
+                            (pill) => (
+                              <button
+                                key={pill}
+                                type="button"
+                                onClick={() => setFurnNameInput(pill)}
+                                className="px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-[10px] text-zinc-400 hover:text-zinc-200 border border-zinc-800"
+                              >
+                                {pill}
+                              </button>
+                            )
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={furnNameInput}
+                            onChange={(e) => setFurnNameInput(e.target.value)}
+                            placeholder="e.g. Chair, Table, Counter"
+                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                          />
+                          <input
+                            type="number"
+                            min="1"
+                            value={furnQtyInput}
+                            onChange={(e) => setFurnQtyInput(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-20 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 text-center font-mono focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddItem('furniture')}
+                            className="px-4 py-2 bg-emerald-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-emerald-400 transition-colors cursor-pointer shrink-0"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-              {furnitureSubCategory === 'furniture' ? (
-                <FurnitureTab boothId={booth.id} />
-              ) : (
-                <ElectricalTab boothId={booth.id} />
+                  {/* SECTION 5: ELECTRICAL */}
+                  {sec.key === 'electrical' && (
+                    <div className="space-y-4">
+                      {/* Electrical Items List */}
+                      {elecItems.length > 0 ? (
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                            Electrical & Lighting Items
+                          </span>
+                          <div className="space-y-1.5">
+                            {elecItems.map((itm) => (
+                              <div
+                                key={itm.id}
+                                className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
+                              >
+                                <span className="font-semibold text-zinc-200">{itm.item_name}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                                    Qty: {itm.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteItem(itm.id, 'electrical')}
+                                    className="p-1 text-zinc-500 hover:text-red-400"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500">No electrical items assigned yet.</p>
+                      )}
+
+                      {/* Add Electrical Form with Quick Pills */}
+                      <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                          + Add Electrical Item
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pb-1">
+                          {['Spotlight (50W)', 'Power Socket (5A/16A)', '50-inch LED TV', 'LED Strip Light', 'Spike Guard'].map(
+                            (pill) => (
+                              <button
+                                key={pill}
+                                type="button"
+                                onClick={() => setElecNameInput(pill)}
+                                className="px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-[10px] text-zinc-400 hover:text-zinc-200 border border-zinc-800"
+                              >
+                                {pill}
+                              </button>
+                            )
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={elecNameInput}
+                            onChange={(e) => setElecNameInput(e.target.value)}
+                            placeholder="e.g. Spotlight, Power Socket, TV"
+                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                          />
+                          <input
+                            type="number"
+                            min="1"
+                            value={elecQtyInput}
+                            onChange={(e) => setElecQtyInput(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-20 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 text-center font-mono focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddItem('electrical')}
+                            className="px-4 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 6: INSTALLATION */}
+                  {sec.key === 'installation' && (
+                    <div className="space-y-3">
+                      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                        Site Execution & Handover
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
+                          <div className="font-semibold text-zinc-200">1. Fabrication Dispatch</div>
+                          <div className="text-[11px] text-zinc-500">Material loaded from workshop</div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
+                          <div className="font-semibold text-zinc-200">2. Venue Setup Completed</div>
+                          <div className="text-[11px] text-zinc-500">Carpentry, graphics & lighting erected</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-
-        {/* Accordion 5: Installation & Handover */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-          <button
-            type="button"
-            onClick={() => toggleSection('installation')}
-            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400">
-                <Truck className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100">Section 5 — Installation & Handover</h3>
-                <p className="text-xs text-zinc-400">Dispatch from workshop, venue arrival, setup completion & handover sign-off</p>
-              </div>
-            </div>
-            {expandedSections.installation ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-          </button>
-
-          {expandedSections.installation && (
-            <div className="p-5 border-t border-zinc-800 bg-zinc-950/40 space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleQuickStatusChange('in_production')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    booth.status === 'in_production'
-                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  <div className="font-bold">1. In Production</div>
-                  <div className="text-[11px] text-zinc-500 mt-1">Workshop fabrication</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickStatusChange('installed')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    booth.status === 'installed'
-                      ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  <div className="font-bold">2. Installed</div>
-                  <div className="text-[11px] text-zinc-500 mt-1">Erected at venue</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickStatusChange('handover')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    booth.status === 'handover'
-                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  <div className="font-bold">3. Handover</div>
-                  <div className="text-[11px] text-zinc-500 mt-1">Client inspection</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickStatusChange('completed')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    booth.status === 'completed'
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  <div className="font-bold">4. Completed</div>
-                  <div className="text-[11px] text-zinc-500 mt-1">Event live & signed off</div>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 4. Secondary "More Details & Financials" Accordion */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-          <button
-            type="button"
-            onClick={() => toggleSection('moreDetails')}
-            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-zinc-800/40 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400">
-                <DollarSign className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-zinc-200">More Details — Costing, Links Library & Logs</h3>
-                <p className="text-xs text-zinc-400">Google Drive library, budget vs actual variance and timestamped activity history</p>
-              </div>
-            </div>
-            {expandedSections.moreDetails ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-          </button>
-
-          {expandedSections.moreDetails && (
-            <div className="p-5 border-t border-zinc-800 bg-zinc-950/40 space-y-4">
-              <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
-                <button
-                  type="button"
-                  onClick={() => setMoreDetailsTab('drive')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    moreDetailsTab === 'drive'
-                      ? 'bg-amber-500 text-zinc-950 shadow'
-                      : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Link2 className="w-3.5 h-3.5" />
-                  <span>Google Drive Links Library</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMoreDetailsTab('costing')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    moreDetailsTab === 'costing'
-                      ? 'bg-amber-500 text-zinc-950 shadow'
-                      : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <DollarSign className="w-3.5 h-3.5" />
-                  <span>Costing & Expenses</span>
-                </button>
-              </div>
-
-              {moreDetailsTab === 'drive' ? (
-                <DriveLinksTab boothId={booth.id} />
-              ) : (
-                <ChecklistCostingTab boothId={booth.id} booth={booth} />
-              )}
-            </div>
-          )}
-        </div>
+          );
+        })}
       </div>
 
       {/* Edit Booth Modal */}
-      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit Stall Details" maxWidth="max-w-[560px]">
-        <form onSubmit={handleSaveEdit} className="space-y-4">
-          {formError && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-              {formError}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Booth Details"
+        subtitle="Update the basic details for this booth"
+        maxWidth="max-w-[540px]"
+      >
+        <form onSubmit={handleSaveEdit} className="space-y-4 text-xs" noValidate>
+          {editError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{editError}</span>
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-zinc-300">Exhibition</label>
-            <select
-              value={formEventId}
-              onChange={(e) => setFormEventId(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 outline-none"
-            >
-              {events.map((evt) => (
-                <option key={evt.id} value={evt.id}>
-                  {evt.name} — {evt.city}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">Stall Number</label>
+              <label className="block text-zinc-300 font-semibold">Booth Number *</label>
               <input
                 type="text"
-                value={formBoothNumber}
-                onChange={(e) => setFormBoothNumber(e.target.value)}
+                required
+                value={editBoothNumber}
+                onChange={(e) => setEditBoothNumber(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">Exhibitor / Company Name</label>
+              <label className="block text-zinc-300 font-semibold">Company Name *</label>
               <input
                 type="text"
-                value={formClientName}
-                onChange={(e) => setFormClientName(e.target.value)}
+                required
+                value={editCompanyName}
+                onChange={(e) => setEditCompanyName(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">Stand Size</label>
+              <label className="block text-zinc-300 font-semibold">Mobile Number</label>
               <input
-                type="text"
-                value={formStandSize}
-                onChange={(e) => setFormStandSize(e.target.value)}
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">Stall Type</label>
-              <input
-                type="text"
-                value={formBoothType}
-                onChange={(e) => setFormBoothType(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-zinc-300">Main Google Drive Folder URL</label>
-            <input
-              type="url"
-              value={formMainDriveUrl}
-              onChange={(e) => setFormMainDriveUrl(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/..."
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">Contact Person</label>
-              <input
-                type="text"
-                value={formContactPerson}
-                onChange={(e) => setFormContactPerson(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">Phone</label>
-              <input
-                type="text"
-                value={formPhone}
-                onChange={(e) => setFormPhone(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">Status</label>
+              <label className="block text-zinc-300 font-semibold">Booth Size</label>
               <select
-                value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as BoothStatus)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-2 text-xs text-zinc-100"
+                value={editSize}
+                onChange={(e) => setEditSize(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 cursor-pointer"
               >
-                <option value="draft">Draft</option>
-                <option value="approved">Approved</option>
-                <option value="in_production">In Production</option>
-                <option value="installed">Installed</option>
-                <option value="handover">Handover</option>
-                <option value="completed">Completed</option>
+                {BOOTH_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-800">
+          <div className="space-y-1.5">
+            <label className="block text-zinc-300 font-semibold">Structure Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setEditStructure('Wooden')}
+                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
+                  editStructure === 'Wooden'
+                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                <span>Wooden</span>
+                {editStructure === 'Wooden' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditStructure('Octonorm')}
+                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
+                  editStructure === 'Octonorm'
+                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                <span>Octonorm</span>
+                {editStructure === 'Octonorm' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
             <button
               type="button"
-              onClick={() => setIsEditOpen(false)}
-              className="px-4 py-2 bg-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl cursor-pointer"
+              onClick={() => setIsEditModalOpen(false)}
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-semibold"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={formSubmitting}
-              className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl cursor-pointer"
+              disabled={editSubmitting}
+              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl"
             >
-              {formSubmitting ? 'Saving...' : 'Save Changes'}
+              {editSubmitting ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
       </Modal>
-
-      {/* Archive Confirm Modal */}
-      <Modal isOpen={isArchiveConfirmOpen} onClose={() => setIsArchiveConfirmOpen(false)} title="Archive Stall" maxWidth="max-w-md">
-        <div className="space-y-4">
-          <p className="text-xs text-zinc-400">
-            Are you sure you want to archive <strong>Stall {booth.booth_number} ({booth.client_name})</strong>? All records, artwork links, and checklist tasks will remain safely stored in the database.
-          </p>
-          <div className="flex items-center justify-end gap-2.5 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsArchiveConfirmOpen(false)}
-              className="px-4 py-2 bg-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleArchiveConfirm}
-              disabled={formSubmitting}
-              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl cursor-pointer"
-            >
-              {formSubmitting ? 'Archiving...' : 'Yes, Archive'}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Pop-up Floor Plan Viewer */}
-      <FloorplanViewerModal
-        isOpen={isFloorplanModalOpen}
-        onClose={() => setIsFloorplanModalOpen(false)}
-        highlightStall={booth.booth_number}
-      />
     </div>
   );
 }

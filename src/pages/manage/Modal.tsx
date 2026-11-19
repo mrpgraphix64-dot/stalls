@@ -37,14 +37,14 @@ export function Modal({ isOpen, onClose, title, subtitle, children, maxWidth = '
   const modalContent = (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150 cursor-pointer overflow-y-auto"
+      className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 cursor-pointer overflow-y-auto"
     >
       <div
-        className={`w-full ${maxWidth} bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto cursor-default animate-in zoom-in-95 duration-150`}
+        className={`w-full ${maxWidth} bg-[#15171e] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col max-h-[92vh] my-auto cursor-default animate-in zoom-in-95 duration-150`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-5 sm:px-6 py-4 border-b border-zinc-800 bg-zinc-950/40 shrink-0">
+        <div className="flex items-start justify-between px-5 sm:px-6 py-4 border-b border-white/[0.07] bg-[#121319]/80 shrink-0">
           <div>
             <h3 className="text-base sm:text-lg font-bold text-zinc-100 tracking-tight">{title}</h3>
             {subtitle && <p className="text-xs text-zinc-400 mt-0.5">{subtitle}</p>}
@@ -52,7 +52,7 @@ export function Modal({ isOpen, onClose, title, subtitle, children, maxWidth = '
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors ml-4 cursor-pointer"
+            className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] rounded-xl transition-colors ml-4 cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />

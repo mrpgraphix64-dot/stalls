@@ -136,11 +136,11 @@ export function ManageApp() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row font-sans selection:bg-amber-500/30 selection:text-amber-200">
+    <div className="min-h-screen bg-[#0f1115] text-zinc-100 flex flex-col md:flex-row font-sans selection:bg-amber-500/30 selection:text-amber-200">
       {/* Mobile Top Header */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 sticky top-0 z-40">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-zinc-950 font-black text-sm shadow-md">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-[#13151b] border-b border-white/[0.07] sticky top-0 z-40">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-zinc-950 font-black text-sm shadow-md shadow-amber-500/10">
             R
           </div>
           <span className="font-bold text-sm tracking-tight text-zinc-100">Reworkzone Stalls</span>
@@ -148,7 +148,7 @@ export function ManageApp() {
 
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800 transition-colors"
+          className="p-2 text-zinc-400 hover:text-zinc-100 rounded-xl hover:bg-white/[0.06] transition-colors"
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -156,14 +156,14 @@ export function ManageApp() {
 
       {/* Sidebar for Desktop & Mobile Drawer */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-30 h-screen w-64 bg-zinc-900/95 border-r border-zinc-800/80 flex flex-col justify-between transition-transform duration-200 backdrop-blur-md ${
+        className={`fixed md:sticky top-0 left-0 z-30 h-screen w-64 bg-[#13151b] border-r border-white/[0.07] flex flex-col justify-between transition-transform duration-200 backdrop-blur-md ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
         <div className="p-5 space-y-6">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-zinc-950 font-black text-base shadow-lg shadow-amber-500/10">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-zinc-950 font-black text-base shadow-md shadow-amber-500/20">
               R
             </div>
             <div>
@@ -190,7 +190,7 @@ export function ManageApp() {
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -202,8 +202,8 @@ export function ManageApp() {
         </div>
 
         {/* User Status & Sign Out */}
-        <div className="p-4 border-t border-zinc-800/60 space-y-3">
-          <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3 flex items-center justify-between text-xs">
+        <div className="p-4 border-t border-white/[0.07] space-y-3">
+          <div className="bg-[#181a22] border border-white/[0.06] rounded-xl p-3 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-amber-400 shrink-0" />
               <div>
@@ -216,14 +216,14 @@ export function ManageApp() {
           <div className="flex items-center gap-2">
             <a
               href="/"
-              className="flex-1 px-3 py-2 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5"
+              className="flex-1 px-3 py-2 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 text-xs font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               Website
             </a>
             <button
               onClick={handleLogout}
-              className="px-3 py-2 bg-zinc-800/50 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 hover:border-red-500/30 border border-transparent text-xs font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5"
+              className="px-3 py-2 bg-white/[0.04] hover:bg-red-500/10 text-zinc-400 hover:text-red-400 hover:border-red-500/30 border border-transparent text-xs font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               title="Sign Out"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -236,7 +236,7 @@ export function ManageApp() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-screen overflow-x-hidden">
         {/* Desktop Top Bar */}
-        <header className="hidden md:flex items-center justify-between px-8 py-4 bg-zinc-900/40 border-b border-zinc-800/60 backdrop-blur-sm sticky top-0 z-20">
+        <header className="hidden md:flex items-center justify-between px-8 py-4 bg-[#13151b]/80 border-b border-white/[0.07] backdrop-blur-md sticky top-0 z-20">
           <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Workspace</span>
             <span className="text-zinc-700">/</span>
@@ -244,13 +244,13 @@ export function ManageApp() {
           </div>
 
           <div className="flex items-center gap-3 text-xs text-zinc-400">
-            <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl font-mono text-[11px] text-zinc-400">
+            <div className="flex items-center gap-1.5 bg-[#181a22] border border-white/[0.06] px-3 py-1.5 rounded-xl font-mono text-[11px] text-zinc-400">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               SQLite Persistent WAL
             </div>
             <button
               onClick={handleLogout}
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               Sign Out

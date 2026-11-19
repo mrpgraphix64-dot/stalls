@@ -224,27 +224,23 @@ if ($method === 'POST') {
             ':desc'     => "Created booth '{$boothNumber}' for client '{$clientName}' under event '{$eventRecord['name']}'."
         ]);
 
-        // Auto-seed default 10 checklist tasks for this new booth
+        // Auto-seed default 6 checklist tasks for this new booth
         $defaultTasks = [
-            'Client details confirmed',
-            'Design approved',
-            'Print files finalized',
-            'Printing completed',
-            'Structure fabricated',
-            'Furniture arranged',
-            'Electrical items ready',
-            'Material dispatched',
-            'Stall installation completed',
-            'Final handover completed',
+            'Design',
+            'Print Files',
+            'Production',
+            'Furniture',
+            'Electrical',
+            'Installation',
         ];
         $insertTaskStmt = $pdo->prepare("
-            INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, created_at, updated_at)
-            VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :sort_order, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, status, created_at, updated_at)
+            VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :sort_order, 0, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ");
         foreach ($defaultTasks as $idx => $taskName) {
             $tId = 'tsk_' . bin2hex(random_bytes(6));
             $order = $idx + 1;
-            $phase = ($order <= 3) ? 'Pre-Production' : (($order <= 7) ? 'Production & Sourcing' : 'Site Execution');
+            $phase = $taskName;
             $insertTaskStmt->execute([
                 ':id'         => $tId,
                 ':booth_id'   => $id,

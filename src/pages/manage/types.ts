@@ -85,6 +85,7 @@ export interface DashboardData {
   total_events: number;
   active_events: number;
   total_booths: number;
+  completed_checklists?: number;
   booths_in_production: number;
   work_in_progress?: number;
   ready_completed?: number;

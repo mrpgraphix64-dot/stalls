@@ -153,3 +153,24 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   filter: invert(1);
 }
 
+/* Modern SaaS / Linear-style glass & charcoal utility classes */
+.bg-charcoal-base {
+  background-color: #0f1115;
+}
+.bg-charcoal-surface {
+  background-color: #15171e;
+}
+.bg-charcoal-card {
+  background-color: #171922;
+}
+.bg-charcoal-input {
+  background-color: #1c1f2a;
+}
+.border-subtle {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.border-subtle-hover:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+
