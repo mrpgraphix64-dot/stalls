@@ -33,7 +33,7 @@ export function DashboardView({
 
   // Search & Filter State for Booths
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [structureFilter, setStructureFilter] = useState<'all' | 'wooden' | 'octonorm'>('all');
+  const [structureFilter, setStructureFilter] = useState<'all' | 'wooden' | 'frame' | 'customize'>('all');
 
   const [isFloorplanOpen, setIsFloorplanOpen] = useState<boolean>(false);
 
@@ -79,6 +79,13 @@ export function DashboardView({
 
   const allStalls = data.all_booths || data.recent_booths || [];
 
+  const getStallTypeLabel = (rawType?: string): 'Wooden' | 'Frame' | 'Customize' => {
+    const raw = (rawType || '').toLowerCase();
+    if (raw.includes('frame') || raw.includes('octonorm')) return 'Frame';
+    if (raw.includes('custom')) return 'Customize';
+    return 'Wooden';
+  };
+
   // Filter booths
   const filteredBooths = allStalls.filter((b) => {
     const q = searchQuery.toLowerCase().trim();
@@ -90,12 +97,10 @@ export function DashboardView({
 
     if (!matchesSearch) return false;
 
-    if (structureFilter === 'wooden') {
-      return !b.booth_type?.toLowerCase().includes('octonorm');
-    }
-    if (structureFilter === 'octonorm') {
-      return b.booth_type?.toLowerCase().includes('octonorm');
-    }
+    const typeLabel = getStallTypeLabel(b.booth_type);
+    if (structureFilter === 'wooden') return typeLabel === 'Wooden';
+    if (structureFilter === 'frame') return typeLabel === 'Frame';
+    if (structureFilter === 'customize') return typeLabel === 'Customize';
     return true;
   });
 
@@ -334,14 +339,25 @@ export function DashboardView({
               </button>
               <button
                 type="button"
-                onClick={() => setStructureFilter('octonorm')}
+                onClick={() => setStructureFilter('frame')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                  structureFilter === 'octonorm'
+                  structureFilter === 'frame'
                     ? 'bg-amber-500 text-zinc-950 font-bold'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                Octonorm
+                Frame
+              </button>
+              <button
+                type="button"
+                onClick={() => setStructureFilter('customize')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  structureFilter === 'customize'
+                    ? 'bg-amber-500 text-zinc-950 font-bold'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Customize
               </button>
             </div>
           </div>
@@ -378,9 +394,7 @@ export function DashboardView({
                   const comp = b.progress?.completed ?? 0;
                   const total = b.progress?.applicable ?? b.progress?.total ?? 6;
                   const pct = b.progress?.percentage ?? 0;
-                  const structure = b.booth_type?.toLowerCase().includes('octonorm')
-                    ? 'Octonorm'
-                    : 'Wooden';
+                  const structure = getStallTypeLabel(b.booth_type);
 
                   return (
                     <tr

@@ -51,7 +51,7 @@ export function BoothsView({
   // Filters
   const [search, setSearch] = useState<string>('');
   const [selectedEventId, setSelectedEventId] = useState<string>(defaultEventId);
-  const [structureFilter, setStructureFilter] = useState<'all' | 'wooden' | 'octonorm'>('all');
+  const [structureFilter, setStructureFilter] = useState<'all' | 'wooden' | 'frame' | 'customize'>('all');
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState<boolean>(createModalOpen);
@@ -65,7 +65,7 @@ export function BoothsView({
   const [editCompanyName, setEditCompanyName] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
   const [editSize, setEditSize] = useState<string>('');
-  const [editStructure, setEditStructure] = useState<'Wooden' | 'Octonorm'>('Wooden');
+  const [editStructure, setEditStructure] = useState<'Wooden' | 'Frame' | 'Customize'>('Wooden');
   const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
   const [editError, setEditError] = useState<string>('');
 
@@ -116,7 +116,13 @@ export function BoothsView({
     setEditCompanyName(bth.client_name);
     setEditPhone(bth.phone || '');
     setEditSize(bth.stand_size || '3 × 3 m (9 sq.m)');
-    const st = bth.booth_type?.toLowerCase().includes('octonorm') ? 'Octonorm' : 'Wooden';
+    let st: 'Wooden' | 'Frame' | 'Customize' = 'Wooden';
+    const rawSt = bth.booth_type?.toLowerCase() || '';
+    if (rawSt.includes('frame') || rawSt.includes('octonorm')) {
+      st = 'Frame';
+    } else if (rawSt.includes('custom')) {
+      st = 'Customize';
+    }
     setEditStructure(st);
     setEditError('');
   };
@@ -166,14 +172,20 @@ export function BoothsView({
     }
   };
 
+  // Helper to map booth type display
+  const getStallTypeLabel = (rawType?: string): 'Wooden' | 'Frame' | 'Customize' => {
+    const raw = (rawType || '').toLowerCase();
+    if (raw.includes('frame') || raw.includes('octonorm')) return 'Frame';
+    if (raw.includes('custom')) return 'Customize';
+    return 'Wooden';
+  };
+
   // Filter booths by structure
   const filteredBooths = booths.filter((b) => {
-    if (structureFilter === 'wooden') {
-      return !b.booth_type?.toLowerCase().includes('octonorm');
-    }
-    if (structureFilter === 'octonorm') {
-      return b.booth_type?.toLowerCase().includes('octonorm');
-    }
+    const typeLabel = getStallTypeLabel(b.booth_type);
+    if (structureFilter === 'wooden') return typeLabel === 'Wooden';
+    if (structureFilter === 'frame') return typeLabel === 'Frame';
+    if (structureFilter === 'customize') return typeLabel === 'Customize';
     return true;
   });
 
@@ -269,14 +281,25 @@ export function BoothsView({
             </button>
             <button
               type="button"
-              onClick={() => setStructureFilter('octonorm')}
+              onClick={() => setStructureFilter('frame')}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                structureFilter === 'octonorm'
+                structureFilter === 'frame'
                   ? 'bg-amber-500 text-zinc-950 font-bold'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              Octonorm
+              Frame
+            </button>
+            <button
+              type="button"
+              onClick={() => setStructureFilter('customize')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                structureFilter === 'customize'
+                  ? 'bg-amber-500 text-zinc-950 font-bold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Customize
             </button>
           </div>
         </div>
@@ -325,9 +348,7 @@ export function BoothsView({
                   const comp = b.tasks_completed ?? 0;
                   const total = b.task_count ?? 6;
                   const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
-                  const structure = b.booth_type?.toLowerCase().includes('octonorm')
-                    ? 'Octonorm'
-                    : 'Wooden';
+                  const structure = getStallTypeLabel(b.booth_type);
 
                   return (
                     <tr
@@ -519,8 +540,8 @@ export function BoothsView({
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-zinc-300 font-semibold">Structure Type</label>
-            <div className="grid grid-cols-2 gap-2">
+            <label className="block text-zinc-300 font-semibold">Stall Type</label>
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setEditStructure('Wooden')}
@@ -535,15 +556,27 @@ export function BoothsView({
               </button>
               <button
                 type="button"
-                onClick={() => setEditStructure('Octonorm')}
+                onClick={() => setEditStructure('Frame')}
                 className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
-                  editStructure === 'Octonorm'
+                  editStructure === 'Frame'
                     ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
                     : 'bg-zinc-950 border-zinc-800 text-zinc-400'
                 }`}
               >
-                <span>Octonorm</span>
-                {editStructure === 'Octonorm' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                <span>Frame</span>
+                {editStructure === 'Frame' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditStructure('Customize')}
+                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
+                  editStructure === 'Customize'
+                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                <span>Customize</span>
+                {editStructure === 'Customize' && <Check className="w-3.5 h-3.5 text-amber-400" />}
               </button>
             </div>
           </div>

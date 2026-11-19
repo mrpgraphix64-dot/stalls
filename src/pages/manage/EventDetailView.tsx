@@ -370,8 +370,11 @@ export function EventDetailView({
                   const comp = b.tasks_completed ?? 0;
                   const total = b.task_count ?? 6;
                   const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
-                  const structure = b.booth_type?.toLowerCase().includes('octonorm')
-                    ? 'Octonorm'
+                  const rawSt = (b.booth_type || '').toLowerCase();
+                  const structure = rawSt.includes('frame') || rawSt.includes('octonorm')
+                    ? 'Frame'
+                    : rawSt.includes('custom')
+                    ? 'Customize'
                     : 'Wooden';
 
                   return (

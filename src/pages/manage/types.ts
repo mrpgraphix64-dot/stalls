@@ -4,6 +4,8 @@
 
 export type EventStatus = 'upcoming' | 'in_progress' | 'live' | 'completed' | 'archived';
 
+export type StallType = 'Wooden' | 'Frame' | 'Customize';
+
 export type BoothStatus =
   | 'draft'
   | 'design'
@@ -45,6 +47,13 @@ export interface BoothItem {
   budget?: number;
   quoted_amount?: number;
   main_drive_folder_url?: string;
+  design_responsibility?: 'Client Side' | 'Our Side' | string;
+  print_file_status?: 'Designs Pending' | 'Partially Received' | 'All Files Ready' | string;
+  print_drive_url?: string | null;
+  print_remark?: string | null;
+  goodies_status?: 'Awaiting Client Artwork' | 'Artwork Received' | 'Ready for Printing' | string;
+  goodies_drive_url?: string | null;
+  goodies_remark?: string | null;
   status: BoothStatus;
   notes?: string;
   created_at?: string;
@@ -123,7 +132,7 @@ export interface AuthStatus {
 
 export type LinkCategory = 'render_3d' | 'working_artwork' | 'print_ready' | 'photo' | 'production' | 'other';
 
-export type ItemCategory = 'furniture' | 'electrical' | 'production' | 'print' | 'av' | 'other';
+export type ItemCategory = 'furniture' | 'electrical' | 'production' | 'print' | 'av' | 'goodies' | 'promotional' | 'other';
 
 export interface BoothLink {
   id: string;

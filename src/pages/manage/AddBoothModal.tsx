@@ -53,7 +53,7 @@ export function AddBoothModal({
   const [stallNumber, setStallNumber] = useState<string>('');
   const [mobileNumber, setMobileNumber] = useState<string>('');
   const [boothSize, setBoothSize] = useState<string>('3 × 3 m (9 sq.m)');
-  const [structureType, setStructureType] = useState<'Wooden' | 'Octonorm'>('Wooden');
+  const [structureType, setStructureType] = useState<'Wooden' | 'Frame' | 'Customize'>('Wooden');
 
   // Catalogue & Autocomplete State
   const [exhibitors, setExhibitors] = useState<ExhibitorItem[]>([]);
@@ -443,40 +443,56 @@ export function AddBoothModal({
               </div>
             </div>
 
-            {/* 5. Structure Type: Wooden / Octonorm */}
+            {/* 5. Stall Type: Wooden / Frame / Customize */}
             <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-medium">Structure Type</label>
-              <div className="grid grid-cols-2 gap-2.5">
+              <label className="block text-zinc-300 font-medium">Stall Type</label>
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setStructureType('Wooden')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[58px] ${
                     structureType === 'Wooden'
                       ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
                       : 'bg-[#1c1f2a] border-white/[0.08] text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  <div>
-                    <div className="text-xs">Wooden</div>
-                    <div className="text-[10px] text-zinc-500 font-normal">Custom fabrication</div>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs">Wooden</span>
+                    {structureType === 'Wooden' && <Check className="w-3.5 h-3.5 text-amber-400" />}
                   </div>
-                  {structureType === 'Wooden' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                  <span className="text-[10px] text-zinc-500 font-normal">Custom woodwork</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setStructureType('Octonorm')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                    structureType === 'Octonorm'
+                  onClick={() => setStructureType('Frame')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[58px] ${
+                    structureType === 'Frame'
                       ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
                       : 'bg-[#1c1f2a] border-white/[0.08] text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  <div>
-                    <div className="text-xs">Octonorm</div>
-                    <div className="text-[10px] text-zinc-500 font-normal">Modular shell scheme</div>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs">Frame</span>
+                    {structureType === 'Frame' && <Check className="w-3.5 h-3.5 text-amber-400" />}
                   </div>
-                  {structureType === 'Octonorm' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                  <span className="text-[10px] text-zinc-500 font-normal">Modular structure</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStructureType('Customize')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[58px] ${
+                    structureType === 'Customize'
+                      ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
+                      : 'bg-[#1c1f2a] border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs">Customize</span>
+                    {structureType === 'Customize' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                  </div>
+                  <span className="text-[10px] text-zinc-500 font-normal">Bespoke design</span>
                 </button>
               </div>
             </div>

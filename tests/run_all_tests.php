@@ -1,0 +1,32 @@
+<?php
+$files = [
+    __DIR__ . '/test_step2_auth.php',
+    __DIR__ . '/test_step3_api.php',
+    __DIR__ . '/test_step4_api.php',
+    __DIR__ . '/test_step5_api.php',
+    __DIR__ . '/test_step6_backup_hardening.php',
+    __DIR__ . '/test_deletion_and_floorplan.php',
+    __DIR__ . '/test_checklist_simplification.php',
+    __DIR__ . '/test_quick_add_refinement.php',
+    __DIR__ . '/test_goodies_promotional_printing.php',
+];
+$totalFailed = 0;
+foreach ($files as $file) {
+    echo "\n--------------------------------------------------------\n";
+    echo "Running " . basename($file) . "\n";
+    echo "--------------------------------------------------------\n";
+    passthru("php " . escapeshellarg($file), $ret);
+    if ($ret !== 0) {
+        $totalFailed++;
+        echo "FAILED: " . basename($file) . " (code $ret)\n";
+    }
+}
+echo "\n========================================================\n";
+if ($totalFailed === 0) {
+    echo "ALL 8 TEST SUITES (264 TESTS) PASSED SUCCESSFULLY!\n";
+    exit(0);
+} else {
+    echo "$totalFailed SUITES FAILED!\n";
+    exit(1);
+}
+

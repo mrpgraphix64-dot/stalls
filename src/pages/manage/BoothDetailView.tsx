@@ -16,13 +16,15 @@ import {
   Truck,
   ExternalLink,
   Plus,
+  Minus,
   Trash2,
   AlertTriangle,
   Check,
-  Ban,
+  X,
   Layers,
   Archive,
   FileText,
+  Tv,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -32,15 +34,12 @@ import {
   deleteBooth,
   fetchTasks,
   setTaskStatus,
-  fetchLinks,
-  createLink,
-  deleteLink,
   fetchItems,
   createItem,
   deleteItem,
   updateItem,
 } from './api';
-import { BoothItem, BoothTask, BoothLink, BoothItemRecord } from './types';
+import { BoothItem, BoothTask, BoothItemRecord, StallType } from './types';
 import { Modal } from './Modal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
@@ -93,35 +92,63 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Section Data States
-  // 1. Design
-  const [designLinks, setDesignLinks] = useState<BoothLink[]>([]);
-  const [designUrlInput, setDesignUrlInput] = useState<string>('');
-  const [designTitleInput, setDesignTitleInput] = useState<string>('3D View / Render');
-  const [designNotes, setDesignNotes] = useState<string>('');
+  // Section 1: Design State
+  const [designResp, setDesignResp] = useState<'Client Side' | 'Our Side'>('Client Side');
+  const [isSavingDesign, setIsSavingDesign] = useState<boolean>(false);
 
-  // 2. Print
-  const [printLinks, setPrintLinks] = useState<BoothLink[]>([]);
-  const [printTitleInput, setPrintTitleInput] = useState<string>('');
-  const [printUrlInput, setPrintUrlInput] = useState<string>('');
+  // Section 2: Print Files State
+  const [printStatus, setPrintStatus] = useState<string>('Designs Pending');
+  const [printDriveUrl, setPrintDriveUrl] = useState<string>('');
+  const [printRemark, setPrintRemark] = useState<string>('');
+  const [isSavingPrint, setIsSavingPrint] = useState<boolean>(false);
 
-  // 3. Production
+  // Goodies & Promotional Printing State (inside Section 2)
+  const [goodiesItems, setGoodiesItems] = useState<BoothItemRecord[]>([]);
+  const [goodiesStatus, setGoodiesStatus] = useState<string>('Awaiting Client Artwork');
+  const [goodiesDriveUrl, setGoodiesDriveUrl] = useState<string>('');
+  const [goodiesRemark, setGoodiesRemark] = useState<string>('');
+  const [isSavingGoodiesArtwork, setIsSavingGoodiesArtwork] = useState<boolean>(false);
+  const [goodiesNameInput, setGoodiesNameInput] = useState<string>('');
+  const [goodiesSpecInput, setGoodiesSpecInput] = useState<string>('');
+  const [goodiesQtyStr, setGoodiesQtyStr] = useState<string>('1');
+  const [showCustomGoodiesForm, setShowCustomGoodiesForm] = useState<boolean>(false);
+
+  // Section 3: Production State
   const [prodItems, setProdItems] = useState<BoothItemRecord[]>([]);
   const [prodNameInput, setProdNameInput] = useState<string>('');
-  const [prodQtyInput, setProdQtyInput] = useState<number>(1);
+  const [prodSpecInput, setProdSpecInput] = useState<string>('');
+  const [prodQtyStr, setProdQtyStr] = useState<string>('1');
 
-  // 4. Furniture
+  // Special Quick Add Panels in Production
+  const [activeSpecialPanel, setActiveSpecialPanel] = useState<'none' | 'flooring' | 'tv'>('none');
+  const [carpetColor, setCarpetColor] = useState<'Grey' | 'Red' | 'Blue'>('Grey');
+  const [tvSize, setTvSize] = useState<'42 inch' | '50–55 inch'>('50–55 inch');
+  const [tvMounting, setTvMounting] = useState<'Wall Mounted (Without Stand)' | 'With Stand'>('Wall Mounted (Without Stand)');
+  const [tvQtyStr, setTvQtyStr] = useState<string>('1');
+
+  // Delete confirmation for Flooring with Carpet
+  const [flooringDeletePrompt, setFlooringDeletePrompt] = useState<{
+    flooringItem: BoothItemRecord;
+    carpetItem: BoothItemRecord | null;
+  } | null>(null);
+
+  // Section 4: Furniture State
   const [furnItems, setFurnItems] = useState<BoothItemRecord[]>([]);
   const [furnNameInput, setFurnNameInput] = useState<string>('');
-  const [furnQtyInput, setFurnQtyInput] = useState<number>(1);
+  const [furnQtyStr, setFurnQtyStr] = useState<string>('1');
 
-  // 5. Electrical
+  // Section 5: Electrical State
   const [elecItems, setElecItems] = useState<BoothItemRecord[]>([]);
   const [elecNameInput, setElecNameInput] = useState<string>('');
-  const [elecQtyInput, setElecQtyInput] = useState<number>(1);
+  const [elecQtyStr, setElecQtyStr] = useState<string>('1');
 
-  // 6. Installation
-  const [installNotes, setInstallNotes] = useState<string>('');
+  // Inline Item Editing State (for Furniture, Electrical, Production)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editItemName, setEditItemName] = useState<string>('');
+  const [editItemSpec, setEditItemSpec] = useState<string>('');
+  const [editItemQtyStr, setEditItemQtyStr] = useState<string>('1');
+  const [editItemUnit, setEditItemUnit] = useState<string>('nos');
+  const [isSavingItem, setIsSavingItem] = useState<boolean>(false);
 
   // Edit Booth Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -132,27 +159,43 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [editCompanyName, setEditCompanyName] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
   const [editSize, setEditSize] = useState<string>('');
-  const [editStructure, setEditStructure] = useState<'Wooden' | 'Octonorm'>('Wooden');
+  const [editStructure, setEditStructure] = useState<StallType>('Wooden');
   const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
   const [editError, setEditError] = useState<string>('');
+
+  // Helper to map stall type
+  const getStallTypeLabel = (rawType?: string): StallType => {
+    const raw = (rawType || '').toLowerCase();
+    if (raw.includes('frame') || raw.includes('octonorm')) return 'Frame';
+    if (raw.includes('custom')) return 'Customize';
+    return 'Wooden';
+  };
 
   // Load booth data and section items
   const loadAllData = async () => {
     try {
       setLoading(true);
       setError('');
-      const [bth, tskRes, dLinks, pLinks, pItems, fItems, eItems] = await Promise.all([
+      const [bth, tskRes, pItems, fItems, eItems, gItems] = await Promise.all([
         fetchBooth(boothId),
         fetchTasks(boothId),
-        fetchLinks(boothId, 'render_3d').catch(() => []),
-        fetchLinks(boothId, 'print_ready').catch(() => []),
         fetchItems(boothId, 'production').catch(() => []),
         fetchItems(boothId, 'furniture').catch(() => []),
         fetchItems(boothId, 'electrical').catch(() => []),
+        fetchItems(boothId, 'goodies').catch(() => []),
       ]);
 
       setBooth(bth);
-      setDesignNotes(bth.notes || '');
+      setDesignResp(bth.design_responsibility === 'Our Side' ? 'Our Side' : 'Client Side');
+      setPrintStatus(bth.print_file_status || 'Designs Pending');
+      setPrintDriveUrl(bth.print_drive_url || '');
+      setPrintRemark(bth.print_remark || '');
+
+      setGoodiesStatus(bth.goodies_status || 'Awaiting Client Artwork');
+      setGoodiesDriveUrl(bth.goodies_drive_url || '');
+      setGoodiesRemark(bth.goodies_remark || '');
+      setGoodiesItems(gItems);
+
       setTasks(tskRes.tasks);
       setTasksSummary({
         total: tskRes.total,
@@ -161,8 +204,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         percentage: tskRes.percentage,
       });
 
-      setDesignLinks(dLinks);
-      setPrintLinks(pLinks);
       setProdItems(pItems);
       setFurnItems(fItems);
       setElecItems(eItems);
@@ -217,7 +258,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
     try {
       const res = await setTaskStatus(task.id, newStatus);
-      // Update local state immediately
       setTasks((prev) =>
         prev.map((t) => (t.id === task.id ? { ...t, status: newStatus, is_completed: newStatus === 'completed' ? 1 : 0 } : t))
       );
@@ -233,129 +273,385 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     }
   };
 
-  // 1. Design Link Handlers
-  const handleAddDesignLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!designUrlInput.trim()) return;
-
+  // 1. Design Section Handlers
+  const handleSetDesignResponsibility = async (val: 'Client Side' | 'Our Side') => {
+    setDesignResp(val);
+    setIsSavingDesign(true);
     try {
-      const newLnk = await createLink({
-        booth_id: boothId,
-        category: 'render_3d',
-        title: designTitleInput.trim() || '3D View / Render',
-        drive_url: designUrlInput.trim(),
-      });
-      setDesignLinks((prev) => [newLnk, ...prev]);
-      setDesignUrlInput('');
-      showToast('Design Drive link added.');
+      const updated = await updateBooth(boothId, { design_responsibility: val });
+      setBooth(updated);
+      showToast(`Design Responsibility set to: ${val}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to add design link.');
+      alert(err.message || 'Failed to update design responsibility.');
+    } finally {
+      setIsSavingDesign(false);
     }
   };
 
-  const handleDeleteLink = async (linkId: string, isDesign: boolean) => {
+  // 2. Print Section Handlers
+  const handleSetPrintStatus = async (val: string) => {
+    setPrintStatus(val);
     try {
-      await deleteLink(linkId);
-      if (isDesign) {
-        setDesignLinks((prev) => prev.filter((l) => l.id !== linkId));
-      } else {
-        setPrintLinks((prev) => prev.filter((l) => l.id !== linkId));
+      const updated = await updateBooth(boothId, { print_file_status: val });
+      setBooth(updated);
+      showToast(`Print File Status set to: ${val}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update print status.');
+    }
+  };
+
+  const handleSavePrintDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = printDriveUrl.trim();
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+      alert('Please enter a valid URL starting with https:// or http://');
+      return;
+    }
+
+    setIsSavingPrint(true);
+    try {
+      const updated = await updateBooth(boothId, {
+        print_file_status: printStatus,
+        print_drive_url: url || null,
+        print_remark: printRemark.trim() || null,
+      });
+      setBooth(updated);
+      setPrintDriveUrl(updated.print_drive_url || '');
+      setPrintRemark(updated.print_remark || '');
+      showToast('Print files details saved.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to save print details.');
+    } finally {
+      setIsSavingPrint(false);
+    }
+  };
+
+  // Goodies Artwork Status & Drive URL Handlers
+  const handleSetGoodiesStatus = async (val: string) => {
+    setGoodiesStatus(val);
+    try {
+      const updated = await updateBooth(boothId, { goodies_status: val });
+      setBooth(updated);
+      showToast(`Artwork Status: ${val}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update goodies artwork status.');
+    }
+  };
+
+  const handleSaveGoodiesArtwork = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const url = goodiesDriveUrl.trim();
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+      alert('Please enter a valid URL starting with https:// or http://');
+      return;
+    }
+
+    setIsSavingGoodiesArtwork(true);
+    try {
+      const updated = await updateBooth(boothId, {
+        goodies_status: goodiesStatus,
+        goodies_drive_url: url || null,
+        goodies_remark: goodiesRemark.trim() || null,
+      });
+      setBooth(updated);
+      setGoodiesDriveUrl(updated.goodies_drive_url || '');
+      setGoodiesRemark(updated.goodies_remark || '');
+      showToast('Client Artwork details saved.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to save artwork details.');
+    } finally {
+      setIsSavingGoodiesArtwork(false);
+    }
+  };
+
+  // Helper for Stepper (+ / -)
+  const adjustQty = (currentStr: string, delta: number): string => {
+    const parsed = parseInt(currentStr, 10);
+    const val = isNaN(parsed) ? 1 : parsed;
+    return String(Math.max(1, val + delta));
+  };
+
+  // -------------------------------------------------------------
+  // Quick Add Handlers
+  // -------------------------------------------------------------
+
+  // Quick Add Ordinary Item helper
+  const handleQuickAddSimpleItem = async (
+    category: 'production' | 'furniture' | 'electrical' | 'goodies',
+    name: string
+  ) => {
+    try {
+      const newItem = await createItem({
+        booth_id: boothId,
+        category,
+        item_name: name,
+        quantity: 1,
+        unit: 'nos',
+      });
+
+      if (category === 'production') setProdItems((prev) => [...prev, newItem]);
+      else if (category === 'furniture') setFurnItems((prev) => [...prev, newItem]);
+      else if (category === 'electrical') setElecItems((prev) => [...prev, newItem]);
+      else if (category === 'goodies') setGoodiesItems((prev) => [...prev, newItem]);
+
+      showToast(`Added ${name} (Qty: 1)`);
+    } catch (err: any) {
+      alert(err.message || `Failed to add ${name}.`);
+    }
+  };
+
+  // Special: Add Wooden Platform Flooring + Linked Carpet
+  const handleAddFlooringWithCarpet = async () => {
+    try {
+      const hasFlooring = prodItems.some((i) => i.item_name.toLowerCase().includes('flooring'));
+      const hasCarpet = prodItems.some((i) => i.item_name.toLowerCase().includes('carpet'));
+
+      const newItemsToAdd: BoothItemRecord[] = [];
+
+      // 1. Create Flooring if not already present
+      if (!hasFlooring) {
+        const floorItem = await createItem({
+          booth_id: boothId,
+          category: 'production',
+          item_name: 'Wooden Platform Flooring',
+          quantity: 1,
+          unit: 'sq.ft',
+        });
+        newItemsToAdd.push(floorItem);
       }
-      showToast('Link removed.');
+
+      // 2. Create Carpet with chosen color if not present
+      if (!hasCarpet) {
+        const carpetItem = await createItem({
+          booth_id: boothId,
+          category: 'production',
+          item_name: 'Carpet',
+          specification: `Color: ${carpetColor}`,
+          notes: 'linked_flooring',
+          quantity: 1,
+          unit: 'sq.ft',
+        });
+        newItemsToAdd.push(carpetItem);
+      }
+
+      if (newItemsToAdd.length > 0) {
+        setProdItems((prev) => [...prev, ...newItemsToAdd]);
+        showToast(`Added Wooden Platform Flooring + ${carpetColor} Carpet`);
+      } else {
+        showToast('Flooring & Carpet already in checklist.');
+      }
+      setActiveSpecialPanel('none');
     } catch (err: any) {
-      alert(err.message || 'Failed to remove link.');
+      alert(err.message || 'Failed to add flooring & carpet.');
     }
   };
 
-  // 2. Print Link Handlers
-  const handleAddPrintLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!printUrlInput.trim()) return;
+  // Special: Add TV in Production
+  const handleAddTv = async () => {
+    const qty = parseInt(tvQtyStr, 10);
+    if (isNaN(qty) || qty < 1) {
+      alert('TV Quantity must be at least 1.');
+      return;
+    }
 
     try {
-      const newLnk = await createLink({
+      const tvItem = await createItem({
         booth_id: boothId,
-        category: 'print_ready',
-        title: printTitleInput.trim() || 'Print Artwork',
-        drive_url: printUrlInput.trim(),
+        category: 'production',
+        item_name: `TV — ${tvSize}`,
+        specification: tvMounting,
+        quantity: qty,
+        unit: 'nos',
       });
-      setPrintLinks((prev) => [...prev, newLnk]);
-      setPrintTitleInput('');
-      setPrintUrlInput('');
-      showToast('Print file link added.');
+
+      setProdItems((prev) => [...prev, tvItem]);
+      setActiveSpecialPanel('none');
+      setTvQtyStr('1');
+      showToast(`Added TV — ${tvSize} (${tvMounting})`);
     } catch (err: any) {
-      alert(err.message || 'Failed to add print file link.');
+      alert(err.message || 'Failed to add TV.');
     }
   };
 
-  // 3, 4, 5. Items Handlers (Production, Furniture, Electrical)
-  const handleAddItem = async (category: 'production' | 'furniture' | 'electrical') => {
+  // 3, 4, 5. Custom Add Item Handlers (Production, Furniture, Electrical, Goodies)
+  const handleAddCustomItem = async (category: 'production' | 'furniture' | 'electrical' | 'goodies') => {
     let name = '';
-    let qty = 1;
+    let spec = '';
+    let qtyStr = '1';
 
     if (category === 'production') {
       name = prodNameInput.trim();
-      qty = prodQtyInput;
+      spec = prodSpecInput.trim();
+      qtyStr = prodQtyStr;
     } else if (category === 'furniture') {
       name = furnNameInput.trim();
-      qty = furnQtyInput;
+      qtyStr = furnQtyStr;
     } else if (category === 'electrical') {
       name = elecNameInput.trim();
-      qty = elecQtyInput;
+      qtyStr = elecQtyStr;
+    } else if (category === 'goodies') {
+      name = goodiesNameInput.trim();
+      spec = goodiesSpecInput.trim();
+      qtyStr = goodiesQtyStr;
     }
 
     if (!name) return;
+
+    const qty = parseInt(qtyStr, 10);
+    if (isNaN(qty) || qty < 1) {
+      alert('Quantity must be at least 1.');
+      return;
+    }
 
     try {
       const newItem = await createItem({
         booth_id: boothId,
         category,
         item_name: name,
-        quantity: Math.max(1, qty),
+        specification: spec || undefined,
+        quantity: qty,
         unit: 'nos',
       });
 
       if (category === 'production') {
         setProdItems((prev) => [...prev, newItem]);
         setProdNameInput('');
-        setProdQtyInput(1);
+        setProdSpecInput('');
+        setProdQtyStr('1');
       } else if (category === 'furniture') {
         setFurnItems((prev) => [...prev, newItem]);
         setFurnNameInput('');
-        setFurnQtyInput(1);
+        setFurnQtyStr('1');
       } else if (category === 'electrical') {
         setElecItems((prev) => [...prev, newItem]);
         setElecNameInput('');
-        setElecQtyInput(1);
+        setElecQtyStr('1');
+      } else if (category === 'goodies') {
+        setGoodiesItems((prev) => [...prev, newItem]);
+        setGoodiesNameInput('');
+        setGoodiesSpecInput('');
+        setGoodiesQtyStr('1');
+        setShowCustomGoodiesForm(false);
       }
 
-      showToast(`Added ${name} (${qty})`);
+      showToast(`Added ${name} (Qty: ${qty})`);
     } catch (err: any) {
       alert(err.message || 'Failed to add item.');
     }
   };
 
-  const handleDeleteItem = async (itemId: string, category: 'production' | 'furniture' | 'electrical') => {
+  // Delete item with linked Flooring check
+  const handleDeleteItem = async (
+    item: BoothItemRecord,
+    category: 'production' | 'furniture' | 'electrical' | 'goodies'
+  ) => {
+    if (category === 'production' && item.item_name.toLowerCase().includes('flooring')) {
+      const linkedCarpet = prodItems.find(
+        (i) => i.id !== item.id && (i.notes === 'linked_flooring' || i.item_name.toLowerCase().includes('carpet'))
+      );
+      if (linkedCarpet) {
+        setFlooringDeletePrompt({ flooringItem: item, carpetItem: linkedCarpet });
+        return;
+      }
+    }
+
     try {
-      await deleteItem(itemId);
-      if (category === 'production') setProdItems((prev) => prev.filter((i) => i.id !== itemId));
-      if (category === 'furniture') setFurnItems((prev) => prev.filter((i) => i.id !== itemId));
-      if (category === 'electrical') setElecItems((prev) => prev.filter((i) => i.id !== itemId));
+      await deleteItem(item.id);
+      if (category === 'production') setProdItems((prev) => prev.filter((i) => i.id !== item.id));
+      if (category === 'furniture') setFurnItems((prev) => prev.filter((i) => i.id !== item.id));
+      if (category === 'electrical') setElecItems((prev) => prev.filter((i) => i.id !== item.id));
+      if (category === 'goodies') setGoodiesItems((prev) => prev.filter((i) => i.id !== item.id));
       showToast('Item removed.');
     } catch (err: any) {
       alert(err.message || 'Failed to remove item.');
     }
   };
 
-  // Open Edit Modal
+  // Confirm delete of flooring with or without carpet
+  const handleConfirmFlooringDelete = async (removeCarpet: boolean) => {
+    if (!flooringDeletePrompt) return;
+    const { flooringItem, carpetItem } = flooringDeletePrompt;
+
+    try {
+      await deleteItem(flooringItem.id);
+      let newProd = prodItems.filter((i) => i.id !== flooringItem.id);
+
+      if (removeCarpet && carpetItem) {
+        await deleteItem(carpetItem.id);
+        newProd = newProd.filter((i) => i.id !== carpetItem.id);
+        showToast('Removed Wooden Platform Flooring and Carpet.');
+      } else {
+        showToast('Removed Wooden Platform Flooring (Carpet kept).');
+      }
+
+      setProdItems(newProd);
+      setFlooringDeletePrompt(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove item.');
+    }
+  };
+
+  // 4. Inline Item Edit Handlers
+  const handleStartEditItem = (item: BoothItemRecord) => {
+    setEditingItemId(item.id);
+    setEditItemName(item.item_name);
+    setEditItemSpec(item.specification || '');
+    setEditItemQtyStr(String(item.quantity || 1));
+    setEditItemUnit(item.unit || 'nos');
+  };
+
+  const handleCancelEditItem = () => {
+    setEditingItemId(null);
+  };
+
+  const handleSaveItemEdit = async (item: BoothItemRecord) => {
+    if (!editItemName.trim()) {
+      alert('Item name cannot be empty.');
+      return;
+    }
+    const qty = parseInt(editItemQtyStr, 10);
+    if (isNaN(qty) || qty < 1) {
+      alert('Quantity must be at least 1.');
+      return;
+    }
+
+    setIsSavingItem(true);
+    try {
+      const updated = await updateItem(item.id, {
+        category: item.category,
+        item_name: editItemName.trim(),
+        specification: editItemSpec.trim() || undefined,
+        quantity: qty,
+        unit: editItemUnit.trim() || 'nos',
+      });
+
+      if (item.category === 'production') {
+        setProdItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      } else if (item.category === 'furniture') {
+        setFurnItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      } else if (item.category === 'electrical') {
+        setElecItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      } else if (item.category === 'goodies') {
+        setGoodiesItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      }
+
+      setEditingItemId(null);
+      showToast(`Updated ${updated.item_name} (Qty: ${updated.quantity})`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update item.');
+    } finally {
+      setIsSavingItem(false);
+    }
+  };
+
+  // Open Edit Booth Modal
   const openEditModal = () => {
     if (!booth) return;
     setEditBoothNumber(booth.booth_number);
     setEditCompanyName(booth.client_name);
     setEditPhone(booth.phone || '');
     setEditSize(booth.stand_size || '3 × 3 m (9 sq.m)');
-    const st = booth.booth_type?.toLowerCase().includes('octonorm') ? 'Octonorm' : 'Wooden';
-    setEditStructure(st);
+    setEditStructure(getStallTypeLabel(booth.booth_type));
     setEditError('');
     setIsEditModalOpen(true);
   };
@@ -415,16 +711,16 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   // Calculate 6-card completion status
   const sectionsList = [
-    { key: 'design', label: '1. Design', icon: Palette, desc: '3D concept render and client visual approval Drive link' },
-    { key: 'print', label: '2. Print Files', icon: Printer, desc: 'Print-ready graphics and backdrop artwork Drive links' },
-    { key: 'production', label: '3. Production', icon: Hammer, desc: 'Carpentry, structure framing specifications and paintwork' },
-    { key: 'furniture', label: '4. Furniture', icon: Armchair, desc: 'Chairs, tables, counters and display units' },
-    { key: 'electrical', label: '5. Electrical', icon: Zap, desc: 'Spotlights, 5A/15A power points and TV screens' },
+    { key: 'design', label: '1. Design', icon: Palette, desc: 'Design responsibility assignment' },
+    { key: 'print', label: '2. Print Files', icon: Printer, desc: 'Print readiness status and Google Drive link' },
+    { key: 'production', label: '3. Production', icon: Hammer, desc: 'Flooring, selfie booth, branding and TV setups' },
+    { key: 'furniture', label: '4. Furniture', icon: Armchair, desc: 'Tables, sofas and chairs' },
+    { key: 'electrical', label: '5. Electrical', icon: Zap, desc: 'Power sockets and palmenent lights' },
     { key: 'installation', label: '6. Installation', icon: Truck, desc: 'Dispatch, on-site erection and final client handover' },
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl mx-auto pb-12">
+    <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl mx-auto pb-12 px-2 sm:px-0">
       {/* Toast Notification */}
       {successToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-amber-500 text-zinc-950 px-4 py-2.5 rounded-xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom duration-200">
@@ -437,17 +733,17 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.07]">
         <button
           onClick={() => (booth.event_id ? onNavigate(`event:${booth.event_id}`) : onNavigate('booths'))}
-          className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer py-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to {booth.event_name ? booth.event_name : 'Stalls Directory'}</span>
+          <span className="truncate max-w-[200px] sm:max-w-md">Back to {booth.event_name ? booth.event_name : 'Stalls Directory'}</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setIsFloorplanModalOpen(true)}
-            className="px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Floor Plan</span>
@@ -455,7 +751,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
           <button
             onClick={openEditModal}
-            className="px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-zinc-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Edit2 className="w-3.5 h-3.5" />
             <span>Edit</span>
@@ -482,21 +778,21 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       </div>
 
       {/* Simplified Top Header */}
-      <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <h1 className="text-xl sm:text-2xl font-bold text-zinc-100 tracking-tight">
               {booth.client_name}
             </h1>
-            <div className="flex flex-wrap items-center gap-2.5 text-xs text-zinc-400">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
               <span className="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md">
                 Booth #{booth.booth_number}
               </span>
               <span>•</span>
               <span className="text-zinc-300 font-mono">{booth.stand_size || '3 × 3 m'}</span>
               <span>•</span>
-              <span className="text-zinc-300 font-medium">
-                {booth.booth_type?.toLowerCase().includes('octonorm') ? 'Octonorm' : 'Wooden'}
+              <span className="text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                {getStallTypeLabel(booth.booth_type)}
               </span>
               {booth.event_name && (
                 <>
@@ -520,7 +816,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
           </div>
 
           {/* Overall Checklist Progress Badge */}
-          <div className="bg-[#121319] border border-white/[0.06] rounded-xl p-3.5 min-w-[210px] text-right space-y-1.5">
+          <div className="bg-[#121319] border border-white/[0.06] rounded-xl p-3 sm:p-3.5 min-w-[210px] space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-zinc-400 font-medium">Checklist Progress</span>
               <span className="font-bold text-amber-400 font-mono">
@@ -558,14 +854,14 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                   : 'border-white/[0.07] hover:border-white/[0.14]'
               }`}
             >
-              {/* Card Header Row */}
-              <div className="px-5 py-3.5 flex items-center justify-between gap-3 bg-[#121319]/80 border-b border-white/[0.04]">
+              {/* Card Header Row - Fully responsive for mobile touch */}
+              <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3 bg-[#121319]/80 border-b border-white/[0.04]">
                 <div
                   onClick={() => toggleSection(sec.key)}
-                  className="flex items-center gap-3.5 flex-1 cursor-pointer select-none"
+                  className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0 cursor-pointer select-none"
                 >
                   <div
-                    className={`p-2 rounded-xl border ${
+                    className={`p-2 rounded-xl border shrink-0 ${
                       isDone
                         ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                         : isNA
@@ -576,10 +872,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                     <Icon className="w-4 h-4" />
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       <h3
-                        className={`text-sm font-bold tracking-wide ${
+                        className={`text-sm font-bold tracking-wide truncate ${
                           isDone ? 'text-zinc-100 line-through decoration-emerald-500/60' : 'text-zinc-100'
                         }`}
                       >
@@ -600,14 +896,13 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                   </div>
                 </div>
 
-                {/* Right Action Controls: Checkbox & NA Toggle */}
-                <div className="flex items-center gap-2">
-                  {/* Not Required Toggle */}
+                {/* Right Action Controls: N/A, Mark Done & Chevron */}
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <button
                     type="button"
                     title={isNA ? 'Re-enable as required' : 'Mark as Not Required'}
                     onClick={() => handleToggleTaskStatus(sec.key, isNA ? 'pending' : 'not_applicable')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                    className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center ${
                       isNA
                         ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
                         : 'bg-white/[0.04] text-zinc-400 border-white/[0.08] hover:text-zinc-200 hover:bg-white/[0.08]'
@@ -616,12 +911,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                     N/A
                   </button>
 
-                  {/* Completion Checkbox */}
                   <button
                     type="button"
                     onClick={() => handleToggleTaskStatus(sec.key)}
                     disabled={isNA}
-                    className={`p-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+                    className={`min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
                       isDone
                         ? 'bg-emerald-500 text-zinc-950 border-emerald-500 shadow-sm'
                         : isNA
@@ -633,11 +927,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                     <span className="hidden sm:inline">{isDone ? 'Done' : 'Mark Done'}</span>
                   </button>
 
-                  {/* Expand / Collapse Chevron */}
                   <button
                     type="button"
                     onClick={() => toggleSection(sec.key)}
-                    className="p-1 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    className="p-1.5 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    aria-label={isExp ? 'Collapse' : 'Expand'}
                   >
                     {isExp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
@@ -646,191 +940,471 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
               {/* Card Expanded Content */}
               {isExp && (
-                <div className="p-5 border-t border-zinc-800 bg-zinc-950/40 space-y-4 animate-in fade-in duration-150">
-                  {/* SECTION 1: DESIGN */}
+                <div className="p-4 sm:p-5 border-t border-zinc-800 bg-zinc-950/40 space-y-4 animate-in fade-in duration-150">
+                  {/* SECTION 1: SIMPLIFIED DESIGN RESPONSIBILITY */}
                   {sec.key === 'design' && (
-                    <div className="space-y-4">
-                      {/* Existing Design Links */}
-                      {designLinks.length > 0 ? (
-                        <div className="space-y-2">
-                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                            Design Google Drive Files
-                          </span>
-                          <div className="space-y-2">
-                            {designLinks.map((lnk) => (
-                              <div
-                                key={lnk.id}
-                                className="flex items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
-                              >
-                                <div className="flex items-center gap-2 truncate">
-                                  <Palette className="w-4 h-4 text-amber-400 shrink-0" />
-                                  <span className="font-semibold text-zinc-200 truncate">{lnk.title}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <a
-                                    href={lnk.drive_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg font-medium inline-flex items-center gap-1.5 transition-colors"
-                                  >
-                                    <span>Open Drive</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteLink(lnk.id, true)}
-                                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
-                                    title="Remove link"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
+                    <div className="space-y-3.5">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-zinc-200">
+                          Design Responsibility
+                        </label>
+                        <p className="text-[11px] text-zinc-400">
+                          Select who is responsible for creating and finalizing the 3D booth design
+                        </p>
+                      </div>
 
-                      {/* Add Design Link Form */}
-                      <form onSubmit={handleAddDesignLink} className="space-y-2.5">
-                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                          {designLinks.length > 0 ? '+ Add Another 3D Design Link' : 'Add Design Google Drive Link'}
-                        </span>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
-                            type="text"
-                            value={designTitleInput}
-                            onChange={(e) => setDesignTitleInput(e.target.value)}
-                            placeholder="Title (e.g. 3D View / Render)"
-                            className="sm:w-1/3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                          />
-                          <input
-                            type="url"
-                            required
-                            value={designUrlInput}
-                            onChange={(e) => setDesignUrlInput(e.target.value)}
-                            placeholder="Paste Google Drive URL (https://drive.google.com/...)"
-                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                          />
-                          <button
-                            type="submit"
-                            className="px-4 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
-                          >
-                            Save Link
-                          </button>
+                      {/* Segmented 2-option selector */}
+                      <div className="grid grid-cols-2 gap-2 sm:gap-3 max-w-md">
+                        <button
+                          type="button"
+                          onClick={() => handleSetDesignResponsibility('Client Side')}
+                          disabled={isSavingDesign}
+                          className={`min-h-[46px] p-3 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                            designResp === 'Client Side'
+                              ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold shadow-sm'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${designResp === 'Client Side' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
+                            <span>Client Side</span>
+                          </div>
+                          {designResp === 'Client Side' && <Check className="w-4 h-4 text-amber-400" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSetDesignResponsibility('Our Side')}
+                          disabled={isSavingDesign}
+                          className={`min-h-[46px] p-3 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                            designResp === 'Our Side'
+                              ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold shadow-sm'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${designResp === 'Our Side' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
+                            <span>Our Side</span>
+                          </div>
+                          {designResp === 'Our Side' && <Check className="w-4 h-4 text-amber-400" />}
+                        </button>
+                      </div>
+
+                      <div className="text-[11px] text-zinc-400 bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3 max-w-md flex items-start gap-2">
+                        <Palette className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          {designResp === 'Client Side' ? (
+                            <span>Client will prepare and deliver the 3D render concept and branding drawings.</span>
+                          ) : (
+                            <span>Reworkzone fabrication team is responsible for preparing the 3D design and visual concepts.</span>
+                          )}
                         </div>
-                      </form>
+                      </div>
                     </div>
                   )}
 
-                  {/* SECTION 2: PRINT FILES */}
+                  {/* SECTION 2: SIMPLIFIED PRINT FILES & GOODIES */}
                   {sec.key === 'print' && (
-                    <div className="space-y-4">
-                      {/* Existing Print Links */}
-                      {printLinks.length > 0 ? (
-                        <div className="space-y-2">
-                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                            Print-Ready Artwork Links
-                          </span>
-                          <div className="space-y-2">
-                            {printLinks.map((lnk) => (
-                              <div
-                                key={lnk.id}
-                                className="flex items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
-                              >
-                                <div className="flex items-center gap-2 truncate">
-                                  <Printer className="w-4 h-4 text-blue-400 shrink-0" />
-                                  <span className="font-semibold text-zinc-200 truncate">{lnk.title}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <a
-                                    href={lnk.drive_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-3 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg font-medium inline-flex items-center gap-1.5 transition-colors"
-                                  >
-                                    <span>Open Drive</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteLink(lnk.id, false)}
-                                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
-                                    title="Remove link"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                    <div className="space-y-6">
+                      <form onSubmit={handleSavePrintDetails} className="space-y-4">
+                        {/* 1. Print File Status (3 options) */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">
+                            Print File Status
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {[
+                              { value: 'Designs Pending', color: 'zinc' },
+                              { value: 'Partially Received', color: 'amber' },
+                              { value: 'All Files Ready', color: 'emerald' },
+                            ].map((opt) => {
+                              const isSelected = printStatus === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => handleSetPrintStatus(opt.value)}
+                                  className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                                    isSelected
+                                      ? opt.color === 'emerald'
+                                        ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 font-bold'
+                                        : opt.color === 'amber'
+                                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold'
+                                        : 'bg-white/[0.08] border-zinc-600 text-zinc-100 font-bold'
+                                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <span>{opt.value}</span>
+                                  {isSelected && <Check className="w-3.5 h-3.5" />}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                      ) : (
-                        <p className="text-xs text-zinc-500">No print artwork links added yet.</p>
-                      )}
 
-                      {/* Add Print File Link Form */}
-                      <form onSubmit={handleAddPrintLink} className="space-y-2.5 pt-2 border-t border-zinc-800/80">
-                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                          + Add Print File Link
-                        </span>
-                        <div className="flex flex-col sm:flex-row gap-2">
+                        {/* 2. Single Google Drive Folder / File Link */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-zinc-200">
+                              Google Drive Folder / File Link
+                            </label>
+                            {printDriveUrl && (
+                              <a
+                                href={printDriveUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline font-medium"
+                              >
+                                <span>Open Drive</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="url"
+                              value={printDriveUrl}
+                              onChange={(e) => setPrintDriveUrl(e.target.value)}
+                              placeholder="https://drive.google.com/drive/folders/..."
+                              className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                            />
+                            {printDriveUrl && (
+                              <a
+                                href={printDriveUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="min-h-[42px] px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl font-semibold text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors"
+                              >
+                                <span>Open Drive</span>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 3. Optional Remark */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">
+                            Remark (Optional)
+                          </label>
                           <input
                             type="text"
-                            required
-                            value={printTitleInput}
-                            onChange={(e) => setPrintTitleInput(e.target.value)}
-                            placeholder="Panel Name (e.g. Back Wall, Side Banner, Fascia)"
-                            className="sm:w-1/3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                            value={printRemark}
+                            onChange={(e) => setPrintRemark(e.target.value)}
+                            placeholder="e.g. Waiting for side wall artwork / high-res logo"
+                            className="w-full min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                           />
-                          <input
-                            type="url"
-                            required
-                            value={printUrlInput}
-                            onChange={(e) => setPrintUrlInput(e.target.value)}
-                            placeholder="Paste Google Drive File Link..."
-                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                          />
+                        </div>
+
+                        {/* Save Button */}
+                        <div className="flex justify-end pt-1">
                           <button
                             type="submit"
-                            className="px-4 py-2 bg-blue-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-blue-400 transition-colors cursor-pointer shrink-0"
+                            disabled={isSavingPrint}
+                            className="w-full sm:w-auto min-h-[42px] px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
                           >
-                            Add Print Link
+                            {isSavingPrint ? 'Saving...' : 'Save Print Details'}
                           </button>
                         </div>
                       </form>
+
+                      {/* SUBSECTION: GOODIES & PROMOTIONAL PRINTING */}
+                      <div className="pt-5 border-t border-zinc-800/90 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                              <span>Goodies & Promotional Printing</span>
+                            </h4>
+                            <p className="text-[11px] text-zinc-400">
+                              Optional giveaways (book, pen, leaflet) & client-supplied artwork.
+                            </p>
+                          </div>
+                          {goodiesItems.length > 0 && (
+                            <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                              {goodiesItems.length} {goodiesItems.length === 1 ? 'item' : 'items'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Goodies Items List */}
+                        {goodiesItems.length > 0 ? (
+                          <div className="space-y-2">
+                            <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                              Promotional Items
+                            </span>
+                            <div className="space-y-2">
+                              {goodiesItems.map((itm) => (
+                                <ItemRow
+                                  key={itm.id}
+                                  item={itm}
+                                  isEditing={editingItemId === itm.id}
+                                  editName={editItemName}
+                                  editSpec={editItemSpec}
+                                  editQtyStr={editItemQtyStr}
+                                  editUnit={editItemUnit}
+                                  isSaving={isSavingItem}
+                                  onStartEdit={() => handleStartEditItem(itm)}
+                                  onCancelEdit={handleCancelEditItem}
+                                  onSaveEdit={() => handleSaveItemEdit(itm)}
+                                  onChangeName={setEditItemName}
+                                  onChangeSpec={setEditItemSpec}
+                                  onChangeQtyStr={setEditItemQtyStr}
+                                  onChangeUnit={setEditItemUnit}
+                                  onAdjustQty={(delta) => setEditItemQtyStr(adjustQty(editItemQtyStr, delta))}
+                                  onDelete={() => handleDeleteItem(itm, 'goodies')}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-500 italic">No goodies or promotional items added yet.</p>
+                        )}
+
+                        {/* Quick Add Presets: Book, Pen, Leaflet, Custom Item */}
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+                              Quick Add Presets
+                            </span>
+                            <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {['Book', 'Pen', 'Leaflet'].map((preset) => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => handleQuickAddSimpleItem('goodies', preset)}
+                                className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800/90 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                              >
+                                <span>{preset}</span>
+                                <Plus className="w-3.5 h-3.5 text-amber-400" />
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setShowCustomGoodiesForm((prev) => !prev)}
+                              className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                                showCustomGoodiesForm
+                                  ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700'
+                              }`}
+                            >
+                              <span>Custom Item</span>
+                              <Plus className={`w-3.5 h-3.5 transition-transform ${showCustomGoodiesForm ? 'rotate-45 text-amber-400' : 'text-zinc-500'}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Custom Goodies Item Form (Collapsible) */}
+                        {showCustomGoodiesForm && (
+                          <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl space-y-2 animate-in fade-in duration-150">
+                            <span className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider">
+                              + Custom Promotional Item
+                            </span>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="text"
+                                value={goodiesNameInput}
+                                onChange={(e) => setGoodiesNameInput(e.target.value)}
+                                placeholder="e.g. Tote Bag, Lanyard, Badge, Cap"
+                                className="flex-1 min-h-[42px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                              />
+                              <input
+                                type="text"
+                                value={goodiesSpecInput}
+                                onChange={(e) => setGoodiesSpecInput(e.target.value)}
+                                placeholder="Specification / remark (optional)"
+                                className="sm:w-48 min-h-[42px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                              />
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden min-h-[42px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => setGoodiesQtyStr(adjustQty(goodiesQtyStr, -1))}
+                                    className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    value={goodiesQtyStr}
+                                    onFocus={(e) => e.target.select()}
+                                    onChange={(e) => setGoodiesQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
+                                    onBlur={() => {
+                                      if (!goodiesQtyStr || parseInt(goodiesQtyStr, 10) < 1) setGoodiesQtyStr('1');
+                                    }}
+                                    className="w-14 bg-transparent text-center text-xs text-zinc-100 font-mono focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setGoodiesQtyStr(adjustQty(goodiesQtyStr, 1))}
+                                    className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddCustomItem('goodies')}
+                                  className="flex-1 sm:flex-initial min-h-[42px] px-5 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* CLIENT ARTWORK & READINESS: ONLY SHOWN WHEN AT LEAST ONE GOODIES ITEM HAS BEEN ADDED */}
+                        {goodiesItems.length > 0 && (
+                          <div className="pt-4 mt-2 border-t border-zinc-800/80 space-y-3.5 bg-zinc-950/40 p-3.5 rounded-xl border border-zinc-800/50">
+                            <div>
+                              <span className="text-xs font-bold text-zinc-200">
+                                Client-Supplied Artwork (Goodies)
+                              </span>
+                              <p className="text-[11px] text-zinc-400">
+                                Design/artwork for promotional items is provided directly by the client.
+                              </p>
+                            </div>
+
+                            {/* Artwork Readiness Status */}
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-semibold text-zinc-300">
+                                Artwork Readiness Status
+                              </label>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {[
+                                  { value: 'Awaiting Client Artwork', color: 'zinc' },
+                                  { value: 'Artwork Received', color: 'amber' },
+                                  { value: 'Ready for Printing', color: 'emerald' },
+                                ].map((opt) => {
+                                  const isSelected = goodiesStatus === opt.value;
+                                  return (
+                                    <button
+                                      key={opt.value}
+                                      type="button"
+                                      onClick={() => handleSetGoodiesStatus(opt.value)}
+                                      className={`min-h-[42px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                                        isSelected
+                                          ? opt.color === 'emerald'
+                                            ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 font-bold'
+                                            : opt.color === 'amber'
+                                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold'
+                                            : 'bg-white/[0.08] border-zinc-600 text-zinc-100 font-bold'
+                                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                      }`}
+                                    >
+                                      <span>{opt.value}</span>
+                                      {isSelected && <Check className="w-3.5 h-3.5" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Client Artwork Google Drive Link */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-semibold text-zinc-300">
+                                  Client Artwork Google Drive Link
+                                </label>
+                                {goodiesDriveUrl && (
+                                  <a
+                                    href={goodiesDriveUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline font-medium"
+                                  >
+                                    <span>Open Artwork</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                  type="url"
+                                  value={goodiesDriveUrl}
+                                  onChange={(e) => setGoodiesDriveUrl(e.target.value)}
+                                  placeholder="https://drive.google.com/drive/folders/..."
+                                  className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                />
+                                {goodiesDriveUrl && (
+                                  <a
+                                    href={goodiesDriveUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="min-h-[42px] px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl font-semibold text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors"
+                                  >
+                                    <span>Open Artwork</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Artwork Remark */}
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-semibold text-zinc-300">
+                                Artwork Remark (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={goodiesRemark}
+                                onChange={(e) => setGoodiesRemark(e.target.value)}
+                                placeholder="e.g. Waiting for high-res logo for pen clip / A5 artwork verified"
+                                className="w-full min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                              />
+                            </div>
+
+                            {/* Save Artwork Button */}
+                            <div className="flex justify-end pt-1">
+                              <button
+                                type="button"
+                                disabled={isSavingGoodiesArtwork}
+                                onClick={() => handleSaveGoodiesArtwork()}
+                                className="w-full sm:w-auto min-h-[40px] px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 hover:border-zinc-600 font-semibold rounded-xl text-xs transition-all cursor-pointer"
+                              >
+                                {isSavingGoodiesArtwork ? 'Saving...' : 'Save Artwork Details'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {/* SECTION 3: PRODUCTION */}
+                  {/* SECTION 3: REFINED PRODUCTION QUICK ADD */}
                   {sec.key === 'production' && (
                     <div className="space-y-4">
                       {/* Production Items List */}
                       {prodItems.length > 0 ? (
                         <div className="space-y-2">
                           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                            Structure & Carpentry Requirements
+                            Fabrication & Production Requirements
                           </span>
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {prodItems.map((itm) => (
-                              <div
+                              <ItemRow
                                 key={itm.id}
-                                className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
-                              >
-                                <span className="font-semibold text-zinc-200">{itm.item_name}</span>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
-                                    Qty: {itm.quantity}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteItem(itm.id, 'production')}
-                                    className="p-1 text-zinc-500 hover:text-red-400"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
+                                item={itm}
+                                isEditing={editingItemId === itm.id}
+                                editName={editItemName}
+                                editSpec={editItemSpec}
+                                editQtyStr={editItemQtyStr}
+                                editUnit={editItemUnit}
+                                isSaving={isSavingItem}
+                                onStartEdit={() => handleStartEditItem(itm)}
+                                onCancelEdit={handleCancelEditItem}
+                                onSaveEdit={() => handleSaveItemEdit(itm)}
+                                onChangeName={setEditItemName}
+                                onChangeSpec={setEditItemSpec}
+                                onChangeQtyStr={setEditItemQtyStr}
+                                onChangeUnit={setEditItemUnit}
+                                onAdjustQty={(delta) => setEditItemQtyStr(adjustQty(editItemQtyStr, delta))}
+                                onDelete={() => handleDeleteItem(itm, 'production')}
+                              />
                             ))}
                           </div>
                         </div>
@@ -838,67 +1412,360 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         <p className="text-xs text-zinc-500">No production items added yet.</p>
                       )}
 
-                      {/* Add Production Item Form */}
+                      {/* 1. Production Quick Add Presets */}
+                      <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+                            Quick Add Presets
+                          </span>
+                          <span className="text-[10px] text-zinc-500">Tap to add</span>
+                        </div>
+
+                        {/* Presets Grid: Max 2 cols on wider screens, 1-2 on mobile */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {/* 1. Wooden Platform Flooring (with Carpet) */}
+                          <button
+                            type="button"
+                            onClick={() => setActiveSpecialPanel(activeSpecialPanel === 'flooring' ? 'none' : 'flooring')}
+                            className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                              activeSpecialPanel === 'flooring'
+                                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700'
+                            }`}
+                          >
+                            <span>1. Wooden Platform Flooring</span>
+                            <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                              + Carpet
+                            </span>
+                          </button>
+
+                          {/* 2. Selfie Booth */}
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAddSimpleItem('production', 'Selfie Booth')}
+                            className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700 text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                          >
+                            <span>2. Selfie Booth</span>
+                            <Plus className="w-3.5 h-3.5 text-zinc-500" />
+                          </button>
+
+                          {/* 3. Table Vinyl Branding */}
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAddSimpleItem('production', 'Table Vinyl Branding')}
+                            className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700 text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                          >
+                            <span>3. Table Vinyl Branding</span>
+                            <Plus className="w-3.5 h-3.5 text-zinc-500" />
+                          </button>
+
+                          {/* 4. TV — 42 inch */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTvSize('42 inch');
+                              setActiveSpecialPanel('tv');
+                            }}
+                            className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                              activeSpecialPanel === 'tv' && tvSize === '42 inch'
+                                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <Tv className="w-3.5 h-3.5 text-amber-400" />
+                              <span>4. TV — 42 inch</span>
+                            </span>
+                            <span className="text-[10px] text-zinc-400">Mount options</span>
+                          </button>
+
+                          {/* 5. TV — 50–55 inch */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTvSize('50–55 inch');
+                              setActiveSpecialPanel('tv');
+                            }}
+                            className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                              activeSpecialPanel === 'tv' && tvSize === '50–55 inch'
+                                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <Tv className="w-3.5 h-3.5 text-amber-400" />
+                              <span>5. TV — 50–55 inch</span>
+                            </span>
+                            <span className="text-[10px] text-zinc-400">Mount options</span>
+                          </button>
+                        </div>
+
+                        {/* Special Panel: Flooring Carpet Color Picker */}
+                        {activeSpecialPanel === 'flooring' && (
+                          <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-amber-500/40 space-y-3 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-zinc-100">
+                                Select Carpet Color for Wooden Platform
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSpecialPanel('none')}
+                                className="text-zinc-500 hover:text-zinc-300"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {(['Grey', 'Red', 'Blue'] as const).map((color) => (
+                                <button
+                                  key={color}
+                                  type="button"
+                                  onClick={() => setCarpetColor(color)}
+                                  className={`min-h-[42px] p-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                    carpetColor === color
+                                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                                      : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-2.5 h-2.5 rounded-full ${
+                                      color === 'Grey' ? 'bg-zinc-400' : color === 'Red' ? 'bg-red-500' : 'bg-blue-500'
+                                    }`}
+                                  />
+                                  <span>{color}</span>
+                                </button>
+                              ))}
+                            </div>
+                            <div className="flex justify-end gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setActiveSpecialPanel('none')}
+                                className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleAddFlooringWithCarpet}
+                                className="min-h-[38px] px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                              >
+                                Add Flooring + {carpetColor} Carpet
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Special Panel: TV Configuration Picker */}
+                        {activeSpecialPanel === 'tv' && (
+                          <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-amber-500/40 space-y-3 animate-in fade-in duration-150">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                                <Tv className="w-4 h-4 text-amber-400" />
+                                <span>Configure TV ({tvSize})</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSpecialPanel('none')}
+                                className="text-zinc-500 hover:text-zinc-300"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* TV Size Selector */}
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-zinc-400 font-medium">TV Size</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {(['42 inch', '50–55 inch'] as const).map((sz) => (
+                                  <button
+                                    key={sz}
+                                    type="button"
+                                    onClick={() => setTvSize(sz)}
+                                    className={`min-h-[38px] p-2 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                                      tvSize === sz
+                                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                    }`}
+                                  >
+                                    {sz}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Installation Type */}
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-zinc-400 font-medium">Installation Type</label>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {[
+                                  { label: 'Wall Mounted (Without Stand)', val: 'Wall Mounted (Without Stand)' as const },
+                                  { label: 'With Stand', val: 'With Stand' as const },
+                                ].map((opt) => (
+                                  <button
+                                    key={opt.val}
+                                    type="button"
+                                    onClick={() => setTvMounting(opt.val)}
+                                    className={`min-h-[38px] p-2 rounded-lg border text-xs font-semibold text-left flex items-center justify-between transition-all cursor-pointer ${
+                                      tvMounting === opt.val
+                                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                    }`}
+                                  >
+                                    <span>{opt.label}</span>
+                                    {tvMounting === opt.val && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Quantity Stepper */}
+                            <div className="flex items-center justify-between pt-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-zinc-400">Quantity:</span>
+                                <div className="flex items-center bg-zinc-950 border border-zinc-700 rounded-lg overflow-hidden min-h-[36px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => setTvQtyStr(adjustQty(tvQtyStr, -1))}
+                                    className="px-2.5 py-1 text-zinc-400 hover:text-zinc-100"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    value={tvQtyStr}
+                                    onFocus={(e) => e.target.select()}
+                                    onChange={(e) => setTvQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
+                                    className="w-12 bg-transparent text-center text-xs text-zinc-100 font-mono focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setTvQtyStr(adjustQty(tvQtyStr, 1))}
+                                    className="px-2.5 py-1 text-zinc-400 hover:text-zinc-100"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveSpecialPanel('none')}
+                                  className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleAddTv}
+                                  className="min-h-[38px] px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                >
+                                  Add TV
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. Custom Production Item Form */}
                       <div className="space-y-2 pt-2 border-t border-zinc-800/80">
                         <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                          + Add Production Requirement
+                          + Custom Production Item
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <input
                             type="text"
                             value={prodNameInput}
                             onChange={(e) => setProdNameInput(e.target.value)}
-                            placeholder="e.g. Backdrop Wooden Frame (10ft x 8ft)"
-                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                            placeholder="e.g. Acrylic Logo Lettering / Special Arch"
+                            className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                           />
                           <input
-                            type="number"
-                            min="1"
-                            value={prodQtyInput}
-                            onChange={(e) => setProdQtyInput(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-20 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 text-center font-mono focus:outline-none"
+                            type="text"
+                            value={prodSpecInput}
+                            onChange={(e) => setProdSpecInput(e.target.value)}
+                            placeholder="Specification (optional)"
+                            className="sm:w-44 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleAddItem('production')}
-                            className="px-4 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
-                          >
-                            Add
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {/* Quantity Stepper */}
+                            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden min-h-[42px]">
+                              <button
+                                type="button"
+                                onClick={() => setProdQtyStr(adjustQty(prodQtyStr, -1))}
+                                className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                title="Decrease"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={prodQtyStr}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => setProdQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
+                                onBlur={() => {
+                                  if (!prodQtyStr || parseInt(prodQtyStr, 10) < 1) setProdQtyStr('1');
+                                }}
+                                className="w-14 bg-transparent text-center text-xs text-zinc-100 font-mono focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setProdQtyStr(adjustQty(prodQtyStr, 1))}
+                                className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                title="Increase"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAddCustomItem('production')}
+                              className="flex-1 sm:flex-initial min-h-[42px] px-5 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
+                            >
+                              Add
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* SECTION 4: FURNITURE */}
+                  {/* SECTION 4: REFINED FURNITURE QUICK ADD */}
                   {sec.key === 'furniture' && (
                     <div className="space-y-4">
                       {/* Furniture Items List */}
                       {furnItems.length > 0 ? (
                         <div className="space-y-2">
                           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                            Furniture Inventory
+                            Furniture Requirements
                           </span>
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {furnItems.map((itm) => (
-                              <div
+                              <ItemRow
                                 key={itm.id}
-                                className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
-                              >
-                                <span className="font-semibold text-zinc-200">{itm.item_name}</span>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
-                                    Qty: {itm.quantity}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteItem(itm.id, 'furniture')}
-                                    className="p-1 text-zinc-500 hover:text-red-400"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
+                                item={itm}
+                                isEditing={editingItemId === itm.id}
+                                editName={editItemName}
+                                editSpec={editItemSpec}
+                                editQtyStr={editItemQtyStr}
+                                editUnit={editItemUnit}
+                                isSaving={isSavingItem}
+                                onStartEdit={() => handleStartEditItem(itm)}
+                                onCancelEdit={handleCancelEditItem}
+                                onSaveEdit={() => handleSaveItemEdit(itm)}
+                                onChangeName={setEditItemName}
+                                onChangeSpec={setEditItemSpec}
+                                onChangeQtyStr={setEditItemQtyStr}
+                                onChangeUnit={setEditItemUnit}
+                                onAdjustQty={(delta) => setEditItemQtyStr(adjustQty(editItemQtyStr, delta))}
+                                onDelete={() => handleDeleteItem(itm, 'furniture')}
+                              />
                             ))}
                           </div>
                         </div>
@@ -906,53 +1773,89 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         <p className="text-xs text-zinc-500">No furniture items assigned yet.</p>
                       )}
 
-                      {/* Add Furniture Form with Quick Pills */}
+                      {/* 1. Quick Add Presets: Glass Round Table, 2 Seater Sofa, Chair */}
+                      <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+                            Quick Add Presets
+                          </span>
+                          <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {['Glass Round Table', '2 Seater Sofa', 'Chair'].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => handleQuickAddSimpleItem('furniture', preset)}
+                              className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800/90 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                            >
+                              <span>{preset}</span>
+                              <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 2. Custom Furniture Item Form */}
                       <div className="space-y-2 pt-2 border-t border-zinc-800/80">
                         <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                          + Add Furniture Item
+                          + Custom Furniture Item
                         </span>
-                        <div className="flex flex-wrap gap-1.5 pb-1">
-                          {['Executive Chair', 'Coffee Table', 'Reception Counter', 'Bar Stool', 'Lockable Cabinet'].map(
-                            (pill) => (
-                              <button
-                                key={pill}
-                                type="button"
-                                onClick={() => setFurnNameInput(pill)}
-                                className="px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-[10px] text-zinc-400 hover:text-zinc-200 border border-zinc-800"
-                              >
-                                {pill}
-                              </button>
-                            )
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <input
                             type="text"
                             value={furnNameInput}
                             onChange={(e) => setFurnNameInput(e.target.value)}
-                            placeholder="e.g. Chair, Table, Counter"
-                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                            placeholder="e.g. Brochure Stand, Counter, Stool"
+                            className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                           />
-                          <input
-                            type="number"
-                            min="1"
-                            value={furnQtyInput}
-                            onChange={(e) => setFurnQtyInput(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-20 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 text-center font-mono focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleAddItem('furniture')}
-                            className="px-4 py-2 bg-emerald-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-emerald-400 transition-colors cursor-pointer shrink-0"
-                          >
-                            Add
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {/* Quantity Stepper */}
+                            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden min-h-[42px]">
+                              <button
+                                type="button"
+                                onClick={() => setFurnQtyStr(adjustQty(furnQtyStr, -1))}
+                                className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                title="Decrease"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={furnQtyStr}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => setFurnQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
+                                onBlur={() => {
+                                  if (!furnQtyStr || parseInt(furnQtyStr, 10) < 1) setFurnQtyStr('1');
+                                }}
+                                className="w-14 bg-transparent text-center text-xs text-zinc-100 font-mono focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setFurnQtyStr(adjustQty(furnQtyStr, 1))}
+                                className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                title="Increase"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAddCustomItem('furniture')}
+                              className="flex-1 sm:flex-initial min-h-[42px] px-5 py-2 bg-emerald-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-emerald-400 transition-colors cursor-pointer shrink-0"
+                            >
+                              Add
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* SECTION 5: ELECTRICAL */}
+                  {/* SECTION 5: REFINED ELECTRICAL QUICK ADD */}
                   {sec.key === 'electrical' && (
                     <div className="space-y-4">
                       {/* Electrical Items List */}
@@ -961,26 +1864,27 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
                             Electrical & Lighting Items
                           </span>
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {elecItems.map((itm) => (
-                              <div
+                              <ItemRow
                                 key={itm.id}
-                                className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs"
-                              >
-                                <span className="font-semibold text-zinc-200">{itm.item_name}</span>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
-                                    Qty: {itm.quantity}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteItem(itm.id, 'electrical')}
-                                    className="p-1 text-zinc-500 hover:text-red-400"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
+                                item={itm}
+                                isEditing={editingItemId === itm.id}
+                                editName={editItemName}
+                                editSpec={editItemSpec}
+                                editQtyStr={editItemQtyStr}
+                                editUnit={editItemUnit}
+                                isSaving={isSavingItem}
+                                onStartEdit={() => handleStartEditItem(itm)}
+                                onCancelEdit={handleCancelEditItem}
+                                onSaveEdit={() => handleSaveItemEdit(itm)}
+                                onChangeName={setEditItemName}
+                                onChangeSpec={setEditItemSpec}
+                                onChangeQtyStr={setEditItemQtyStr}
+                                onChangeUnit={setEditItemUnit}
+                                onAdjustQty={(delta) => setEditItemQtyStr(adjustQty(editItemQtyStr, delta))}
+                                onDelete={() => handleDeleteItem(itm, 'electrical')}
+                              />
                             ))}
                           </div>
                         </div>
@@ -988,47 +1892,83 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         <p className="text-xs text-zinc-500">No electrical items assigned yet.</p>
                       )}
 
-                      {/* Add Electrical Form with Quick Pills */}
+                      {/* 1. Quick Add Presets: Power Socket, Palmenent Light */}
+                      <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+                            Quick Add Presets
+                          </span>
+                          <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {['Power Socket', 'Palmenent Light'].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => handleQuickAddSimpleItem('electrical', preset)}
+                              className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800/90 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                            >
+                              <span>{preset}</span>
+                              <Plus className="w-3.5 h-3.5 text-amber-400" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 2. Custom Electrical Item Form */}
                       <div className="space-y-2 pt-2 border-t border-zinc-800/80">
                         <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                          + Add Electrical Item
+                          + Custom Electrical Item
                         </span>
-                        <div className="flex flex-wrap gap-1.5 pb-1">
-                          {['Spotlight (50W)', 'Power Socket (5A/16A)', '50-inch LED TV', 'LED Strip Light', 'Spike Guard'].map(
-                            (pill) => (
-                              <button
-                                key={pill}
-                                type="button"
-                                onClick={() => setElecNameInput(pill)}
-                                className="px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-[10px] text-zinc-400 hover:text-zinc-200 border border-zinc-800"
-                              >
-                                {pill}
-                              </button>
-                            )
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <input
                             type="text"
                             value={elecNameInput}
                             onChange={(e) => setElecNameInput(e.target.value)}
-                            placeholder="e.g. Spotlight, Power Socket, TV"
-                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                            placeholder="e.g. 15A Power Point / LED Track Light"
+                            className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                           />
-                          <input
-                            type="number"
-                            min="1"
-                            value={elecQtyInput}
-                            onChange={(e) => setElecQtyInput(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-20 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 text-center font-mono focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleAddItem('electrical')}
-                            className="px-4 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
-                          >
-                            Add
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {/* Quantity Stepper */}
+                            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden min-h-[42px]">
+                              <button
+                                type="button"
+                                onClick={() => setElecQtyStr(adjustQty(elecQtyStr, -1))}
+                                className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                title="Decrease"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={elecQtyStr}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => setElecQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
+                                onBlur={() => {
+                                  if (!elecQtyStr || parseInt(elecQtyStr, 10) < 1) setElecQtyStr('1');
+                                }}
+                                className="w-14 bg-transparent text-center text-xs text-zinc-100 font-mono focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setElecQtyStr(adjustQty(elecQtyStr, 1))}
+                                className="px-3 py-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                                title="Increase"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAddCustomItem('electrical')}
+                              className="flex-1 sm:flex-initial min-h-[42px] px-5 py-2 bg-amber-500 text-zinc-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-colors cursor-pointer shrink-0"
+                            >
+                              Add
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1041,13 +1981,13 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         Site Execution & Handover
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
+                        <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
                           <div className="font-semibold text-zinc-200">1. Fabrication Dispatch</div>
-                          <div className="text-[11px] text-zinc-500">Material loaded from workshop</div>
+                          <div className="text-[11px] text-zinc-400">Material loaded from workshop</div>
                         </div>
-                        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
+                        <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
                           <div className="font-semibold text-zinc-200">2. Venue Setup Completed</div>
-                          <div className="text-[11px] text-zinc-500">Carpentry, graphics & lighting erected</div>
+                          <div className="text-[11px] text-zinc-400">Carpentry, graphics & lighting erected</div>
                         </div>
                       </div>
                     </div>
@@ -1059,7 +1999,44 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         })}
       </div>
 
-      {/* Edit Booth Modal */}
+      {/* Confirmation Modal: Delete Flooring with Associated Carpet */}
+      <Modal
+        isOpen={flooringDeletePrompt !== null}
+        onClose={() => setFlooringDeletePrompt(null)}
+        title="Remove Flooring & Carpet"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-zinc-300">
+            Wooden Platform Flooring is linked with the Carpet requirement. Do you also want to remove the Carpet item?
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setFlooringDeletePrompt(null)}
+              className="w-full sm:w-auto px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-medium cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => handleConfirmFlooringDelete(false)}
+              className="w-full sm:w-auto px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl font-medium cursor-pointer"
+            >
+              Keep Carpet
+            </button>
+            <button
+              type="button"
+              onClick={() => handleConfirmFlooringDelete(true)}
+              className="w-full sm:w-auto px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 rounded-xl font-bold cursor-pointer"
+            >
+              Remove Both
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Booth Modal with 3 Stall Types */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
@@ -1124,13 +2101,14 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
             </div>
           </div>
 
+          {/* 3 Stall Types: Wooden / Frame / Customize */}
           <div className="space-y-1.5">
-            <label className="block text-zinc-300 font-semibold">Structure Type</label>
-            <div className="grid grid-cols-2 gap-2">
+            <label className="block text-zinc-300 font-semibold">Stall Type</label>
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setEditStructure('Wooden')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
+                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between min-h-[46px] ${
                   editStructure === 'Wooden'
                     ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
                     : 'bg-zinc-950 border-zinc-800 text-zinc-400'
@@ -1141,15 +2119,27 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
               </button>
               <button
                 type="button"
-                onClick={() => setEditStructure('Octonorm')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
-                  editStructure === 'Octonorm'
+                onClick={() => setEditStructure('Frame')}
+                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between min-h-[46px] ${
+                  editStructure === 'Frame'
                     ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
                     : 'bg-zinc-950 border-zinc-800 text-zinc-400'
                 }`}
               >
-                <span>Octonorm</span>
-                {editStructure === 'Octonorm' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                <span>Frame</span>
+                {editStructure === 'Frame' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditStructure('Customize')}
+                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between min-h-[46px] ${
+                  editStructure === 'Customize'
+                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                <span>Customize</span>
+                {editStructure === 'Customize' && <Check className="w-3.5 h-3.5 text-amber-400" />}
               </button>
             </div>
           </div>
@@ -1243,6 +2233,200 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
           }
         }}
       />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-component: ItemRow with Inline Editing Support
+// ---------------------------------------------------------------------------
+interface ItemRowProps {
+  item: BoothItemRecord;
+  isEditing: boolean;
+  editName: string;
+  editSpec: string;
+  editQtyStr: string;
+  editUnit: string;
+  isSaving: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onChangeName: (val: string) => void;
+  onChangeSpec: (val: string) => void;
+  onChangeQtyStr: (val: string) => void;
+  onChangeUnit: (val: string) => void;
+  onAdjustQty: (delta: number) => void;
+  onDelete: () => void;
+}
+
+function ItemRow({
+  item,
+  isEditing,
+  editName,
+  editSpec,
+  editQtyStr,
+  editUnit,
+  isSaving,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onChangeName,
+  onChangeSpec,
+  onChangeQtyStr,
+  onChangeUnit,
+  onAdjustQty,
+  onDelete,
+}: ItemRowProps) {
+  if (isEditing) {
+    const isCarpetItem = item.item_name.toLowerCase().includes('carpet');
+    const isTvItem = item.item_name.toLowerCase().includes('tv');
+
+    return (
+      <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-amber-500/40 space-y-2.5 animate-in fade-in duration-100">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            value={editName}
+            onChange={(e) => onChangeName(e.target.value)}
+            placeholder="Item name"
+            className="flex-1 min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+          />
+
+          {/* Quick Specification Editor: Color for Carpet, Mounting for TV, or Text */}
+          {isCarpetItem ? (
+            <div className="flex items-center gap-1.5">
+              {(['Grey', 'Red', 'Blue'] as const).map((clr) => (
+                <button
+                  key={clr}
+                  type="button"
+                  onClick={() => onChangeSpec(`Color: ${clr}`)}
+                  className={`px-2 py-1.5 text-xs rounded-lg border cursor-pointer transition-colors ${
+                    editSpec.includes(clr)
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                      : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {clr}
+                </button>
+              ))}
+            </div>
+          ) : isTvItem ? (
+            <div className="flex items-center gap-1.5">
+              {[
+                { label: 'Wall Mount', val: 'Wall Mounted (Without Stand)' },
+                { label: 'With Stand', val: 'With Stand' },
+              ].map((opt) => (
+                <button
+                  key={opt.val}
+                  type="button"
+                  onClick={() => onChangeSpec(opt.val)}
+                  className={`px-2 py-1.5 text-xs rounded-lg border cursor-pointer transition-colors ${
+                    editSpec === opt.val
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                      : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={editSpec}
+              onChange={(e) => onChangeSpec(e.target.value)}
+              placeholder="Specification (optional)"
+              className="sm:w-44 min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+            />
+          )}
+
+          <div className="flex items-center gap-2">
+            {/* Inline Stepper */}
+            <div className="flex items-center bg-zinc-950 border border-zinc-700 rounded-lg overflow-hidden min-h-[38px]">
+              <button
+                type="button"
+                onClick={() => onAdjustQty(-1)}
+                className="px-2.5 py-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                title="Decrease"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={editQtyStr}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => onChangeQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-12 bg-transparent text-center text-xs text-zinc-100 font-mono focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => onAdjustQty(1)}
+                className="px-2.5 py-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                title="Increase"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Save & Cancel Buttons */}
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={onSaveEdit}
+              className="min-h-[38px] px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
+              title="Save Item"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{isSaving ? '...' : 'Save'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="min-h-[38px] px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs flex items-center gap-1 cursor-pointer transition-colors"
+              title="Cancel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs gap-2">
+      <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+        <span className="font-semibold text-zinc-200 truncate">{item.item_name}</span>
+        {item.specification && (
+          <span className="text-[11px] text-amber-300/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 font-medium">
+            {item.specification}
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+        <span className="font-mono text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded-md border border-zinc-800 text-[11px]">
+          Qty: {item.quantity}
+        </span>
+        <button
+          type="button"
+          onClick={onStartEdit}
+          className="min-h-[34px] min-w-[34px] flex items-center justify-center p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer"
+          title="Edit Item"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="min-h-[34px] min-w-[34px] flex items-center justify-center p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer"
+          title="Delete Item"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   );
 }

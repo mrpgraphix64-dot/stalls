@@ -244,6 +244,31 @@ function reworkzone_init_schema(PDO $pdo) {
         );
     ");
 
+    // Safe column checks for booths: design_responsibility, print_file_status, print_drive_url, print_remark
+    $boothCols = $pdo->query("PRAGMA table_info(booths)")->fetchAll(PDO::FETCH_ASSOC);
+    $boothColNames = array_column($boothCols, 'name');
+    if (!in_array('design_responsibility', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN design_responsibility TEXT DEFAULT 'Client Side';");
+    }
+    if (!in_array('print_file_status', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN print_file_status TEXT DEFAULT 'Designs Pending';");
+    }
+    if (!in_array('print_drive_url', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN print_drive_url TEXT DEFAULT NULL;");
+    }
+    if (!in_array('print_remark', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN print_remark TEXT DEFAULT NULL;");
+    }
+    if (!in_array('goodies_status', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN goodies_status TEXT DEFAULT 'Awaiting Client Artwork';");
+    }
+    if (!in_array('goodies_drive_url', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN goodies_drive_url TEXT DEFAULT NULL;");
+    }
+    if (!in_array('goodies_remark', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN goodies_remark TEXT DEFAULT NULL;");
+    }
+
     // 5. Booth Links (Google Drive URLs only; NO file uploads)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS booth_links (
@@ -364,6 +389,18 @@ function reworkzone_init_schema(PDO $pdo) {
     }
     if (!in_array('is_paid', $expCols)) {
         $pdo->exec("ALTER TABLE booth_expenses ADD COLUMN is_paid INTEGER DEFAULT 0;");
+    }
+
+    // Safe migration: move TV items from electrical to production category
+    try {
+        $pdo->exec("
+            UPDATE booth_items 
+            SET category = 'production' 
+            WHERE category = 'electrical' 
+              AND (item_name LIKE '%TV%' OR item_name LIKE '%Television%' OR specification LIKE '%TV%');
+        ");
+    } catch (Exception $e) {
+        // Silently continue
     }
 
     // 9. Activity Logs (Audit trail)

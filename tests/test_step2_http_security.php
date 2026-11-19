@@ -274,7 +274,12 @@ try {
 } finally {
     // Terminate local test server process
     if (is_resource($serverProcess)) {
-        proc_terminate($serverProcess);
+        $pstatus = proc_get_status($serverProcess);
+        if (!empty($pstatus['pid']) && strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            exec("taskkill /F /T /PID " . (int)$pstatus['pid'] . " 2>nul");
+        } else {
+            proc_terminate($serverProcess);
+        }
         proc_close($serverProcess);
     }
     @unlink($routerFile);

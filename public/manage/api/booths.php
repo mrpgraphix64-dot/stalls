@@ -146,9 +146,33 @@ if ($method === 'POST') {
         $boothType          = trim($body['booth_type'] ?? 'Custom Stall');
         $budget             = !empty($body['budget']) ? (float)$body['budget'] : 0.0;
         $quotedAmount       = !empty($body['quoted_amount']) ? (float)$body['quoted_amount'] : 0.0;
-        $mainDriveFolderUrl = trim($body['main_drive_folder_url'] ?? '');
-        $status             = trim($body['status'] ?? 'draft');
-        $notes              = trim($body['notes'] ?? '');
+        $mainDriveFolderUrl   = trim($body['main_drive_folder_url'] ?? '');
+        $designResponsibility = trim($body['design_responsibility'] ?? 'Client Side');
+        $printFileStatus      = trim($body['print_file_status'] ?? 'Designs Pending');
+        $printDriveUrl        = trim($body['print_drive_url'] ?? '');
+        $printRemark          = trim($body['print_remark'] ?? '');
+        $goodiesStatus        = trim($body['goodies_status'] ?? 'Awaiting Client Artwork');
+        $goodiesDriveUrl      = trim($body['goodies_drive_url'] ?? '');
+        $goodiesRemark        = trim($body['goodies_remark'] ?? '');
+        $status               = trim($body['status'] ?? 'draft');
+        $notes                = trim($body['notes'] ?? '');
+
+        if (!in_array($designResponsibility, ['Client Side', 'Our Side'], true)) {
+            $designResponsibility = 'Client Side';
+        }
+        if (!in_array($printFileStatus, ['Designs Pending', 'Partially Received', 'All Files Ready'], true)) {
+            $printFileStatus = 'Designs Pending';
+        }
+        if (!empty($printDriveUrl) && !filter_var($printDriveUrl, FILTER_VALIDATE_URL)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Print Google Drive URL must be a valid web link.'], 400);
+        }
+        $validGoodiesStatuses = ['Awaiting Client Artwork', 'Artwork Received', 'Ready for Printing'];
+        if (!in_array($goodiesStatus, $validGoodiesStatuses, true)) {
+            $goodiesStatus = 'Awaiting Client Artwork';
+        }
+        if (!empty($goodiesDriveUrl) && !filter_var($goodiesDriveUrl, FILTER_VALIDATE_URL)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Client Artwork Google Drive URL must be a valid web link.'], 400);
+        }
 
         // Validation
         if (empty($eventId)) {
@@ -189,10 +213,14 @@ if ($method === 'POST') {
             INSERT INTO booths (
                 id, event_id, booth_number, client_name, contact_person, phone, email,
                 stand_size, booth_type, budget, quoted_amount, main_drive_folder_url,
+                design_responsibility, print_file_status, print_drive_url, print_remark,
+                goodies_status, goodies_drive_url, goodies_remark,
                 status, notes, created_at, updated_at
             ) VALUES (
                 :id, :event_id, :booth_number, :client_name, :contact_person, :phone, :email,
                 :stand_size, :booth_type, :budget, :quoted_amount, :main_drive_folder_url,
+                :design_responsibility, :print_file_status, :print_drive_url, :print_remark,
+                :goodies_status, :goodies_drive_url, :goodies_remark,
                 :status, :notes, :created_at, :updated_at
             )
         ");
@@ -209,6 +237,13 @@ if ($method === 'POST') {
             ':budget'                => $budget,
             ':quoted_amount'         => $quotedAmount,
             ':main_drive_folder_url' => $mainDriveFolderUrl,
+            ':design_responsibility' => $designResponsibility,
+            ':print_file_status'     => $printFileStatus,
+            ':print_drive_url'       => !empty($printDriveUrl) ? $printDriveUrl : null,
+            ':print_remark'          => !empty($printRemark) ? $printRemark : null,
+            ':goodies_status'        => $goodiesStatus,
+            ':goodies_drive_url'      => !empty($goodiesDriveUrl) ? $goodiesDriveUrl : null,
+            ':goodies_remark'        => !empty($goodiesRemark) ? $goodiesRemark : null,
             ':status'                => $status,
             ':notes'                 => $notes,
             ':created_at'            => $now,
@@ -292,9 +327,33 @@ if ($method === 'POST') {
         $boothType          = trim($body['booth_type'] ?? 'Custom Stall');
         $budget             = isset($body['budget']) ? (float)$body['budget'] : 0.0;
         $quotedAmount       = isset($body['quoted_amount']) ? (float)$body['quoted_amount'] : 0.0;
-        $mainDriveFolderUrl = trim($body['main_drive_folder_url'] ?? '');
-        $status             = trim($body['status'] ?? 'draft');
-        $notes              = trim($body['notes'] ?? '');
+        $mainDriveFolderUrl   = trim($body['main_drive_folder_url'] ?? ($existing['main_drive_folder_url'] ?? ''));
+        $designResponsibility = trim($body['design_responsibility'] ?? ($existing['design_responsibility'] ?? 'Client Side'));
+        $printFileStatus      = trim($body['print_file_status'] ?? ($existing['print_file_status'] ?? 'Designs Pending'));
+        $printDriveUrl        = array_key_exists('print_drive_url', $body) ? trim((string)$body['print_drive_url']) : ($existing['print_drive_url'] ?? '');
+        $printRemark          = array_key_exists('print_remark', $body) ? trim((string)$body['print_remark']) : ($existing['print_remark'] ?? '');
+        $goodiesStatus        = trim($body['goodies_status'] ?? ($existing['goodies_status'] ?? 'Awaiting Client Artwork'));
+        $goodiesDriveUrl      = array_key_exists('goodies_drive_url', $body) ? trim((string)$body['goodies_drive_url']) : ($existing['goodies_drive_url'] ?? '');
+        $goodiesRemark        = array_key_exists('goodies_remark', $body) ? trim((string)$body['goodies_remark']) : ($existing['goodies_remark'] ?? '');
+        $status               = trim($body['status'] ?? 'draft');
+        $notes                = trim($body['notes'] ?? '');
+
+        if (!in_array($designResponsibility, ['Client Side', 'Our Side'], true)) {
+            $designResponsibility = $existing['design_responsibility'] ?? 'Client Side';
+        }
+        if (!in_array($printFileStatus, ['Designs Pending', 'Partially Received', 'All Files Ready'], true)) {
+            $printFileStatus = $existing['print_file_status'] ?? 'Designs Pending';
+        }
+        if (!empty($printDriveUrl) && !filter_var($printDriveUrl, FILTER_VALIDATE_URL)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Print Google Drive URL must be a valid web link.'], 400);
+        }
+        $validGoodiesStatuses = ['Awaiting Client Artwork', 'Artwork Received', 'Ready for Printing'];
+        if (!in_array($goodiesStatus, $validGoodiesStatuses, true)) {
+            $goodiesStatus = $existing['goodies_status'] ?? 'Awaiting Client Artwork';
+        }
+        if (!empty($goodiesDriveUrl) && !filter_var($goodiesDriveUrl, FILTER_VALIDATE_URL)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Client Artwork Google Drive URL must be a valid web link.'], 400);
+        }
 
         if (empty($boothNumber)) {
             reworkzone_json_response(['success' => false, 'error' => 'Booth number is required.'], 400);
@@ -326,6 +385,13 @@ if ($method === 'POST') {
                 budget = :budget,
                 quoted_amount = :quoted_amount,
                 main_drive_folder_url = :main_drive_folder_url,
+                design_responsibility = :design_responsibility,
+                print_file_status = :print_file_status,
+                print_drive_url = :print_drive_url,
+                print_remark = :print_remark,
+                goodies_status = :goodies_status,
+                goodies_drive_url = :goodies_drive_url,
+                goodies_remark = :goodies_remark,
                 status = :status,
                 notes = :notes,
                 updated_at = :updated_at
@@ -343,6 +409,13 @@ if ($method === 'POST') {
             ':budget'                => $budget,
             ':quoted_amount'         => $quotedAmount,
             ':main_drive_folder_url' => $mainDriveFolderUrl,
+            ':design_responsibility' => $designResponsibility,
+            ':print_file_status'     => $printFileStatus,
+            ':print_drive_url'       => !empty($printDriveUrl) ? $printDriveUrl : null,
+            ':print_remark'          => !empty($printRemark) ? $printRemark : null,
+            ':goodies_status'        => $goodiesStatus,
+            ':goodies_drive_url'      => !empty($goodiesDriveUrl) ? $goodiesDriveUrl : null,
+            ':goodies_remark'        => !empty($goodiesRemark) ? $goodiesRemark : null,
             ':status'                => $status,
             ':notes'                 => $notes,
             ':updated_at'            => $now,

@@ -77,7 +77,7 @@ if ($method === 'POST') {
     $body = json_decode($raw, true) ?: $_POST;
     $action = trim($_GET['action'] ?? ($body['action'] ?? 'create'));
 
-    $validCategories = ['furniture', 'electrical', 'production', 'print', 'av', 'other'];
+    $validCategories = ['furniture', 'electrical', 'production', 'print', 'av', 'goodies', 'promotional', 'other'];
 
     // ---------------------------------------------------------------------
     // 2A. CREATE ITEM
