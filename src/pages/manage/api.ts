@@ -15,6 +15,7 @@ import {
   BoothExpense,
   ExpensesSummary,
   ActivityLog,
+  ExhibitorItem,
 } from './types';
 
 let cachedCsrfToken: string | null = null;
@@ -276,6 +277,51 @@ export async function deleteItem(id: string): Promise<void> {
 }
 
 // -------------------------------------------------------------
+// Exhibitors Catalogue API
+// -------------------------------------------------------------
+export async function fetchExhibitors(params?: {
+  search?: string;
+  event_id?: string;
+  limit?: number;
+}): Promise<ExhibitorItem[]> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.event_id) query.set('event_id', params.event_id);
+  if (params?.limit) query.set('limit', String(params.limit));
+
+  const qs = query.toString();
+  const res = await request<{ success: boolean; exhibitors: ExhibitorItem[] }>(
+    `/manage/api/exhibitors.php${qs ? `?${qs}` : ''}`
+  );
+  return res.exhibitors || [];
+}
+
+export async function createExhibitor(
+  data: Partial<ExhibitorItem>
+): Promise<{ success: boolean; exhibitor: ExhibitorItem; is_existing?: boolean }> {
+  return request<{ success: boolean; exhibitor: ExhibitorItem; is_existing?: boolean }>(
+    '/manage/api/exhibitors.php?action=create',
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+export async function updateExhibitor(
+  id: string,
+  data: Partial<ExhibitorItem>
+): Promise<{ success: boolean; exhibitor: ExhibitorItem }> {
+  return request<{ success: boolean; exhibitor: ExhibitorItem }>(
+    '/manage/api/exhibitors.php?action=update',
+    {
+      method: 'POST',
+      body: JSON.stringify({ ...data, id }),
+    }
+  );
+}
+
+// -------------------------------------------------------------
 // Booth Tasks / Checklist API
 // -------------------------------------------------------------
 export async function fetchTasks(boothId: string): Promise<TasksSummary> {
@@ -286,12 +332,30 @@ export async function toggleTask(id: string): Promise<{
   success: boolean;
   task: BoothTask;
   total: number;
+  applicable_count?: number;
   completed: number;
   percentage: number;
 }> {
   return request('/manage/api/tasks.php?action=toggle', {
     method: 'POST',
     body: JSON.stringify({ id }),
+  });
+}
+
+export async function setTaskStatus(
+  id: string,
+  status: 'pending' | 'completed' | 'not_applicable'
+): Promise<{
+  success: boolean;
+  task: BoothTask;
+  total: number;
+  applicable_count?: number;
+  completed: number;
+  percentage: number;
+}> {
+  return request('/manage/api/tasks.php?action=set_status', {
+    method: 'POST',
+    body: JSON.stringify({ id, status }),
   });
 }
 
@@ -355,4 +419,18 @@ export async function fetchLogs(boothId?: string): Promise<ActivityLog[]> {
   const query = boothId ? `?booth_id=${encodeURIComponent(boothId)}` : '';
   const res = await request<{ success: boolean; logs: ActivityLog[] }>(`/manage/api/logs.php${query}`);
   return res.logs;
+}
+
+// -------------------------------------------------------------
+// Backups & Maintenance API
+// -------------------------------------------------------------
+export async function verifyDatabaseBackup(): Promise<any> {
+  return request<any>('/manage/api/backup.php?action=verify');
+}
+
+export async function createDatabaseSnapshot(): Promise<{ success: boolean; message: string; filename?: string }> {
+  return request<{ success: boolean; message: string; filename?: string }>('/manage/api/backup.php?action=create_snapshot', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 }

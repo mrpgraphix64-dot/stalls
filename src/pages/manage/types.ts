@@ -21,10 +21,10 @@ export interface EventItem {
   city: string;
   start_date: string;
   end_date: string;
-  setup_date: string;
-  dismantling_date: string;
+  setup_date?: string | null;
+  dismantling_date?: string | null;
   status: EventStatus;
-  notes?: string;
+  notes?: string | null;
   booth_count?: number;
   created_at?: string;
   updated_at?: string;
@@ -61,14 +61,51 @@ export interface BoothItem {
   tasks_completed?: number;
 }
 
+export interface ExhibitorItem {
+  id: string;
+  event_id?: string | null;
+  company_name: string;
+  official_id?: string | null;
+  contact_person?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website_url?: string | null;
+  city?: string | null;
+  tagline?: string | null;
+  booth_number?: string | null;
+  booth_category?: string | null;
+  notes?: string | null;
+  source?: string;
+  verified_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface DashboardData {
   total_events: number;
   active_events: number;
   total_booths: number;
   booths_in_production: number;
+  work_in_progress?: number;
+  ready_completed?: number;
   pending_tasks: number;
-  recent_booths: BoothItem[];
-  upcoming_events: EventItem[];
+  recent_booths: (BoothItem & {
+    progress?: {
+      total: number;
+      applicable: number;
+      completed: number;
+      percentage: number;
+    };
+  })[];
+  all_booths?: (BoothItem & {
+    progress?: {
+      total: number;
+      applicable: number;
+      completed: number;
+      percentage: number;
+    };
+  })[];
+  upcoming_events: (EventItem & { booth_count?: number })[];
 }
 
 export interface AuthStatus {
@@ -125,6 +162,7 @@ export interface BoothTask {
   assigned_to?: string;
   completed_by?: string;
   is_completed: number;
+  status?: 'pending' | 'completed' | 'not_applicable';
   completed_at?: string | null;
   due_date?: string | null;
   notes?: string;
@@ -137,6 +175,7 @@ export interface BoothTask {
 export interface TasksSummary {
   success: boolean;
   total: number;
+  applicable_count?: number;
   completed: number;
   percentage: number;
   tasks: BoothTask[];

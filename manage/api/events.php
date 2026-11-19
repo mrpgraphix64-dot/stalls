@@ -128,10 +128,14 @@ if ($method === 'POST') {
         $city            = trim($body['city'] ?? '');
         $startDate       = trim($body['start_date'] ?? '');
         $endDate         = trim($body['end_date'] ?? '');
-        $setupDate       = trim($body['setup_date'] ?? '');
-        $dismantlingDate = trim($body['dismantling_date'] ?? '');
-        $status          = trim($body['status'] ?? 'upcoming');
-        $notes           = trim($body['notes'] ?? '');
+        $setupDate       = !empty($body['setup_date']) ? trim($body['setup_date']) : null;
+        $dismantlingDate = !empty($body['dismantling_date']) ? trim($body['dismantling_date']) : null;
+        $notes           = !empty($body['notes']) ? trim($body['notes']) : null;
+        $status          = 'upcoming';
+
+        if (!empty($body['status']) && in_array(trim($body['status']), ['upcoming', 'in_progress', 'live', 'completed', 'archived'], true)) {
+            $status = trim($body['status']);
+        }
 
         // Validation
         if (strlen($name) < 2) {
@@ -149,16 +153,14 @@ if ($method === 'POST') {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
             reworkzone_json_response(['success' => false, 'error' => 'Valid end date (YYYY-MM-DD) is required.'], 400);
         }
-        if (empty($setupDate)) {
-            $setupDate = date('Y-m-d', strtotime($startDate . ' -1 day'));
+        if (strtotime($endDate) < strtotime($startDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'End date cannot be earlier than start date.'], 400);
         }
-        if (empty($dismantlingDate)) {
-            $dismantlingDate = date('Y-m-d', strtotime($endDate . ' +1 day'));
+        if ($setupDate !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $setupDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Setup date must be in YYYY-MM-DD format.'], 400);
         }
-
-        $validStatuses = ['upcoming', 'in_progress', 'live', 'completed', 'archived'];
-        if (!in_array($status, $validStatuses, true)) {
-            $status = 'upcoming';
+        if ($dismantlingDate !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dismantlingDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Dismantling date must be in YYYY-MM-DD format.'], 400);
         }
 
         $id = 'evt_' . bin2hex(random_bytes(6));
@@ -216,7 +218,7 @@ if ($method === 'POST') {
         }
 
         // Check existence
-        $check = $pdo->prepare("SELECT id, name FROM events WHERE id = :id");
+        $check = $pdo->prepare("SELECT * FROM events WHERE id = :id");
         $check->execute([':id' => $id]);
         $existing = $check->fetch();
 
@@ -224,15 +226,15 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Event not found.'], 404);
         }
 
-        $name            = trim($body['name'] ?? $existing['name']);
-        $venue           = trim($body['venue'] ?? '');
-        $city            = trim($body['city'] ?? '');
-        $startDate       = trim($body['start_date'] ?? '');
-        $endDate         = trim($body['end_date'] ?? '');
-        $setupDate       = trim($body['setup_date'] ?? '');
-        $dismantlingDate = trim($body['dismantling_date'] ?? '');
-        $status          = trim($body['status'] ?? 'upcoming');
-        $notes           = trim($body['notes'] ?? '');
+        $name            = array_key_exists('name', $body) ? trim($body['name']) : $existing['name'];
+        $venue           = array_key_exists('venue', $body) ? trim($body['venue']) : $existing['venue'];
+        $city            = array_key_exists('city', $body) ? trim($body['city']) : $existing['city'];
+        $startDate       = array_key_exists('start_date', $body) ? trim($body['start_date']) : $existing['start_date'];
+        $endDate         = array_key_exists('end_date', $body) ? trim($body['end_date']) : $existing['end_date'];
+        $setupDate       = array_key_exists('setup_date', $body) ? (trim((string)$body['setup_date']) ?: null) : $existing['setup_date'];
+        $dismantlingDate = array_key_exists('dismantling_date', $body) ? (trim((string)$body['dismantling_date']) ?: null) : $existing['dismantling_date'];
+        $status          = array_key_exists('status', $body) ? trim($body['status']) : $existing['status'];
+        $notes           = array_key_exists('notes', $body) ? (trim((string)$body['notes']) ?: null) : $existing['notes'];
 
         if (strlen($name) < 2) {
             reworkzone_json_response(['success' => false, 'error' => 'Event name must be at least 2 characters.'], 400);
@@ -243,10 +245,19 @@ if ($method === 'POST') {
         if (strlen($city) < 2) {
             reworkzone_json_response(['success' => false, 'error' => 'City is required.'], 400);
         }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Valid start date (YYYY-MM-DD) is required.'], 400);
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Valid end date (YYYY-MM-DD) is required.'], 400);
+        }
+        if (strtotime($endDate) < strtotime($startDate)) {
+            reworkzone_json_response(['success' => false, 'error' => 'End date cannot be earlier than start date.'], 400);
+        }
 
         $validStatuses = ['upcoming', 'in_progress', 'live', 'completed', 'archived'];
         if (!in_array($status, $validStatuses, true)) {
-            $status = 'upcoming';
+            $status = $existing['status'];
         }
 
         $now = date('Y-m-d H:i:s');

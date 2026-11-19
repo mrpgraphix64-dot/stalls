@@ -107,10 +107,8 @@ function reworkzone_get_db() {
         // Enable WAL journal mode for high concurrency
         $pdo->exec('PRAGMA journal_mode = WAL;');
 
-        // Automatically initialize schema if new database file
-        if ($isNewDb) {
-            reworkzone_init_schema($pdo);
-        }
+        // Automatically initialize and upgrade schema if needed (idempotent)
+        reworkzone_init_schema($pdo);
 
     } catch (PDOException $e) {
         error_log('Database connection failure: ' . $e->getMessage());
@@ -164,14 +162,57 @@ function reworkzone_init_schema(PDO $pdo) {
             city TEXT NOT NULL,
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
-            setup_date DATE NOT NULL,
-            dismantling_date DATE NOT NULL,
+            setup_date DATE,
+            dismantling_date DATE,
             notes TEXT,
             status TEXT NOT NULL DEFAULT 'upcoming',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
     ");
+
+    // Safe migration: check if events table has NOT NULL on setup_date or dismantling_date
+    $eventCols = $pdo->query("PRAGMA table_info(events)")->fetchAll(PDO::FETCH_ASSOC);
+    $needsEventMigration = false;
+    foreach ($eventCols as $col) {
+        if (($col['name'] === 'setup_date' || $col['name'] === 'dismantling_date') && (int)$col['notnull'] === 1) {
+            $needsEventMigration = true;
+            break;
+        }
+    }
+    if ($needsEventMigration) {
+        $pdo->exec("PRAGMA foreign_keys = OFF;");
+        $pdo->beginTransaction();
+        try {
+            $pdo->exec("
+                CREATE TABLE events_migrated (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    venue TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    setup_date DATE,
+                    dismantling_date DATE,
+                    notes TEXT,
+                    status TEXT NOT NULL DEFAULT 'upcoming',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO events_migrated (id, name, venue, city, start_date, end_date, setup_date, dismantling_date, notes, status, created_at, updated_at)
+                SELECT id, name, venue, city, start_date, end_date, setup_date, dismantling_date, notes, status, created_at, updated_at FROM events;
+                DROP TABLE events;
+                ALTER TABLE events_migrated RENAME TO events;
+            ");
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Event schema migration failed: ' . $e->getMessage());
+        }
+        $pdo->exec("PRAGMA foreign_keys = ON;");
+    }
 
     // 4. Booths Table (with main_drive_folder_url)
     $pdo->exec("
@@ -292,6 +333,10 @@ function reworkzone_init_schema(PDO $pdo) {
     if (!in_array('completed_by', $taskCols)) {
         $pdo->exec("ALTER TABLE booth_tasks ADD COLUMN completed_by TEXT;");
     }
+    if (!in_array('status', $taskCols)) {
+        $pdo->exec("ALTER TABLE booth_tasks ADD COLUMN status TEXT DEFAULT 'pending';");
+        $pdo->exec("UPDATE booth_tasks SET status = 'completed' WHERE is_completed = 1;");
+    }
 
     $expCols = [];
     $stmt = $pdo->query("PRAGMA table_info(booth_expenses);");
@@ -327,6 +372,29 @@ function reworkzone_init_schema(PDO $pdo) {
         );
     ");
 
+    // 10. Exhibitors Catalogue Table (Official reference & custom additions)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS exhibitors (
+            id TEXT PRIMARY KEY,
+            event_id TEXT,
+            company_name TEXT NOT NULL,
+            official_id TEXT,
+            contact_person TEXT,
+            phone TEXT,
+            email TEXT,
+            website_url TEXT,
+            city TEXT,
+            tagline TEXT,
+            booth_number TEXT,
+            booth_category TEXT,
+            notes TEXT,
+            source TEXT DEFAULT 'official_catalogue',
+            verified_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+    ");
+
     // Create Indexes for high-frequency search and relational filters
     $pdo->exec("
         CREATE INDEX IF NOT EXISTS idx_booths_event_id ON booths(event_id);
@@ -335,7 +403,49 @@ function reworkzone_init_schema(PDO $pdo) {
         CREATE INDEX IF NOT EXISTS idx_booth_tasks_booth_id ON booth_tasks(booth_id);
         CREATE INDEX IF NOT EXISTS idx_booth_expenses_booth_id ON booth_expenses(booth_id);
         CREATE INDEX IF NOT EXISTS idx_activity_logs_booth_id ON activity_logs(booth_id);
+        CREATE INDEX IF NOT EXISTS idx_exhibitors_name ON exhibitors(company_name);
+        CREATE INDEX IF NOT EXISTS idx_exhibitors_event_id ON exhibitors(event_id);
     ");
+
+    // Auto-seed verified exhibitors if catalogue is empty
+    $exCount = (int)$pdo->query("SELECT count(*) FROM exhibitors;")->fetchColumn();
+    if ($exCount === 0) {
+        $seedFile = __DIR__ . '/data/verified_exhibitors.json';
+        if (file_exists($seedFile)) {
+            $seedData = json_decode(file_get_contents($seedFile), true);
+            if (is_array($seedData)) {
+                $ins = $pdo->prepare("
+                    INSERT OR IGNORE INTO exhibitors (
+                        id, event_id, company_name, official_id, contact_person, phone,
+                        email, website_url, city, tagline, booth_number, booth_category,
+                        source, verified_at, created_at, updated_at
+                    ) VALUES (
+                        :id, :event_id, :company_name, :official_id, :contact_person, :phone,
+                        :email, :website_url, :city, :tagline, :booth_number, :booth_category,
+                        'official_catalogue', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                ");
+                $now = date('Y-m-d H:i:s');
+                foreach ($seedData as $row) {
+                    $id = !empty($row['id']) ? 'ex_' . $row['id'] : ('ex_' . bin2hex(random_bytes(6)));
+                    $ins->execute([
+                        ':id'             => $id,
+                        ':event_id'       => null,
+                        ':company_name'   => trim($row['companyName'] ?? ''),
+                        ':official_id'    => $row['id'] ?? null,
+                        ':contact_person' => null,
+                        ':phone'          => !empty($row['companyMobile']) ? $row['companyMobile'] : null,
+                        ':email'          => !empty($row['companyEmail']) ? $row['companyEmail'] : null,
+                        ':website_url'    => !empty($row['websiteUrl']) ? $row['websiteUrl'] : null,
+                        ':city'           => !empty($row['placeOfBusiness']) ? $row['placeOfBusiness'] : null,
+                        ':tagline'        => !empty($row['companyTagline']) ? $row['companyTagline'] : null,
+                        ':booth_number'   => !empty($row['boothNumber']) ? $row['boothNumber'] : null,
+                        ':booth_category' => !empty($row['boothCategory']) ? $row['boothCategory'] : null,
+                    ]);
+                }
+            }
+        }
+    }
 }
 
 /**

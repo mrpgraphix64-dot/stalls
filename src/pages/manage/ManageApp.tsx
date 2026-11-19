@@ -56,15 +56,27 @@ export function ManageApp() {
   useEffect(() => {
     checkAuth();
 
-    // Check hash for direct deep links if present
-    const hash = window.location.hash;
-    if (hash.startsWith('#/manage/')) {
-      const sub = hash.replace('#/manage/', '');
-      if (sub) setCurrentRoute(sub);
-    } else if (window.location.pathname.startsWith('/manage/')) {
-      const sub = window.location.pathname.replace('/manage/', '');
-      if (sub) setCurrentRoute(sub);
-    }
+    const handleRouteSync = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#/manage/')) {
+        const sub = hash.replace('#/manage/', '');
+        if (sub) setCurrentRoute(sub);
+      } else if (hash === '#/manage' || hash === '#manage' || (!hash && (window.location.pathname === '/manage' || window.location.pathname === '/manage/'))) {
+        setCurrentRoute('dashboard');
+      } else if (window.location.pathname.startsWith('/manage/')) {
+        const sub = window.location.pathname.replace('/manage/', '');
+        if (sub) setCurrentRoute(sub);
+      }
+    };
+
+    handleRouteSync();
+    window.addEventListener('hashchange', handleRouteSync);
+    window.addEventListener('popstate', handleRouteSync);
+
+    return () => {
+      window.removeEventListener('hashchange', handleRouteSync);
+      window.removeEventListener('popstate', handleRouteSync);
+    };
   }, []);
 
   const handleNavigate = (route: string) => {
@@ -251,8 +263,14 @@ export function ManageApp() {
           {currentRoute === 'dashboard' && (
             <DashboardView
               onNavigate={handleNavigate}
-              onOpenCreateEvent={() => setCreateEventModalOpen(true)}
-              onOpenCreateBooth={() => setCreateBoothModalOpen(true)}
+              onOpenCreateEvent={() => {
+                setCreateEventModalOpen(true);
+                handleNavigate('events');
+              }}
+              onOpenCreateBooth={() => {
+                setCreateBoothModalOpen(true);
+                handleNavigate('booths');
+              }}
             />
           )}
 

@@ -15,16 +15,19 @@ dist-ssr
 # Temporary files & tests
 .taste-skill
 extracted_pdf
+scratch/
 *.ps1
 *.jpeg
 
 # Editor directories and files
-data/
+/data/
 reworkzone_data/
 reworkzone_leads/
 *.sqlite*
 *.db
 *.log
+!manage/api/data/**
+!public/manage/api/data/**
 
 .vscode/*
 !.vscode/extensions.json

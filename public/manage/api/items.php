@@ -292,9 +292,9 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Item not found.'], 404);
         }
 
-        $field = trim($body['field'] ?? '');
+        $field = trim($body['field'] ?? 'is_installed');
         if ($field !== 'is_delivered' && $field !== 'is_installed') {
-            reworkzone_json_response(['success' => false, 'error' => 'field must be is_delivered or is_installed.'], 400);
+            $field = 'is_installed';
         }
 
         $currentVal = (int)$existing[$field];

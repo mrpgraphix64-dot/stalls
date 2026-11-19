@@ -10,8 +10,18 @@ export default defineConfig({
       name: 'dev-html-redirect',
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
-          if (req.url === '/' || req.url === '/index.html') {
-            req.url = '/index.dev.html';
+          const url = req.url ? req.url.split('?')[0] : '';
+          if (
+            url === '/' ||
+            url === '/index.html' ||
+            url === '/manage' ||
+            url.startsWith('/manage/') ||
+            url.startsWith('/build') ||
+            (!url.includes('.') && !url.startsWith('/@') && !url.startsWith('/src') && !url.startsWith('/assets') && !url.startsWith('/images'))
+          ) {
+            if (!url.startsWith('/manage/api')) {
+              req.url = '/index.dev.html';
+            }
           }
           next();
         });

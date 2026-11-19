@@ -90,7 +90,7 @@ if ($method === 'GET') {
 
     // Fetch tasks ordered by sort_order
     $stmt = $pdo->prepare("
-        SELECT id, booth_id, phase, task_name, assigned_to, completed_by, is_completed, completed_at, due_date, notes, sort_order, display_order, created_at, updated_at
+        SELECT id, booth_id, phase, task_name, assigned_to, completed_by, is_completed, status, completed_at, due_date, notes, sort_order, display_order, created_at, updated_at
         FROM booth_tasks
         WHERE booth_id = :booth_id
         ORDER BY sort_order ASC, created_at ASC
@@ -99,21 +99,32 @@ if ($method === 'GET') {
     $tasks = $stmt->fetchAll();
 
     $total = count($tasks);
+    $applicable = 0;
     $completed = 0;
-    foreach ($tasks as $t) {
-        if ((int)$t['is_completed'] === 1) {
+    foreach ($tasks as &$t) {
+        // Normalize status
+        if (empty($t['status'])) {
+            $t['status'] = ((int)$t['is_completed'] === 1) ? 'completed' : 'pending';
+        }
+        if ($t['status'] !== 'not_applicable') {
+            $applicable++;
+        }
+        if ($t['status'] === 'completed' || (int)$t['is_completed'] === 1) {
             $completed++;
         }
     }
-    $percentage = $total > 0 ? round(($completed / $total) * 100, 1) : 0;
+    unset($t);
+
+    $percentage = $applicable > 0 ? round(($completed / $applicable) * 100, 1) : 0.0;
 
     reworkzone_json_response([
-        'success'    => true,
-        'booth'      => $booth,
-        'total'      => $total,
-        'completed'  => $completed,
-        'percentage' => $percentage,
-        'tasks'      => $tasks,
+        'success'          => true,
+        'booth'            => $booth,
+        'total'            => $total,
+        'applicable_count' => $applicable,
+        'completed'        => $completed,
+        'percentage'       => $percentage,
+        'tasks'            => $tasks,
     ]);
 }
 
@@ -133,7 +144,7 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Task ID is required.'], 400);
         }
 
-        $taskStmt = $pdo->prepare("SELECT id, booth_id, task_name, is_completed FROM booth_tasks WHERE id = :id");
+        $taskStmt = $pdo->prepare("SELECT id, booth_id, task_name, is_completed, status FROM booth_tasks WHERE id = :id");
         $taskStmt->execute([':id' => $taskId]);
         $task = $taskStmt->fetch();
 
@@ -144,14 +155,16 @@ if ($method === 'POST') {
         $newCompleted = (int)$task['is_completed'] === 1 ? 0 : 1;
         $completedAt = $newCompleted === 1 ? date('Y-m-d H:i:s') : null;
         $completedBy = $newCompleted === 1 ? 'Master' : null;
+        $newStatus = $newCompleted === 1 ? 'completed' : 'pending';
 
         $updateStmt = $pdo->prepare("
             UPDATE booth_tasks
-            SET is_completed = :is_completed, completed_at = :completed_at, completed_by = :completed_by, updated_at = CURRENT_TIMESTAMP
+            SET is_completed = :is_completed, status = :status, completed_at = :completed_at, completed_by = :completed_by, updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
         ");
         $updateStmt->execute([
             ':is_completed' => $newCompleted,
+            ':status'       => $newStatus,
             ':completed_at' => $completedAt,
             ':completed_by' => $completedBy,
             ':id'           => $taskId,
@@ -166,21 +179,109 @@ if ($method === 'POST') {
         $freshStmt->execute([':id' => $taskId]);
         $refreshed = $freshStmt->fetch();
 
-        // Calculate refreshed stats for the booth
-        $statsStmt = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed FROM booth_tasks WHERE booth_id = :b_id");
-        $statsStmt->execute([':b_id' => $task['booth_id']]);
-        $stats = $statsStmt->fetch();
-        $total = (int)$stats['total'];
-        $completed = (int)$stats['completed'];
-        $percentage = $total > 0 ? round(($completed / $total) * 100, 1) : 0;
+        // Calculate refreshed stats for the booth (applicable only)
+        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id");
+        $allTasksStmt->execute([':b_id' => $task['booth_id']]);
+        $bTasks = $allTasksStmt->fetchAll();
+
+        $total = count($bTasks);
+        $applicable = 0;
+        $completed = 0;
+        foreach ($bTasks as $bt) {
+            $st = !empty($bt['status']) ? $bt['status'] : ((int)$bt['is_completed'] === 1 ? 'completed' : 'pending');
+            if ($st !== 'not_applicable') {
+                $applicable++;
+            }
+            if ($st === 'completed' || (int)$bt['is_completed'] === 1) {
+                $completed++;
+            }
+        }
+        $percentage = $applicable > 0 ? round(($completed / $applicable) * 100, 1) : 0.0;
 
         reworkzone_json_response([
-            'success'    => true,
-            'task'       => $refreshed,
-            'total'      => $total,
-            'completed'  => $completed,
-            'percentage' => $percentage,
-            'message'    => "Task status updated successfully.",
+            'success'          => true,
+            'task'             => $refreshed,
+            'total'            => $total,
+            'applicable_count' => $applicable,
+            'completed'        => $completed,
+            'percentage'       => $percentage,
+            'message'          => "Task status updated successfully.",
+        ]);
+    }
+
+    // 1B. SET TASK STATUS (Pending, Completed, Not Applicable)
+    if ($action === 'set_status') {
+        $taskId = trim($data['id'] ?? '');
+        $status = trim($data['status'] ?? 'pending');
+
+        if (empty($taskId)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task ID is required.'], 400);
+        }
+
+        if (!in_array($status, ['pending', 'completed', 'not_applicable'], true)) {
+            $status = 'pending';
+        }
+
+        $taskStmt = $pdo->prepare("SELECT id, booth_id, task_name, is_completed, status FROM booth_tasks WHERE id = :id");
+        $taskStmt->execute([':id' => $taskId]);
+        $task = $taskStmt->fetch();
+
+        if (!$task) {
+            reworkzone_json_response(['success' => false, 'error' => 'Task not found.'], 404);
+        }
+
+        $isCompleted = ($status === 'completed') ? 1 : 0;
+        $completedAt = ($status === 'completed') ? date('Y-m-d H:i:s') : null;
+        $completedBy = ($status === 'completed') ? 'Master' : null;
+
+        $updateStmt = $pdo->prepare("
+            UPDATE booth_tasks
+            SET is_completed = :is_completed, status = :status, completed_at = :completed_at, completed_by = :completed_by, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        ");
+        $updateStmt->execute([
+            ':is_completed' => $isCompleted,
+            ':status'       => $status,
+            ':completed_at' => $completedAt,
+            ':completed_by' => $completedBy,
+            ':id'           => $taskId,
+        ]);
+
+        $logDesc = "Set task '{$task['task_name']}' status to {$status}";
+        reworkzone_log_activity($pdo, $task['booth_id'], 'task_status_changed', $logDesc);
+
+        // Fetch refreshed task
+        $freshStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE id = :id");
+        $freshStmt->execute([':id' => $taskId]);
+        $refreshed = $freshStmt->fetch();
+
+        // Calculate refreshed stats for the booth
+        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id");
+        $allTasksStmt->execute([':b_id' => $task['booth_id']]);
+        $bTasks = $allTasksStmt->fetchAll();
+
+        $total = count($bTasks);
+        $applicable = 0;
+        $completed = 0;
+        foreach ($bTasks as $bt) {
+            $st = !empty($bt['status']) ? $bt['status'] : ((int)$bt['is_completed'] === 1 ? 'completed' : 'pending');
+            if ($st !== 'not_applicable') {
+                $applicable++;
+            }
+            if ($st === 'completed' || (int)$bt['is_completed'] === 1) {
+                $completed++;
+            }
+        }
+        $percentage = $applicable > 0 ? round(($completed / $applicable) * 100, 1) : 0.0;
+
+        reworkzone_json_response([
+            'success'          => true,
+            'task'             => $refreshed,
+            'total'            => $total,
+            'applicable_count' => $applicable,
+            'completed'        => $completed,
+            'percentage'       => $percentage,
+            'message'          => "Task marked as " . str_replace('_', ' ', $status) . ".",
         ]);
     }
 

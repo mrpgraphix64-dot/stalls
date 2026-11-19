@@ -140,3 +140,16 @@ img, .protected-image {
   .loader-draw { animation: none; stroke-dashoffset: 0; }
   .loader-pulse, .loader-bar { animation: none; }
 }
+
+/* Dark mode date inputs styling */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.85);
+  opacity: 0.8;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(1);
+}
+

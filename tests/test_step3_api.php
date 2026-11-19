@@ -175,6 +175,26 @@ try {
     ], $cookies, $authHeaders);
     assert_step3("Event creation with invalid name rejected (400)", $badEvent['code'] === 400);
 
+    // Reject invalid dates (end_date < start_date)
+    $badDatesEvent = http_step3('POST', "{$baseUrl}/manage/api/events.php", [
+        'name' => 'Invalid Dates Expo', 'venue' => 'Pragati Maidan', 'city' => 'New Delhi',
+        'start_date' => '2027-02-15', 'end_date' => '2027-02-10'
+    ], $cookies, $authHeaders);
+    assert_step3("Event creation with end_date earlier than start_date rejected (400)", $badDatesEvent['code'] === 400);
+
+    // Create Event with ONLY required fields (simplified UI form)
+    $createEvtSimple = http_step3('POST', "{$baseUrl}/manage/api/events.php", [
+        'name'       => 'Simplified Expo 2027',
+        'venue'      => 'Pragati Maidan',
+        'city'       => 'New Delhi',
+        'start_date' => '2027-04-10',
+        'end_date'   => '2027-04-14'
+    ], $cookies, $authHeaders);
+    assert_step3("Event created with only required fields (201)", $createEvtSimple['code'] === 201);
+    assert_step3("New event automatically assigned status 'upcoming'", ($createEvtSimple['body']['event']['status'] ?? '') === 'upcoming');
+    assert_step3("New event setup_date is null (no fabricated date)", array_key_exists('setup_date', $createEvtSimple['body']['event'] ?? []) && $createEvtSimple['body']['event']['setup_date'] === null);
+    assert_step3("New event dismantling_date is null (no fabricated date)", array_key_exists('dismantling_date', $createEvtSimple['body']['event'] ?? []) && $createEvtSimple['body']['event']['dismantling_date'] === null);
+
     // Create Event 1 (Upcoming)
     $createEvt1 = http_step3('POST', "{$baseUrl}/manage/api/events.php", [
         'name'              => 'Bharat Mobility Expo 2027',
@@ -207,7 +227,7 @@ try {
 
     // List Events
     $listEvents = http_step3('GET', "{$baseUrl}/manage/api/events.php", null, $cookies);
-    assert_step3("GET /manage/api/events.php returns both events", $listEvents['code'] === 200 && count($listEvents['body']['events']) === 2);
+    assert_step3("GET /manage/api/events.php returns all 3 events", $listEvents['code'] === 200 && count($listEvents['body']['events']) === 3);
 
     // Search Events by City
     $searchEvents = http_step3('GET', "{$baseUrl}/manage/api/events.php?search=Noida", null, $cookies);
@@ -228,6 +248,15 @@ try {
         'status'     => 'upcoming'
     ], $cookies, $authHeaders);
     assert_step3("Update event succeeds", $updateEvt1['code'] === 200 && $updateEvt1['body']['event']['name'] === 'Bharat Mobility Global Expo 2027');
+    assert_step3("Update preserves existing setup_date when omitted", ($updateEvt1['body']['event']['setup_date'] ?? '') === '2027-01-13');
+
+    // Update simple event adding optional setup_date
+    $simpleEvtId = $createEvtSimple['body']['event']['id'] ?? '';
+    $updateSimple = http_step3('POST', "{$baseUrl}/manage/api/events.php?action=update", [
+        'id'         => $simpleEvtId,
+        'setup_date' => '2027-04-08'
+    ], $cookies, $authHeaders);
+    assert_step3("Update event adding optional setup_date succeeds", $updateSimple['code'] === 200 && ($updateSimple['body']['event']['setup_date'] ?? '') === '2027-04-08');
 
     echo "\n";
 
@@ -334,13 +363,13 @@ try {
     assert_step3("GET /manage/api/dashboard.php returns 200 OK", $dashRes['code'] === 200);
 
     $stats = $dashRes['body']['data'] ?? [];
-    assert_step3("total_events equals 2", ($stats['total_events'] ?? null) === 2);
-    assert_step3("active_events equals 2", ($stats['active_events'] ?? null) === 2);
+    assert_step3("total_events equals 3", ($stats['total_events'] ?? null) === 3);
+    assert_step3("active_events equals 3", ($stats['active_events'] ?? null) === 3);
     assert_step3("total_booths equals 3", ($stats['total_booths'] ?? null) === 3);
     // booths in production includes in_production (1) + approved (1) = 2
     assert_step3("booths_in_production equals 2", ($stats['booths_in_production'] ?? null) === 2);
     assert_step3("recent_booths list contains 3 entries with event details", count($stats['recent_booths'] ?? []) === 3);
-    assert_step3("upcoming_events list contains 2 events with booth counts", count($stats['upcoming_events'] ?? []) === 2);
+    assert_step3("upcoming_events list contains 3 events with booth counts", count($stats['upcoming_events'] ?? []) === 3);
 
     echo "\n";
 

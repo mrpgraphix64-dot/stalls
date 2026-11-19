@@ -12,10 +12,12 @@ import {
   ChevronRight,
   FileText,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { fetchEvent, updateEvent, archiveEvent } from './api';
 import { EventItem, BoothItem, EventStatus } from './types';
 import { Modal } from './Modal';
+import { FloorplanViewerModal } from './FloorplanViewerModal';
 
 interface EventDetailViewProps {
   eventId: string;
@@ -31,6 +33,7 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
   // Modals
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState<boolean>(false);
+  const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
 
   // Form State
   const [formName, setFormName] = useState<string>('');
@@ -43,6 +46,13 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
   const [formStatus, setFormStatus] = useState<EventStatus>('upcoming');
   const [formNotes, setFormNotes] = useState<string>('');
   const [formError, setFormError] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    venue?: string;
+    city?: string;
+    startDate?: string;
+    endDate?: string;
+  }>({});
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
 
   const loadEvent = async () => {
@@ -74,18 +84,41 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
     setFormStatus(event.status);
     setFormNotes(event.notes || '');
     setFormError('');
+    setFieldErrors({});
     setIsEditOpen(true);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formVenue.trim() || !formCity.trim() || !formStartDate || !formEndDate) {
-      setFormError('Please fill in all required fields.');
+    const errors: typeof fieldErrors = {};
+
+    if (!formName.trim() || formName.trim().length < 2) {
+      errors.name = 'Event name must be at least 2 characters.';
+    }
+    if (!formVenue.trim() || formVenue.trim().length < 2) {
+      errors.venue = 'Venue is required.';
+    }
+    if (!formCity.trim() || formCity.trim().length < 2) {
+      errors.city = 'City is required.';
+    }
+    if (!formStartDate) {
+      errors.startDate = 'Start date is required.';
+    }
+    if (!formEndDate) {
+      errors.endDate = 'End date is required.';
+    } else if (formStartDate && formEndDate < formStartDate) {
+      errors.endDate = 'End date cannot be earlier than start date.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please resolve the highlighted field errors.');
       return;
     }
 
     setFormSubmitting(true);
     setFormError('');
+    setFieldErrors({});
 
     try {
       await updateEvent(eventId, {
@@ -177,6 +210,14 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
         </button>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsFloorplanModalOpen(true)}
+            className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+            <span>View Floor Plan</span>
+          </button>
           <button
             onClick={openEditModal}
             className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5"
@@ -381,9 +422,11 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
       <Modal
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
-        title={`Edit Exhibition: ${event.name}`}
+        title="Edit Exhibition"
+        subtitle="Update event details and scheduling"
+        maxWidth="max-w-[580px]"
       >
-        <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+        <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs" noValidate>
           {formError && (
             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -391,116 +434,177 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
             </div>
           )}
 
+          {/* 1. Event Name (Full Width) */}
           <div>
-            <label className="block text-zinc-300 font-medium mb-1">
+            <label className="block text-xs text-zinc-300 font-medium mb-1.5">
               Event / Exhibition Name <span className="text-amber-500">*</span>
             </label>
             <input
               type="text"
               required
               value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
+              onChange={(e) => {
+                setFormName(e.target.value);
+                if (fieldErrors.name) setFieldErrors((prev) => ({ ...prev, name: undefined }));
+              }}
+              placeholder="e.g. Bharat Mobility Global Expo 2027"
+              className={`w-full bg-zinc-950 border ${
+                fieldErrors.name ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30'
+              } rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors h-10`}
             />
+            {fieldErrors.name && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.name}</p>}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* 2. Venue & City (Two columns on desktop, stacked on mobile) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-zinc-300 font-medium mb-1">
+              <label className="block text-xs text-zinc-300 font-medium mb-1.5">
                 Venue <span className="text-amber-500">*</span>
               </label>
-              <input
-                type="text"
-                required
-                value={formVenue}
-                onChange={(e) => setFormVenue(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
-              />
+              <div className="relative">
+                <MapPin className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  required
+                  value={formVenue}
+                  onChange={(e) => {
+                    setFormVenue(e.target.value);
+                    if (fieldErrors.venue) setFieldErrors((prev) => ({ ...prev, venue: undefined }));
+                  }}
+                  placeholder="e.g. Pragati Maidan / BIEC"
+                  className={`w-full bg-zinc-950 border ${
+                    fieldErrors.venue ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30'
+                  } rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors h-10`}
+                />
+              </div>
+              {fieldErrors.venue && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.venue}</p>}
             </div>
             <div>
-              <label className="block text-zinc-300 font-medium mb-1">
+              <label className="block text-xs text-zinc-300 font-medium mb-1.5">
                 City <span className="text-amber-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={formCity}
-                onChange={(e) => setFormCity(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
+                onChange={(e) => {
+                  setFormCity(e.target.value);
+                  if (fieldErrors.city) setFieldErrors((prev) => ({ ...prev, city: undefined }));
+                }}
+                placeholder="e.g. New Delhi, Mumbai"
+                className={`w-full bg-zinc-950 border ${
+                  fieldErrors.city ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30'
+                } rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors h-10`}
               />
+              {fieldErrors.city && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.city}</p>}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* 3. Event Dates (Two columns on desktop, stacked on mobile) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-zinc-300 font-medium mb-1">
-                Exhibition Start Date <span className="text-amber-500">*</span>
+              <label className="block text-xs text-zinc-300 font-medium mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-amber-500/80" />
+                Event Start Date <span className="text-amber-500">*</span>
               </label>
               <input
                 type="date"
                 required
                 value={formStartDate}
-                onChange={(e) => setFormStartDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
+                onChange={(e) => {
+                  setFormStartDate(e.target.value);
+                  if (fieldErrors.startDate) setFieldErrors((prev) => ({ ...prev, startDate: undefined }));
+                  if (formEndDate && e.target.value && formEndDate < e.target.value) {
+                    setFieldErrors((prev) => ({ ...prev, endDate: 'End date cannot be earlier than start date.' }));
+                  } else if (fieldErrors.endDate === 'End date cannot be earlier than start date.') {
+                    setFieldErrors((prev) => ({ ...prev, endDate: undefined }));
+                  }
+                }}
+                className={`w-full bg-zinc-950 border ${
+                  fieldErrors.startDate ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30'
+                } rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none [color-scheme:dark] transition-colors h-10`}
               />
+              {fieldErrors.startDate && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.startDate}</p>}
             </div>
             <div>
-              <label className="block text-zinc-300 font-medium mb-1">
-                Exhibition End Date <span className="text-amber-500">*</span>
+              <label className="block text-xs text-zinc-300 font-medium mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-amber-500/80" />
+                Event End Date <span className="text-amber-500">*</span>
               </label>
               <input
                 type="date"
                 required
+                min={formStartDate || undefined}
                 value={formEndDate}
-                onChange={(e) => setFormEndDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
+                onChange={(e) => {
+                  setFormEndDate(e.target.value);
+                  if (fieldErrors.endDate) setFieldErrors((prev) => ({ ...prev, endDate: undefined }));
+                  if (formStartDate && e.target.value && e.target.value < formStartDate) {
+                    setFieldErrors((prev) => ({ ...prev, endDate: 'End date cannot be earlier than start date.' }));
+                  }
+                }}
+                className={`w-full bg-zinc-950 border ${
+                  fieldErrors.endDate ? 'border-red-500/80 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30'
+                } rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none [color-scheme:dark] transition-colors h-10`}
               />
+              {fieldErrors.endDate && <p className="text-[11px] text-red-400 mt-1">{fieldErrors.endDate}</p>}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* 4. Optional Setup & Dismantling Dates */}
+          <div className="space-y-3.5 pt-1 border-t border-zinc-800/60">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs text-zinc-400 font-medium mb-1.5">
+                  Setup / Fabrication Date <span className="text-zinc-600 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={formSetupDate}
+                  onChange={(e) => setFormSetupDate(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-500/80 rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none [color-scheme:dark] transition-colors h-10"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 font-medium mb-1.5">
+                  Dismantling Date <span className="text-zinc-600 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={formDismantlingDate}
+                  onChange={(e) => setFormDismantlingDate(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-500/80 rounded-xl px-3.5 py-2 text-xs text-zinc-100 focus:outline-none [color-scheme:dark] transition-colors h-10"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-zinc-300 font-medium mb-1">Setup / Fabrication Date</label>
-              <input
-                type="date"
-                value={formSetupDate}
-                onChange={(e) => setFormSetupDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
-              />
-            </div>
-            <div>
-              <label className="block text-zinc-300 font-medium mb-1">Dismantling Date</label>
-              <input
-                type="date"
-                value={formDismantlingDate}
-                onChange={(e) => setFormDismantlingDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
-              />
+              <label className="block text-xs text-zinc-300 font-medium mb-1.5">Event Status</label>
+              <select
+                value={formStatus}
+                onChange={(e) => setFormStatus(e.target.value as EventStatus)}
+                className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-500/80 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 focus:outline-none capitalize transition-colors h-10"
+              >
+                <option value="upcoming">Upcoming</option>
+                <option value="in_progress">In Progress</option>
+                <option value="live">Live / Ongoing</option>
+                <option value="completed">Completed</option>
+                <option value="archived">Archived</option>
+              </select>
             </div>
           </div>
 
+          {/* 5. Notes */}
           <div>
-            <label className="block text-zinc-300 font-medium mb-1">Status</label>
-            <select
-              value={formStatus}
-              onChange={(e) => setFormStatus(e.target.value as EventStatus)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60 capitalize"
-            >
-              <option value="upcoming">Upcoming</option>
-              <option value="in_progress">In Progress</option>
-              <option value="live">Live / Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-zinc-300 font-medium mb-1">Event Notes & Special Instructions</label>
+            <label className="block text-xs text-zinc-300 font-medium mb-1.5">
+              Notes & Special Instructions <span className="text-zinc-500 font-normal">(Optional)</span>
+            </label>
             <textarea
-              rows={3}
+              rows={2}
               value={formNotes}
               onChange={(e) => setFormNotes(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500/60"
+              placeholder="e.g. VIP hall, special access permits required"
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/30 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none resize-none transition-colors"
             />
           </div>
 
@@ -508,16 +612,23 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
             <button
               type="button"
               onClick={() => setIsEditOpen(false)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-xl transition-colors"
+              className="px-4 py-2 bg-zinc-800/80 hover:bg-zinc-800 text-zinc-300 font-medium rounded-xl transition-colors text-xs"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={formSubmitting}
-              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold rounded-xl transition-all shadow-md shadow-amber-500/10 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold rounded-xl transition-all shadow-md shadow-amber-500/10 disabled:opacity-50 text-xs"
             >
-              {formSubmitting ? 'Saving...' : 'Save Changes'}
+              {formSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Changes</span>
+              )}
             </button>
           </div>
         </form>
@@ -556,6 +667,12 @@ export function EventDetailView({ eventId, onNavigate, onOpenCreateBoothForEvent
           </div>
         </div>
       </Modal>
+
+      {/* Pop-up Floor Plan Viewer */}
+      <FloorplanViewerModal
+        isOpen={isFloorplanModalOpen}
+        onClose={() => setIsFloorplanModalOpen(false)}
+      />
     </div>
   );
 }

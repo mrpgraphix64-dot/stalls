@@ -16,6 +16,8 @@ import {
 import { fetchBooths, fetchEvents, createBooth, updateBooth, archiveBooth } from './api';
 import { BoothItem, EventItem, BoothStatus } from './types';
 import { Modal } from './Modal';
+import { AddStallModal } from './AddStallModal';
+import { FloorplanViewerModal } from './FloorplanViewerModal';
 
 interface BoothsViewProps {
   onNavigate: (route: string) => void;
@@ -44,6 +46,7 @@ export function BoothsView({
   const [isAddOpen, setIsAddOpen] = useState<boolean>(createModalOpen);
   const [editingBooth, setEditingBooth] = useState<BoothItem | null>(null);
   const [archivingBooth, setArchivingBooth] = useState<BoothItem | null>(null);
+  const [isFloorplanOpen, setIsFloorplanOpen] = useState<boolean>(false);
 
   // Form State
   const [formEventId, setFormEventId] = useState<string>(defaultEventId);
@@ -63,7 +66,11 @@ export function BoothsView({
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
-    setIsAddOpen(createModalOpen);
+    if (createModalOpen) {
+      openCreateModal();
+    } else {
+      setIsAddOpen(false);
+    }
     if (defaultEventId) {
       setFormEventId(defaultEventId);
       setSelectedEventId(defaultEventId);
@@ -228,13 +235,24 @@ export function BoothsView({
           <p className="text-xs text-zinc-400 mt-1">Centralized directory of all exhibition stalls and Google Drive link hubs</p>
         </div>
 
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Register Stall
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setIsFloorplanOpen(true)}
+            className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+            <span>View Floor Plan</span>
+          </button>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Register Stall</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -428,15 +446,35 @@ export function BoothsView({
         </div>
       )}
 
-      {/* Add / Edit Booth Modal */}
-      <Modal
-        isOpen={isAddOpen || editingBooth !== null}
+      {/* Add New Stall Modal (Simplified 5-field exhibitor & floor-plan workflow) */}
+      <AddStallModal
+        isOpen={isAddOpen}
         onClose={() => {
           setIsAddOpen(false);
-          setEditingBooth(null);
           if (onCloseCreateModal) onCloseCreateModal();
         }}
-        title={editingBooth ? `Edit Stall: ${editingBooth.booth_number} (${editingBooth.client_name})` : 'Register New Exhibition Stall'}
+        events={events}
+        defaultEventId={formEventId || selectedEventId}
+        existingBooths={booths}
+        onSuccess={(newBooth) => {
+          setIsAddOpen(false);
+          if (onCloseCreateModal) onCloseCreateModal();
+          loadData();
+          onNavigate(`booth:${newBooth.id}`);
+        }}
+      />
+
+      {/* Pop-up Floor Plan Viewer */}
+      <FloorplanViewerModal
+        isOpen={isFloorplanOpen}
+        onClose={() => setIsFloorplanOpen(false)}
+      />
+
+      {/* Edit Existing Stall Modal */}
+      <Modal
+        isOpen={editingBooth !== null}
+        onClose={() => setEditingBooth(null)}
+        title={editingBooth ? `Edit Stall: ${editingBooth.booth_number} (${editingBooth.client_name})` : 'Edit Stall'}
       >
         <form onSubmit={handleSaveBooth} className="space-y-4 text-xs">
           {formError && (

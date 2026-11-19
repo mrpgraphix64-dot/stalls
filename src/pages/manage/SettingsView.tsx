@@ -12,7 +12,7 @@ import {
   Download,
   Check,
 } from 'lucide-react';
-import { changePin } from './api';
+import { changePin, verifyDatabaseBackup, createDatabaseSnapshot } from './api';
 
 export function SettingsView() {
   const [currentPin, setCurrentPin] = useState<string>('');
@@ -71,11 +71,10 @@ export function SettingsView() {
   const handleVerifyIntegrity = async () => {
     setVerifyLoading(true);
     try {
-      const res = await fetch('/manage/api/backup.php?action=verify');
-      const data = await res.json();
+      const data = await verifyDatabaseBackup();
       setVerifyResult(data);
     } catch (err: any) {
-      alert('Verification request failed.');
+      alert(err.message || 'Verification request failed.');
     } finally {
       setVerifyLoading(false);
     }
@@ -85,19 +84,11 @@ export function SettingsView() {
     setSnapshotLoading(true);
     setSnapshotMessage('');
     try {
-      const token = sessionStorage.getItem('rz_csrf_token') || '';
-      const res = await fetch('/manage/api/backup.php?action=create_snapshot', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': token,
-        },
-      });
-      const data = await res.json();
+      const data = await createDatabaseSnapshot();
       if (data.success) {
         setSnapshotMessage(data.message || 'Server snapshot created successfully.');
       } else {
-        alert(data.error || 'Failed to create snapshot.');
+        alert(data.message || 'Failed to create snapshot.');
       }
     } catch (err: any) {
       alert(err.message || 'Failed to create snapshot.');
