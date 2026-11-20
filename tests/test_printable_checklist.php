@@ -126,7 +126,7 @@ $itemStmt->execute([':id' => 'itm_f3', ':bth' => $b1, ':cat' => 'furniture', ':n
 
 // Electrical Items for A-101
 $itemStmt->execute([':id' => 'itm_e1', ':bth' => $b1, ':cat' => 'electrical', ':name' => 'Power Socket', ':qty' => 2, ':spec' => '16A 3-pin']);
-$itemStmt->execute([':id' => 'itm_e2', ':bth' => $b1, ':cat' => 'electrical', ':name' => 'Palmenent Light', ':qty' => 4, ':spec' => 'Warm White Spotlights']);
+$itemStmt->execute([':id' => 'itm_e2', ':bth' => $b1, ':cat' => 'electrical', ':name' => 'Pelmet Light', ':qty' => 4, ':spec' => 'Warm White Spotlights']);
 
 // Goodies Items for A-101
 $itemStmt->execute([':id' => 'itm_g1', ':bth' => $b1, ':cat' => 'goodies', ':name' => 'Executive Metal Pen', ':qty' => 500, ':spec' => 'Blue Ink, Engraved']);

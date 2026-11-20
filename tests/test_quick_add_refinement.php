@@ -139,18 +139,18 @@ $pdo->prepare("INSERT INTO booth_items (id, booth_id, category, item_name, quant
 assertTest((int)$pdo->query("SELECT COUNT(*) FROM booth_items WHERE booth_id = '{$b1}' AND category = 'furniture'")->fetchColumn() === 3, "All 3 Furniture presets created");
 
 // -------------------------------------------------------------
-// Test 6: Electrical Presets (Power Socket, Palmenent Light)
+// Test 6: Electrical Presets (Power Socket, Pelmet Light)
 // -------------------------------------------------------------
-echo "\nTest 6: Electrical Presets (Power Socket, Palmenent Light)\n";
+echo "\nTest 6: Electrical Presets (Power Socket, Pelmet Light)\n";
 $e1 = 'itm_e1_' . bin2hex(random_bytes(3));
 $e2 = 'itm_e2_' . bin2hex(random_bytes(3));
 
 $pdo->prepare("INSERT INTO booth_items (id, booth_id, category, item_name, quantity) VALUES (:id, :bid, 'electrical', 'Power Socket', 2)")->execute([':id' => $e1, ':bid' => $b1]);
-$pdo->prepare("INSERT INTO booth_items (id, booth_id, category, item_name, quantity) VALUES (:id, :bid, 'electrical', 'Palmenent Light', 3)")->execute([':id' => $e2, ':bid' => $b1]);
+$pdo->prepare("INSERT INTO booth_items (id, booth_id, category, item_name, quantity) VALUES (:id, :bid, 'electrical', 'Pelmet Light', 3)")->execute([':id' => $e2, ':bid' => $b1]);
 
 $elecItems = $pdo->query("SELECT item_name FROM booth_items WHERE booth_id = '{$b1}' AND category = 'electrical'")->fetchAll(PDO::FETCH_COLUMN);
 assertTest(in_array('Power Socket', $elecItems, true), "'Power Socket' created in Electrical");
-assertTest(in_array('Palmenent Light', $elecItems, true), "'Palmenent Light' created in Electrical");
+assertTest(in_array('Pelmet Light', $elecItems, true), "'Pelmet Light' created in Electrical");
 assertTest(!in_array('TV', $elecItems, true), "Zero TV items in Electrical");
 
 // -------------------------------------------------------------

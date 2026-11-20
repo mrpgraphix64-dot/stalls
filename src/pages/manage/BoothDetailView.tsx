@@ -925,7 +925,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     { key: 'print', label: '2. Print Files', icon: Printer, desc: 'Print readiness status and Google Drive link' },
     { key: 'production', label: '3. Production', icon: Hammer, desc: 'Flooring, selfie booth, branding and TV setups' },
     { key: 'furniture', label: '4. Furniture', icon: Armchair, desc: 'Tables, sofas and chairs' },
-    { key: 'electrical', label: '5. Electrical', icon: Zap, desc: 'Power sockets and palmenent lights' },
+    { key: 'electrical', label: '5. Electrical', icon: Zap, desc: 'Power sockets and pelmet lights' },
   ];
 
   return (
@@ -2679,7 +2679,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         <p className="text-xs text-zinc-500">No electrical items assigned yet.</p>
                       )}
 
-                      {/* 1. Quick Add Presets: Power Socket, Palmenent Light */}
+                      {/* 1. Quick Add Presets: Power Socket, Pelmet Light */}
                       <div className="space-y-2 pt-3 border-t border-zinc-800/80">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -2689,7 +2689,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {['Power Socket', 'Palmenent Light'].map((preset) => (
+                          {['Power Socket', 'Pelmet Light'].map((preset) => (
                             <button
                               key={preset}
                               type="button"

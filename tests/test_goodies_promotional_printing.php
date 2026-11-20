@@ -223,7 +223,7 @@ echo "\nTest 7: Non-Interference with Other Sections\n";
 $pdo->prepare("
     INSERT INTO booth_items (id, booth_id, category, item_name, quantity, unit)
     VALUES ('itm_furn_1', :bth, 'furniture', 'Glass Round Table', 1, 'nos'),
-           ('itm_elec_1', :bth, 'electrical', 'Palmenent Light', 2, 'nos'),
+           ('itm_elec_1', :bth, 'electrical', 'Pelmet Light', 2, 'nos'),
            ('itm_prod_1', :bth, 'production', 'Wooden Platform Flooring', 1, 'sq.ft')
 ")->execute([':bth' => $bthId]);
 
