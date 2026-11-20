@@ -990,6 +990,16 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
               <span className="text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
                 {getStallTypeLabel(booth.booth_type)}
               </span>
+              <span>•</span>
+              <span
+                className="text-zinc-300 font-medium bg-zinc-800/80 border border-zinc-700/60 px-2.5 py-0.5 rounded inline-flex items-center gap-1.5"
+                title={booth.wall_configuration ? `Wall Configuration: ${booth.wall_configuration}` : 'Wall Configuration: Not Configured'}
+              >
+                <span className="text-zinc-400 text-xs font-normal">Walls:</span>
+                <span className={booth.wall_configuration ? 'text-amber-300 font-semibold' : 'text-zinc-400 font-mono'}>
+                  {booth.wall_configuration || 'Not Configured'}
+                </span>
+              </span>
               {booth.event_name && (
                 <>
                   <span>•</span>

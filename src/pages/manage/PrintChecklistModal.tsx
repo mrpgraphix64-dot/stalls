@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, ArrowLeft } from 'lucide-react';
 import { StallPrintData } from './types';
-import { StallChecklistSheet } from './StallChecklistSheet';
+import { StallChecklistSheet, getStallTypeLabel } from './StallChecklistSheet';
 import { isPendingOrEmpty } from './boothSort';
 
 interface PrintChecklistModalProps {
@@ -203,6 +203,18 @@ export function PrintChecklistModal({
                 >
                   {companyName}
                 </span>
+                {singleBooth && (
+                  <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 shrink-0">
+                    <span>•</span>
+                    <span className="text-zinc-300 font-medium">{getStallTypeLabel(singleBooth.booth_type)}</span>
+                    {singleBooth.wall_configuration && (
+                      <>
+                        <span>•</span>
+                        <span className="text-amber-400 font-medium">{singleBooth.wall_configuration}</span>
+                      </>
+                    )}
+                  </div>
+                )}
                 {eventName && (
                   <span
                     className="hidden lg:inline text-xs text-zinc-500 truncate max-w-[200px]"

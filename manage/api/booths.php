@@ -356,7 +356,7 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Booth ID is required.'], 400);
         }
 
-        $check = $pdo->prepare("SELECT id, booth_number, client_name, event_id FROM booths WHERE id = :id");
+        $check = $pdo->prepare("SELECT * FROM booths WHERE id = :id");
         $check->execute([':id' => $id]);
         $existing = $check->fetch();
 
@@ -364,32 +364,32 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
         }
 
-        $eventId            = trim($body['event_id'] ?? $existing['event_id']);
-        $boothNumber        = trim($body['booth_number'] ?? $existing['booth_number']);
-        $clientName         = trim($body['client_name'] ?? $existing['client_name']);
-        $contactPerson      = trim($body['contact_person'] ?? '');
-        $phone              = trim($body['phone'] ?? '');
-        $email              = trim($body['email'] ?? '');
-        $standSize          = trim($body['stand_size'] ?? '');
-        $boothType          = trim($body['booth_type'] ?? 'Custom Stall');
-        $budget             = isset($body['budget']) ? (float)$body['budget'] : 0.0;
-        $quotedAmount       = isset($body['quoted_amount']) ? (float)$body['quoted_amount'] : 0.0;
-        $mainDriveFolderUrl   = trim($body['main_drive_folder_url'] ?? ($existing['main_drive_folder_url'] ?? ''));
-        $designResponsibility = trim($body['design_responsibility'] ?? ($existing['design_responsibility'] ?? 'Client Side'));
-        $printFileStatus      = trim($body['print_file_status'] ?? ($existing['print_file_status'] ?? 'Designs Pending'));
+        $eventId            = array_key_exists('event_id', $body) ? trim((string)$body['event_id']) : $existing['event_id'];
+        $boothNumber        = array_key_exists('booth_number', $body) ? trim((string)$body['booth_number']) : $existing['booth_number'];
+        $clientName         = array_key_exists('client_name', $body) ? trim((string)$body['client_name']) : $existing['client_name'];
+        $contactPerson      = array_key_exists('contact_person', $body) ? trim((string)$body['contact_person']) : ($existing['contact_person'] ?? '');
+        $phone              = array_key_exists('phone', $body) ? trim((string)$body['phone']) : ($existing['phone'] ?? '');
+        $email              = array_key_exists('email', $body) ? trim((string)$body['email']) : ($existing['email'] ?? '');
+        $standSize          = array_key_exists('stand_size', $body) ? trim((string)$body['stand_size']) : ($existing['stand_size'] ?? '');
+        $boothType          = array_key_exists('booth_type', $body) ? trim((string)$body['booth_type']) : ($existing['booth_type'] ?? 'Wooden');
+        $budget             = array_key_exists('budget', $body) ? (float)$body['budget'] : (float)($existing['budget'] ?? 0.0);
+        $quotedAmount       = array_key_exists('quoted_amount', $body) ? (float)$body['quoted_amount'] : (float)($existing['quoted_amount'] ?? 0.0);
+        $mainDriveFolderUrl   = array_key_exists('main_drive_folder_url', $body) ? trim((string)$body['main_drive_folder_url']) : ($existing['main_drive_folder_url'] ?? '');
+        $designResponsibility = array_key_exists('design_responsibility', $body) ? trim((string)$body['design_responsibility']) : ($existing['design_responsibility'] ?? 'Client Side');
+        $printFileStatus      = array_key_exists('print_file_status', $body) ? trim((string)$body['print_file_status']) : ($existing['print_file_status'] ?? 'Designs Pending');
         $printDriveUrl        = array_key_exists('print_drive_url', $body) ? trim((string)$body['print_drive_url']) : ($existing['print_drive_url'] ?? '');
         $printRemark          = array_key_exists('print_remark', $body) ? trim((string)$body['print_remark']) : ($existing['print_remark'] ?? '');
-        $goodiesStatus        = trim($body['goodies_status'] ?? ($existing['goodies_status'] ?? 'Awaiting Client Artwork'));
+        $goodiesStatus        = array_key_exists('goodies_status', $body) ? trim((string)$body['goodies_status']) : ($existing['goodies_status'] ?? 'Awaiting Client Artwork');
         $goodiesDriveUrl      = array_key_exists('goodies_drive_url', $body) ? trim((string)$body['goodies_drive_url']) : ($existing['goodies_drive_url'] ?? '');
         $goodiesRemark        = array_key_exists('goodies_remark', $body) ? trim((string)$body['goodies_remark']) : ($existing['goodies_remark'] ?? '');
-        $status               = trim($body['status'] ?? 'draft');
-        $notes                = trim($body['notes'] ?? '');
-        $bookingStage         = trim($body['booking_stage'] ?? ($existing['booking_stage'] ?? 'confirmed'));
+        $status               = array_key_exists('status', $body) ? trim((string)$body['status']) : ($existing['status'] ?? 'draft');
+        $notes                = array_key_exists('notes', $body) ? trim((string)$body['notes']) : ($existing['notes'] ?? '');
+        $bookingStage         = array_key_exists('booking_stage', $body) ? trim((string)$body['booking_stage']) : ($existing['booking_stage'] ?? 'confirmed');
         if (!in_array($bookingStage, ['confirmed', 'discussion'], true)) {
             $bookingStage = $existing['booking_stage'] ?? 'confirmed';
         }
         $discussionRemark     = array_key_exists('discussion_remark', $body)
-            ? trim((string)$body['discussion_remark'])
+            ? (trim((string)$body['discussion_remark']) !== '' ? trim((string)$body['discussion_remark']) : null)
             : ($existing['discussion_remark'] ?? null);
         $wallConfiguration    = array_key_exists('wall_configuration', $body)
             ? (trim((string)$body['wall_configuration']) !== '' ? trim((string)$body['wall_configuration']) : null)

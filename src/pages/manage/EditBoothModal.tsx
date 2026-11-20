@@ -151,6 +151,7 @@ export function EditBoothModal({
         stand_size: standSize,
         booth_type: structureType,
         discussion_remark: bookingStage === 'discussion' ? (discussionRemark.trim() || undefined) : booth.discussion_remark,
+        wall_configuration: booth.wall_configuration ?? undefined,
       });
 
       onSuccess(updated);
