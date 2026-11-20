@@ -29,6 +29,8 @@ export interface EventItem {
   notes?: string | null;
   floor_plan_url?: string | null;
   booth_count?: number;
+  confirmed_booth_count?: number;
+  discussion_booth_count?: number;
   created_at?: string;
   updated_at?: string;
   booths?: BoothItem[];

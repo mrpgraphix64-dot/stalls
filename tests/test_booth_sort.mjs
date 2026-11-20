@@ -10,7 +10,16 @@ function normalizeBoothNumber(str) {
 function isPendingOrEmpty(val) {
   if (!val) return true;
   const s = val.trim().toLowerCase();
-  return s === '' || s === 'pending' || s === 'tbd' || s === 'n/a' || s === '-';
+  return (
+    s === '' ||
+    s === 'pending' ||
+    s === 'tbd' ||
+    s === 'n/a' ||
+    s === '-' ||
+    s === 'not assigned' ||
+    s === 'unassigned' ||
+    s === 'none'
+  );
 }
 
 function compareBoothNumbers(aNum, bNum, direction = 'asc') {

@@ -367,9 +367,16 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
                   <h3 className="text-sm sm:text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors line-clamp-1">
                     {evt.name}
                   </h3>
-                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
-                    {evt.booth_count ?? 0} {evt.booth_count === 1 ? 'booth' : 'booths'}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      {evt.confirmed_booth_count ?? evt.booth_count ?? 0} {((evt.confirmed_booth_count ?? evt.booth_count) === 1) ? 'stall' : 'stalls'}
+                    </span>
+                    {(evt.discussion_booth_count ?? 0) > 0 && (
+                      <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20" title={`${evt.discussion_booth_count} ongoing discussion(s)`}>
+                        +{evt.discussion_booth_count} disc.
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 text-xs text-zinc-400">

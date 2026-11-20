@@ -20,7 +20,16 @@ export function normalizeBoothNumber(str: string | null | undefined): string {
 export function isPendingOrEmpty(val: string | null | undefined): boolean {
   if (!val) return true;
   const s = val.trim().toLowerCase();
-  return s === '' || s === 'pending' || s === 'tbd' || s === 'n/a' || s === '-';
+  return (
+    s === '' ||
+    s === 'pending' ||
+    s === 'tbd' ||
+    s === 'n/a' ||
+    s === '-' ||
+    s === 'not assigned' ||
+    s === 'unassigned' ||
+    s === 'none'
+  );
 }
 
 /**

@@ -226,7 +226,7 @@ function reworkzone_init_schema(PDO $pdo) {
         CREATE TABLE IF NOT EXISTS booths (
             id TEXT PRIMARY KEY,
             event_id TEXT NOT NULL,
-            booth_number TEXT NOT NULL,
+            booth_number TEXT,
             client_name TEXT NOT NULL,
             contact_person TEXT,
             phone TEXT,
@@ -243,6 +243,54 @@ function reworkzone_init_schema(PDO $pdo) {
             FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
         );
     ");
+
+    // Safe migration: check if booths table has NOT NULL on booth_number
+    $boothColsBefore = $pdo->query("PRAGMA table_info(booths)")->fetchAll(PDO::FETCH_ASSOC);
+    $needsBoothMigration = false;
+    foreach ($boothColsBefore as $col) {
+        if ($col['name'] === 'booth_number' && (int)$col['notnull'] === 1) {
+            $needsBoothMigration = true;
+            break;
+        }
+    }
+    if ($needsBoothMigration) {
+        $pdo->exec("PRAGMA foreign_keys = OFF;");
+        $pdo->beginTransaction();
+        try {
+            $pdo->exec("
+                CREATE TABLE booths_migrated (
+                    id TEXT PRIMARY KEY,
+                    event_id TEXT NOT NULL,
+                    booth_number TEXT,
+                    client_name TEXT NOT NULL,
+                    contact_person TEXT,
+                    phone TEXT,
+                    email TEXT,
+                    stand_size TEXT,
+                    booth_type TEXT,
+                    budget REAL,
+                    quoted_amount REAL,
+                    main_drive_folder_url TEXT,
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+                );
+                INSERT INTO booths_migrated (id, event_id, booth_number, client_name, contact_person, phone, email, stand_size, booth_type, budget, quoted_amount, main_drive_folder_url, status, notes, created_at, updated_at)
+                SELECT id, event_id, booth_number, client_name, contact_person, phone, email, stand_size, booth_type, budget, quoted_amount, main_drive_folder_url, status, notes, created_at, updated_at FROM booths;
+                DROP TABLE booths;
+                ALTER TABLE booths_migrated RENAME TO booths;
+            ");
+            $pdo->commit();
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Booth schema migration failed: ' . $e->getMessage());
+        }
+        $pdo->exec("PRAGMA foreign_keys = ON;");
+    }
 
     // Safe column checks for booths: design_responsibility, print_file_status, print_drive_url, print_remark
     $boothCols = $pdo->query("PRAGMA table_info(booths)")->fetchAll(PDO::FETCH_ASSOC);

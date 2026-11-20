@@ -14,6 +14,7 @@ $files = [
     __DIR__ . '/test_printable_checklist.php',
     __DIR__ . '/test_remove_installation_section.php',
     __DIR__ . '/test_wall_configuration.php',
+    __DIR__ . '/test_edit_booth_discussions.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {

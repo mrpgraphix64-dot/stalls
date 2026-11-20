@@ -210,7 +210,7 @@ export function AddBoothModal({
     try {
       const newBooth = await createBooth({
         event_id: selectedEventId,
-        booth_number: stallNumber.trim() || (bookingStage === 'discussion' ? 'Pending' : ''),
+        booth_number: stallNumber.trim() || undefined,
         client_name: companyName.trim(),
         phone: phoneClean || undefined,
         stand_size: boothSize,

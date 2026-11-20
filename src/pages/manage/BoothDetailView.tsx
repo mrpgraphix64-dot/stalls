@@ -50,6 +50,8 @@ import { Modal } from './Modal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
 import { PrintChecklistModal } from './PrintChecklistModal';
+import { EditBoothModal } from './EditBoothModal';
+import { isPendingOrEmpty } from './boothSort';
 
 interface ChecklistProgress {
   total: number;
@@ -827,48 +829,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   // Open Edit Booth Modal
   const openEditModal = () => {
     if (!booth) return;
-    setEditBoothNumber(booth.booth_number && booth.booth_number.toLowerCase() !== 'pending' ? booth.booth_number : '');
-    setEditCompanyName(booth.client_name);
-    setEditPhone(booth.phone || '');
-    setEditSize(booth.stand_size || '3 × 3 m (9 sq.m)');
-    setEditStructure(getStallTypeLabel(booth.booth_type));
-    setEditDiscussionRemark(booth.discussion_remark || '');
-    setEditError('');
     setIsEditModalOpen(true);
-  };
-
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!booth) return;
-
-    const isDiscussion = booth.booking_stage === 'discussion';
-    if (!isDiscussion && !editBoothNumber.trim()) {
-      setEditError('Booth number is required for confirmed stalls.');
-      return;
-    }
-    if (!editCompanyName.trim()) {
-      setEditError('Company name is required.');
-      return;
-    }
-
-    setEditSubmitting(true);
-    try {
-      const updated = await updateBooth(boothId, {
-        booth_number: editBoothNumber.trim() || (isDiscussion ? 'Pending' : ''),
-        client_name: editCompanyName.trim(),
-        phone: editPhone.trim() || undefined,
-        stand_size: editSize,
-        booth_type: editStructure,
-        discussion_remark: editDiscussionRemark.trim() || undefined,
-      });
-      setBooth(updated);
-      setIsEditModalOpen(false);
-      showToast('Booth details updated.');
-    } catch (err: any) {
-      setEditError(err.message || 'Failed to update booth.');
-    } finally {
-      setEditSubmitting(false);
-    }
   };
 
   const handleConfirmStallSubmit = async (e: React.FormEvent) => {
@@ -1007,9 +968,9 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
               {booth.booking_stage === 'discussion' ? (
                 <>
                   <span className="font-mono text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-0.5 rounded-md font-semibold">
-                    {booth.booth_number && booth.booth_number.toLowerCase() !== 'pending'
+                    {booth.booth_number && !isPendingOrEmpty(booth.booth_number)
                       ? `Stall #${booth.booth_number}`
-                      : 'Pending Allotment'}
+                      : 'Not Assigned'}
                   </span>
                   <span>•</span>
                   <span className="text-sky-400 font-semibold bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded text-xs">
@@ -1018,7 +979,9 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                 </>
               ) : (
                 <span className="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md">
-                  Booth #{booth.booth_number}
+                  {booth.booth_number && !isPendingOrEmpty(booth.booth_number)
+                    ? `Booth #${booth.booth_number}`
+                    : 'Not Assigned'}
                 </span>
               )}
               <span>•</span>
@@ -1055,7 +1018,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                 type="button"
                 onClick={() => {
                   setConfirmStallNumber(
-                    booth.booth_number && booth.booth_number.toLowerCase() !== 'pending'
+                    booth.booth_number && !isPendingOrEmpty(booth.booth_number)
                       ? booth.booth_number
                       : ''
                   );
@@ -1112,7 +1075,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
               type="button"
               onClick={() => {
                 setConfirmStallNumber(
-                  booth.booth_number && booth.booth_number.toLowerCase() !== 'pending'
+                  booth.booth_number && !isPendingOrEmpty(booth.booth_number)
                     ? booth.booth_number
                     : ''
                 );
@@ -2805,145 +2768,18 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         </div>
       </Modal>
 
-      {/* Edit Booth Modal with 3 Stall Types */}
-      <Modal
+      {/* Edit Booth Modal */}
+      <EditBoothModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title="Edit Booth Details"
-        subtitle="Update the basic details for this booth"
-        maxWidth="max-w-[540px]"
-      >
-        <form onSubmit={handleSaveEdit} className="space-y-4 text-xs" noValidate>
-          {editError && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{editError}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Booth Number *</label>
-              <input
-                type="text"
-                required
-                value={editBoothNumber}
-                onChange={(e) => setEditBoothNumber(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Company Name *</label>
-              <input
-                type="text"
-                required
-                value={editCompanyName}
-                onChange={(e) => setEditCompanyName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Mobile Number</label>
-              <input
-                type="tel"
-                value={editPhone}
-                onChange={(e) => setEditPhone(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Booth Size</label>
-              <select
-                value={editSize}
-                onChange={(e) => setEditSize(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 cursor-pointer"
-              >
-                {BOOTH_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* 3 Stall Types: Wooden / Frame / Customize */}
-          <div className="space-y-1.5">
-            <label className="block text-zinc-300 font-semibold">Stall Type</label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setEditStructure('Wooden')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between min-h-[46px] ${
-                  editStructure === 'Wooden'
-                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                }`}
-              >
-                <span>Wooden</span>
-                {editStructure === 'Wooden' && <Check className="w-3.5 h-3.5 text-amber-400" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditStructure('Frame')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between min-h-[46px] ${
-                  editStructure === 'Frame'
-                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                }`}
-              >
-                <span>Frame</span>
-                {editStructure === 'Frame' && <Check className="w-3.5 h-3.5 text-amber-400" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditStructure('Customize')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between min-h-[46px] ${
-                  editStructure === 'Customize'
-                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                }`}
-              >
-                <span>Customize</span>
-                {editStructure === 'Customize' && <Check className="w-3.5 h-3.5 text-amber-400" />}
-              </button>
-            </div>
-          </div>
-
-          {booth.booking_stage === 'discussion' && (
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Discussion Remark</label>
-              <textarea
-                rows={2}
-                value={editDiscussionRemark}
-                onChange={(e) => setEditDiscussionRemark(e.target.value)}
-                placeholder="e.g. Client requested 3x3 layout quote..."
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 resize-none"
-              />
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setIsEditModalOpen(false)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-semibold cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={editSubmitting}
-              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl cursor-pointer"
-            >
-              {editSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        booth={booth}
+        onSuccess={async (updated) => {
+          setBooth(updated);
+          setIsEditModalOpen(false);
+          showToast('Booth details updated.');
+          await loadAllData();
+        }}
+      />
 
       {/* Delete Stall Confirmation Modal */}
       <DeleteConfirmModal

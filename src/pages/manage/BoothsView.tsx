@@ -35,8 +35,9 @@ import { Modal } from './Modal';
 import { AddBoothModal } from './AddBoothModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { SortDirection, sortBoothsByNumber } from './boothSort';
+import { SortDirection, sortBoothsByNumber, isPendingOrEmpty } from './boothSort';
 import { PrintChecklistModal } from './PrintChecklistModal';
+import { EditBoothModal } from './EditBoothModal';
 
 interface BoothsViewProps {
   onNavigate: (route: string) => void;
@@ -90,6 +91,7 @@ export function BoothsView({
   const [isAddOpen, setIsAddOpen] = useState<boolean>(createModalOpen);
   const [editingBooth, setEditingBooth] = useState<BoothItem | null>(null);
   const [archivingBooth, setArchivingBooth] = useState<BoothItem | null>(null);
+  const [archiveSubmitting, setArchiveSubmitting] = useState<boolean>(false);
   const [deletingBooth, setDeletingBooth] = useState<BoothItem | null>(null);
   const [isFloorplanOpen, setIsFloorplanOpen] = useState<boolean>(false);
 
@@ -141,16 +143,6 @@ export function BoothsView({
     }
   };
 
-  // Edit Form State
-  const [editBoothNumber, setEditBoothNumber] = useState<string>('');
-  const [editCompanyName, setEditCompanyName] = useState<string>('');
-  const [editPhone, setEditPhone] = useState<string>('');
-  const [editSize, setEditSize] = useState<string>('');
-  const [editStructure, setEditStructure] = useState<'Wooden' | 'Frame' | 'Customize'>('Wooden');
-  const [editDiscussionRemark, setEditDiscussionRemark] = useState<string>('');
-  const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
-  const [editError, setEditError] = useState<string>('');
-
   useEffect(() => {
     if (createModalOpen) {
       setIsAddOpen(true);
@@ -194,59 +186,12 @@ export function BoothsView({
   const openEditModal = (bth: BoothItem, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingBooth(bth);
-    setEditBoothNumber(bth.booth_number && bth.booth_number.toLowerCase() !== 'pending' ? bth.booth_number : '');
-    setEditCompanyName(bth.client_name);
-    setEditPhone(bth.phone || '');
-    setEditSize(bth.stand_size || '3 × 3 m (9 sq.m)');
-    setEditDiscussionRemark(bth.discussion_remark || '');
-    let st: 'Wooden' | 'Frame' | 'Customize' = 'Wooden';
-    const rawSt = bth.booth_type?.toLowerCase() || '';
-    if (rawSt.includes('frame') || rawSt.includes('octonorm')) {
-      st = 'Frame';
-    } else if (rawSt.includes('custom')) {
-      st = 'Customize';
-    }
-    setEditStructure(st);
-    setEditError('');
-  };
-
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingBooth) return;
-
-    const isDiscussion = editingBooth.booking_stage === 'discussion';
-    if (!isDiscussion && !editBoothNumber.trim()) {
-      setEditError('Booth number is required for confirmed stalls.');
-      return;
-    }
-    if (!editCompanyName.trim()) {
-      setEditError('Company name is required.');
-      return;
-    }
-
-    setEditSubmitting(true);
-    try {
-      await updateBooth(editingBooth.id, {
-        booth_number: editBoothNumber.trim() || (isDiscussion ? 'Pending' : ''),
-        client_name: editCompanyName.trim(),
-        phone: editPhone.trim() || undefined,
-        stand_size: editSize,
-        booth_type: editStructure,
-        discussion_remark: editDiscussionRemark.trim() || undefined,
-      });
-      setEditingBooth(null);
-      await loadData();
-    } catch (err: any) {
-      setEditError(err.message || 'Failed to update booth.');
-    } finally {
-      setEditSubmitting(false);
-    }
   };
 
   const openConfirmModal = (bth: BoothItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setConfirmingBooth(bth);
-    setConfirmStallNumber(bth.booth_number && bth.booth_number.toLowerCase() !== 'pending' ? bth.booth_number : '');
+    setConfirmStallNumber(bth.booth_number && !isPendingOrEmpty(bth.booth_number) ? bth.booth_number : '');
     setConfirmError('');
   };
 
@@ -255,7 +200,7 @@ export function BoothsView({
     if (!confirmingBooth) return;
 
     const num = confirmStallNumber.trim();
-    if (!num || num.toLowerCase() === 'pending') {
+    if (!num || isPendingOrEmpty(num)) {
       setConfirmError('Please enter a valid Stall / Booth number to confirm.');
       return;
     }
@@ -276,14 +221,14 @@ export function BoothsView({
   const handleArchiveConfirm = async () => {
     if (!archivingBooth) return;
     try {
-      setEditSubmitting(true);
+      setArchiveSubmitting(true);
       await archiveBooth(archivingBooth.id);
       setArchivingBooth(null);
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Failed to archive booth.');
     } finally {
-      setEditSubmitting(false);
+      setArchiveSubmitting(false);
     }
   };
 
@@ -550,9 +495,15 @@ export function BoothsView({
                       className="group hover:bg-zinc-800/40 odd:bg-transparent even:bg-white/[0.015] cursor-pointer transition-colors"
                     >
                       <td className="py-3.5 px-4 font-mono">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/25 font-mono font-bold text-amber-300 text-xs tracking-tight group-hover:border-amber-500/50 group-hover:bg-amber-500/20 transition-all">
-                          {b.booth_number}
-                        </span>
+                        {isPendingOrEmpty(b.booth_number) ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-mono text-[11px] font-medium">
+                            Not Assigned
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/25 font-mono font-bold text-amber-300 text-xs tracking-tight group-hover:border-amber-500/50 group-hover:bg-amber-500/20 transition-all">
+                            {b.booth_number}
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -680,9 +631,15 @@ export function BoothsView({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 font-mono font-bold text-amber-300 text-xs tracking-tight shrink-0">
-                        {b.booth_number}
-                      </span>
+                      {isPendingOrEmpty(b.booth_number) ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-mono text-[10px] font-medium shrink-0">
+                          Not Assigned
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 font-mono font-bold text-amber-300 text-xs tracking-tight shrink-0">
+                          {b.booth_number}
+                        </span>
+                      )}
                       <span className="font-semibold text-zinc-100 text-sm truncate">
                         {b.client_name}
                       </span>
@@ -807,7 +764,7 @@ export function BoothsView({
               <tbody className="divide-y divide-white/[0.05] text-zinc-300">
                 {sortedBooths.map((b) => {
                   const structure = getStallTypeLabel(b.booth_type);
-                  const hasAllottedNumber = b.booth_number && b.booth_number.toLowerCase() !== 'pending';
+                  const hasAllottedNumber = !isPendingOrEmpty(b.booth_number);
                   const dateStr = b.updated_at || b.created_at || '';
                   const formattedDate = dateStr ? new Date(dateStr).toLocaleDateString() : '—';
 
@@ -848,7 +805,7 @@ export function BoothsView({
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800/80 text-zinc-400 border border-zinc-700/60">
-                            Pending Allotment
+                            Not Assigned
                           </span>
                         )}
                       </td>
@@ -924,7 +881,7 @@ export function BoothsView({
           <div className="block sm:hidden divide-y divide-white/[0.06]">
             {sortedBooths.map((b) => {
               const structure = getStallTypeLabel(b.booth_type);
-              const hasAllottedNumber = b.booth_number && b.booth_number.toLowerCase() !== 'pending';
+              const hasAllottedNumber = !isPendingOrEmpty(b.booth_number);
 
               return (
                 <div
@@ -940,7 +897,7 @@ export function BoothsView({
                         </span>
                       ) : (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-800/80 text-zinc-400 border border-zinc-700/60 shrink-0">
-                          Pending
+                          Not Assigned
                         </span>
                       )}
                       <span className="font-semibold text-zinc-100 text-sm truncate">
@@ -1036,161 +993,18 @@ export function BoothsView({
       />
 
       {/* Edit Booth Modal */}
-      <Modal
+      <EditBoothModal
         isOpen={editingBooth !== null}
         onClose={() => setEditingBooth(null)}
-        title={
-          editingBooth?.booking_stage === 'discussion'
-            ? `Edit Discussion: ${editingBooth.client_name}`
-            : editingBooth
-            ? `Edit Booth: #${editingBooth.booth_number}`
-            : 'Edit Booth'
-        }
-        subtitle={
-          editingBooth?.booking_stage === 'discussion'
-            ? 'Update prospective stall and discussion details'
-            : 'Update the basic details for this booth'
-        }
-        maxWidth="max-w-[540px]"
-      >
-        <form onSubmit={handleSaveEdit} className="space-y-4 text-xs" noValidate>
-          {editError && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{editError}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">
-                Booth Number{' '}
-                {editingBooth?.booking_stage === 'discussion' ? (
-                  <span className="text-zinc-500 font-normal">(Optional)</span>
-                ) : (
-                  <span className="text-amber-500">*</span>
-                )}
-              </label>
-              <input
-                type="text"
-                required={editingBooth?.booking_stage !== 'discussion'}
-                value={editBoothNumber}
-                onChange={(e) => setEditBoothNumber(e.target.value)}
-                placeholder={editingBooth?.booking_stage === 'discussion' ? 'Optional (allot later)' : 'e.g. A-12'}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Company Name *</label>
-              <input
-                type="text"
-                required
-                value={editCompanyName}
-                onChange={(e) => setEditCompanyName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Mobile Number</label>
-              <input
-                type="tel"
-                value={editPhone}
-                onChange={(e) => setEditPhone(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Booth Size</label>
-              <select
-                value={editSize}
-                onChange={(e) => setEditSize(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 cursor-pointer"
-              >
-                {BOOTH_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-zinc-300 font-semibold">Stall Type</label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setEditStructure('Wooden')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
-                  editStructure === 'Wooden'
-                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                }`}
-              >
-                <span>Wooden</span>
-                {editStructure === 'Wooden' && <Check className="w-3.5 h-3.5 text-amber-400" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditStructure('Frame')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
-                  editStructure === 'Frame'
-                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                }`}
-              >
-                <span>Frame</span>
-                {editStructure === 'Frame' && <Check className="w-3.5 h-3.5 text-amber-400" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditStructure('Customize')}
-                className={`p-2.5 rounded-xl border text-left cursor-pointer flex items-center justify-between ${
-                  editStructure === 'Customize'
-                    ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
-                    : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                }`}
-              >
-                <span>Customize</span>
-                {editStructure === 'Customize' && <Check className="w-3.5 h-3.5 text-amber-400" />}
-              </button>
-            </div>
-          </div>
-
-          {editingBooth?.booking_stage === 'discussion' && (
-            <div className="space-y-1.5">
-              <label className="block text-zinc-300 font-semibold">Discussion Remark</label>
-              <textarea
-                rows={2}
-                value={editDiscussionRemark}
-                onChange={(e) => setEditDiscussionRemark(e.target.value)}
-                placeholder="e.g. Waiting for client to approve 3x3 layout..."
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 resize-none"
-              />
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setEditingBooth(null)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-semibold cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={editSubmitting}
-              className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl cursor-pointer"
-            >
-              {editSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        booth={editingBooth}
+        events={events}
+        existingBooths={booths}
+        onSuccess={(updated) => {
+          setEditingBooth(null);
+          setBooths((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+          loadData();
+        }}
+      />
 
       {/* Confirm Stall Modal */}
       <Modal
@@ -1309,10 +1123,10 @@ export function BoothsView({
             <button
               type="button"
               onClick={handleArchiveConfirm}
-              disabled={editSubmitting}
+              disabled={archiveSubmitting}
               className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold rounded-xl cursor-pointer"
             >
-              {editSubmitting ? 'Archiving...' : 'Archive Booth'}
+              {archiveSubmitting ? 'Archiving...' : 'Archive Booth'}
             </button>
           </div>
         </div>
