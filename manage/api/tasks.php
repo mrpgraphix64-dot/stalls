@@ -16,14 +16,13 @@ $pdo = reworkzone_get_db();
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
-// Core 6 Checklist Tasks (Simple Everyday Operations)
+// Core 5 Checklist Tasks (Simple Everyday Operations)
 $defaultTasks = [
     'Design',
     'Print Files',
     'Production',
     'Furniture',
     'Electrical',
-    'Installation',
 ];
 
 // Helper: Seed 6 default tasks if booth has 0 tasks
@@ -84,11 +83,11 @@ if ($method === 'GET') {
     // Seed if empty
     reworkzone_seed_default_tasks($pdo, $boothId, $defaultTasks);
 
-    // Fetch tasks ordered by sort_order
+    // Fetch tasks ordered by sort_order (excluding legacy installation tasks)
     $stmt = $pdo->prepare("
         SELECT id, booth_id, phase, task_name, assigned_to, completed_by, is_completed, status, completed_at, due_date, notes, sort_order, display_order, created_at, updated_at
         FROM booth_tasks
-        WHERE booth_id = :booth_id
+        WHERE booth_id = :booth_id AND LOWER(task_name) NOT LIKE '%install%'
         ORDER BY sort_order ASC, created_at ASC
     ");
     $stmt->execute([':booth_id' => $boothId]);
@@ -175,8 +174,8 @@ if ($method === 'POST') {
         $freshStmt->execute([':id' => $taskId]);
         $refreshed = $freshStmt->fetch();
 
-        // Calculate refreshed stats for the booth (applicable only)
-        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id");
+        // Calculate refreshed stats for the booth (applicable only, excluding legacy installation)
+        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id AND LOWER(task_name) NOT LIKE '%install%'");
         $allTasksStmt->execute([':b_id' => $task['booth_id']]);
         $bTasks = $allTasksStmt->fetchAll();
 
@@ -251,8 +250,8 @@ if ($method === 'POST') {
         $freshStmt->execute([':id' => $taskId]);
         $refreshed = $freshStmt->fetch();
 
-        // Calculate refreshed stats for the booth
-        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id");
+        // Calculate refreshed stats for the booth (excluding legacy installation)
+        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id AND LOWER(task_name) NOT LIKE '%install%'");
         $allTasksStmt->execute([':b_id' => $task['booth_id']]);
         $bTasks = $allTasksStmt->fetchAll();
 

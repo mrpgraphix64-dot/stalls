@@ -10,6 +10,7 @@ import {
   MapPin,
   Building,
   ExternalLink,
+  MessageSquare,
 } from 'lucide-react';
 import { fetchDashboard } from './api';
 import { DashboardData, BoothItem, EventItem } from './types';
@@ -147,87 +148,101 @@ export function DashboardView({
         </div>
       </div>
 
-      {/* 4 Concise Summary Tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* 1. Total Events */}
-        <div
-          onClick={() => onNavigate('events')}
-          className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-white/[0.07] hover:border-white/[0.14] rounded-2xl p-4 sm:p-5 transition-all shadow-sm flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Total Events</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-              <Calendar className="w-4 h-4" />
+      {/* 4 Core Management Metrics */}
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* 1. Confirmed Stalls */}
+          <div
+            onClick={() => onNavigate('booths')}
+            className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-white/[0.07] hover:border-white/[0.14] rounded-2xl p-4 sm:p-5 transition-all shadow-sm flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-400">Confirmed Stalls</span>
+              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                <Layers className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl sm:text-3xl font-extrabold text-zinc-100 font-mono group-hover:text-amber-400 transition-colors">
+                {data.confirmed_stalls ?? data.total_booths}
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center justify-between">
+                <span>All confirmed booths</span>
+                <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-400" />
+              </div>
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-extrabold text-zinc-100 font-mono group-hover:text-amber-400 transition-colors">
-              {data.total_events}
+
+          {/* 2. Ongoing Discussions */}
+          <div
+            onClick={() => onNavigate('booths:discussions')}
+            className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-sky-500/20 hover:border-sky-500/40 rounded-2xl p-4 sm:p-5 transition-all shadow-sm flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-sky-400">Ongoing Discussions</span>
+              <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                <MessageSquare className="w-4 h-4" />
+              </div>
             </div>
-            <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center justify-between">
-              <span>Active exhibitions</span>
-              <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-400" />
+            <div className="mt-3">
+              <div className="text-2xl sm:text-3xl font-extrabold text-sky-400 font-mono group-hover:text-sky-300 transition-colors">
+                {data.ongoing_discussions ?? 0}
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center justify-between">
+                <span>Unconfirmed discussions</span>
+                <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-sky-400" />
+              </div>
+            </div>
+          </div>
+
+          {/* 3. In Progress (Subset of Confirmed) */}
+          <div
+            onClick={() => onNavigate('booths')}
+            className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-white/[0.07] hover:border-white/[0.14] rounded-2xl p-4 sm:p-5 transition-all shadow-sm flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-400">In Progress</span>
+              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                <Clock className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl sm:text-3xl font-extrabold text-amber-400 font-mono">
+                {data.in_progress ?? data.booths_in_production ?? 0}
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center justify-between">
+                <span>Underway (subset of Confirmed)</span>
+                <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-400" />
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Completed (Subset of Confirmed) */}
+          <div
+            onClick={() => onNavigate('booths')}
+            className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-white/[0.07] hover:border-white/[0.14] rounded-2xl p-4 sm:p-5 transition-all shadow-sm flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-400">Completed</span>
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-mono">
+                {data.completed ?? data.completed_checklists ?? 0}
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center justify-between">
+                <span>100% checklist complete</span>
+                <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* 2. Total Booths */}
-        <div
-          onClick={() => onNavigate('booths')}
-          className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-white/[0.07] hover:border-white/[0.14] rounded-2xl p-4 sm:p-5 transition-all shadow-sm flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Total Booths</span>
-            <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
-              <Layers className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-extrabold text-zinc-100 font-mono group-hover:text-sky-400 transition-colors">
-              {data.total_booths}
-            </div>
-            <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center justify-between">
-              <span>Managed stalls</span>
-              <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-sky-400" />
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Pending Tasks */}
-        <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Pending Tasks</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-extrabold text-zinc-100 font-mono">
-              {data.pending_tasks}
-            </div>
-            <div className="text-[11px] text-zinc-500 mt-0.5">
-              Checklist items in progress
-            </div>
-          </div>
-        </div>
-
-        {/* 4. Completed Booths */}
-        <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Completed Booths</span>
-            <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-mono">
-              {data.completed_checklists ?? data.ready_completed ?? 0}
-            </div>
-            <div className="text-[11px] text-zinc-500 mt-0.5">
-              100% checklist complete
-            </div>
-          </div>
-        </div>
+        <p className="text-[11px] text-zinc-500 italic px-1 pt-0.5">
+          * In Progress and Completed are tracked as subsets of Confirmed Stalls.
+        </p>
       </div>
 
       {/* Section 1: Upcoming Events */}
@@ -392,7 +407,7 @@ export function DashboardView({
               <tbody className="divide-y divide-white/[0.05] text-zinc-300">
                 {filteredBooths.map((b) => {
                   const comp = b.progress?.completed ?? 0;
-                  const total = b.progress?.applicable ?? b.progress?.total ?? 6;
+                  const total = b.progress?.applicable ?? b.progress?.total ?? 5;
                   const pct = b.progress?.percentage ?? 0;
                   const structure = getStallTypeLabel(b.booth_type);
 

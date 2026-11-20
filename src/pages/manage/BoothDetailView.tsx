@@ -13,7 +13,6 @@ import {
   Hammer,
   Armchair,
   Zap,
-  Truck,
   ExternalLink,
   Plus,
   Minus,
@@ -26,6 +25,7 @@ import {
   FileText,
   Tv,
   Box,
+  MessageSquare,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -33,6 +33,7 @@ import {
   updateEvent,
   archiveBooth,
   deleteBooth,
+  confirmBooth,
   fetchTasks,
   setTaskStatus,
   fetchItems,
@@ -48,6 +49,7 @@ import { BoothItem, BoothTask, BoothItemRecord, StallType, BoothLink } from './t
 import { Modal } from './Modal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
+import { PrintChecklistModal } from './PrintChecklistModal';
 
 interface ChecklistProgress {
   total: number;
@@ -74,8 +76,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [booth, setBooth] = useState<BoothItem | null>(null);
   const [tasks, setTasks] = useState<BoothTask[]>([]);
   const [tasksSummary, setTasksSummary] = useState<ChecklistProgress>({
-    total: 6,
-    applicable_count: 6,
+    total: 5,
+    applicable_count: 5,
     completed: 0,
     percentage: 0,
   });
@@ -83,15 +85,21 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [error, setError] = useState<string>('');
   const [successToast, setSuccessToast] = useState<string>('');
 
+  // Confirm Stall State (when viewing an Ongoing Discussion)
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState<boolean>(false);
+  const [confirmStallNumber, setConfirmStallNumber] = useState<string>('');
+  const [confirmError, setConfirmError] = useState<string>('');
+  const [confirmSubmitting, setConfirmSubmitting] = useState<boolean>(false);
+
   // Expandable sections state
   const [expanded, setExpanded] = useState<{ [key: string]: boolean }>({
     design: true,
-    print: false,
-    production: false,
-    furniture: false,
-    electrical: false,
-    installation: false,
+    print: true,
+    production: true,
+    furniture: true,
+    electrical: true,
   });
+  const initialAccordionBoothIdRef = React.useRef<string | null>(null);
 
   const toggleSection = (key: string) => {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -134,6 +142,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [prodNameInput, setProdNameInput] = useState<string>('');
   const [prodSpecInput, setProdSpecInput] = useState<string>('');
   const [prodQtyStr, setProdQtyStr] = useState<string>('1');
+  const [isSavingWallConfig, setIsSavingWallConfig] = useState<boolean>(false);
 
   // Special Quick Add Panels in Production
   const [activeSpecialPanel, setActiveSpecialPanel] = useState<'none' | 'flooring' | 'tv'>('none');
@@ -171,11 +180,13 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState<boolean>(false);
   const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [editBoothNumber, setEditBoothNumber] = useState<string>('');
   const [editCompanyName, setEditCompanyName] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
   const [editSize, setEditSize] = useState<string>('');
   const [editStructure, setEditStructure] = useState<StallType>('Wooden');
+  const [editDiscussionRemark, setEditDiscussionRemark] = useState<string>('');
   const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
   const [editError, setEditError] = useState<string>('');
 
@@ -225,6 +236,35 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setProdItems(pItems);
       setFurnItems(fItems);
       setElecItems(eItems);
+
+      // Auto-expand unfinished checklist sections on initial stall load
+      // Pending -> Expanded; Completed or N/A -> Collapsed
+      if (initialAccordionBoothIdRef.current !== boothId) {
+        initialAccordionBoothIdRef.current = boothId;
+        const sectionKeys = ['design', 'print', 'production', 'furniture', 'electrical'];
+        const autoExpanded: { [key: string]: boolean } = {};
+        sectionKeys.forEach((secKey) => {
+          const key = secKey.toLowerCase();
+          const task = (tskRes.tasks || []).find((t) => {
+            const name = t.task_name.toLowerCase();
+            if (key === 'design') return name.includes('design');
+            if (key === 'print') return name.includes('print');
+            if (key === 'production') return name.includes('production') || name.includes('structure');
+            if (key === 'furniture') return name.includes('furniture');
+            if (key === 'electrical') return name.includes('electrical');
+            return false;
+          });
+          if (!task) {
+            autoExpanded[secKey] = true;
+          } else {
+            const st = task.status || (task.is_completed ? 'completed' : 'pending');
+            const isDone = st === 'completed';
+            const isNA = st === 'not_applicable' || (st as string) === 'na';
+            autoExpanded[secKey] = !(isDone || isNA);
+          }
+        });
+        setExpanded(autoExpanded);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load booth information.');
     } finally {
@@ -251,7 +291,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       if (key === 'production') return name.includes('production') || name.includes('structure');
       if (key === 'furniture') return name.includes('furniture');
       if (key === 'electrical') return name.includes('electrical');
-      if (key === 'installation') return name.includes('install') || name.includes('handover');
       return false;
     });
   };
@@ -510,6 +549,37 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     }
   };
 
+  // -------------------------------------------------------------
+  // Production Wall Configuration Handlers
+  // -------------------------------------------------------------
+  const handleSelectWallConfig = async (config: '3 Sides' | 'Back + Left' | 'Back + Right' | 'Back Wall Only') => {
+    if (!booth) return;
+    setIsSavingWallConfig(true);
+    try {
+      const updated = await updateBooth(boothId, { wall_configuration: config });
+      setBooth(updated);
+      showToast(`Wall Configuration set to: ${config}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update wall configuration.');
+    } finally {
+      setIsSavingWallConfig(false);
+    }
+  };
+
+  const handleClearWallConfig = async () => {
+    if (!booth) return;
+    setIsSavingWallConfig(true);
+    try {
+      const updated = await updateBooth(boothId, { wall_configuration: '' as any });
+      setBooth({ ...updated, wall_configuration: null });
+      showToast('Wall Configuration cleared.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to clear wall configuration.');
+    } finally {
+      setIsSavingWallConfig(false);
+    }
+  };
+
   // Special: Add Wooden Platform Flooring + Linked Carpet
   const handleAddFlooringWithCarpet = async () => {
     try {
@@ -757,19 +827,23 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   // Open Edit Booth Modal
   const openEditModal = () => {
     if (!booth) return;
-    setEditBoothNumber(booth.booth_number);
+    setEditBoothNumber(booth.booth_number && booth.booth_number.toLowerCase() !== 'pending' ? booth.booth_number : '');
     setEditCompanyName(booth.client_name);
     setEditPhone(booth.phone || '');
     setEditSize(booth.stand_size || '3 × 3 m (9 sq.m)');
     setEditStructure(getStallTypeLabel(booth.booth_type));
+    setEditDiscussionRemark(booth.discussion_remark || '');
     setEditError('');
     setIsEditModalOpen(true);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editBoothNumber.trim()) {
-      setEditError('Booth number is required.');
+    if (!booth) return;
+
+    const isDiscussion = booth.booking_stage === 'discussion';
+    if (!isDiscussion && !editBoothNumber.trim()) {
+      setEditError('Booth number is required for confirmed stalls.');
       return;
     }
     if (!editCompanyName.trim()) {
@@ -780,11 +854,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setEditSubmitting(true);
     try {
       const updated = await updateBooth(boothId, {
-        booth_number: editBoothNumber.trim(),
+        booth_number: editBoothNumber.trim() || (isDiscussion ? 'Pending' : ''),
         client_name: editCompanyName.trim(),
         phone: editPhone.trim() || undefined,
         stand_size: editSize,
         booth_type: editStructure,
+        discussion_remark: editDiscussionRemark.trim() || undefined,
       });
       setBooth(updated);
       setIsEditModalOpen(false);
@@ -793,6 +868,31 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setEditError(err.message || 'Failed to update booth.');
     } finally {
       setEditSubmitting(false);
+    }
+  };
+
+  const handleConfirmStallSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!booth) return;
+
+    const num = confirmStallNumber.trim();
+    if (!num || num.toLowerCase() === 'pending') {
+      setConfirmError('Please enter a valid Stall / Booth number to confirm.');
+      return;
+    }
+
+    setConfirmSubmitting(true);
+    setConfirmError('');
+    try {
+      const updated = await confirmBooth(booth.id, num);
+      setBooth(updated);
+      setIsConfirmModalOpen(false);
+      showToast(`Stall #${num} confirmed! 5-section checklist initialized.`);
+      await loadAllData();
+    } catch (err: any) {
+      setConfirmError(err.message || 'Failed to confirm stall.');
+    } finally {
+      setConfirmSubmitting(false);
     }
   };
 
@@ -819,14 +919,13 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     );
   }
 
-  // Calculate 6-card completion status
+  // Calculate 5-card completion status
   const sectionsList = [
     { key: 'design', label: '1. Design', icon: Palette, desc: 'Design responsibility assignment' },
     { key: 'print', label: '2. Print Files', icon: Printer, desc: 'Print readiness status and Google Drive link' },
     { key: 'production', label: '3. Production', icon: Hammer, desc: 'Flooring, selfie booth, branding and TV setups' },
     { key: 'furniture', label: '4. Furniture', icon: Armchair, desc: 'Tables, sofas and chairs' },
     { key: 'electrical', label: '5. Electrical', icon: Zap, desc: 'Power sockets and palmenent lights' },
-    { key: 'installation', label: '6. Installation', icon: Truck, desc: 'Dispatch, on-site erection and final client handover' },
   ];
 
   return (
@@ -850,6 +949,16 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         </button>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="px-2.5 sm:px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Print Clean A4 Checklist Sheet"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print Checklist</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsFloorplanModalOpen(true)}
@@ -895,9 +1004,23 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
               {booth.client_name}
             </h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-              <span className="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md">
-                Booth #{booth.booth_number}
-              </span>
+              {booth.booking_stage === 'discussion' ? (
+                <>
+                  <span className="font-mono text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-0.5 rounded-md font-semibold">
+                    {booth.booth_number && booth.booth_number.toLowerCase() !== 'pending'
+                      ? `Stall #${booth.booth_number}`
+                      : 'Pending Allotment'}
+                  </span>
+                  <span>•</span>
+                  <span className="text-sky-400 font-semibold bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded text-xs">
+                    Ongoing Discussion
+                  </span>
+                </>
+              ) : (
+                <span className="font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md">
+                  Booth #{booth.booth_number}
+                </span>
+              )}
               <span>•</span>
               <span className="text-zinc-300 font-mono">{booth.stand_size || '3 × 3 m'}</span>
               <span>•</span>
@@ -925,23 +1048,94 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
             </div>
           </div>
 
-          {/* Overall Checklist Progress Badge */}
-          <div className="bg-[#121319] border border-white/[0.06] rounded-xl p-3 sm:p-3.5 min-w-[210px] space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-400 font-medium">Checklist Progress</span>
-              <span className="font-bold text-amber-400 font-mono">
-                {tasksSummary.completed} of {tasksSummary.applicable_count} ({tasksSummary.percentage}%)
-              </span>
+          {/* Overall Checklist Progress Badge or Confirm Button */}
+          {booth.booking_stage === 'discussion' ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmStallNumber(
+                    booth.booth_number && booth.booth_number.toLowerCase() !== 'pending'
+                      ? booth.booth_number
+                      : ''
+                  );
+                  setConfirmError('');
+                  setIsConfirmModalOpen(true);
+                }}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Confirm Stall</span>
+              </button>
             </div>
-            <div className="w-full h-2 rounded-full bg-white/[0.08] overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300"
-                style={{ width: `${tasksSummary.percentage}%` }}
-              />
+          ) : (
+            <div className="bg-[#121319] border border-white/[0.06] rounded-xl p-3 sm:p-3.5 min-w-[210px] space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-400 font-medium">Checklist Progress</span>
+                <span className="font-bold text-amber-400 font-mono">
+                  {tasksSummary.completed} of {tasksSummary.applicable_count} ({tasksSummary.percentage}%)
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-white/[0.08] overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300"
+                  style={{ width: `${tasksSummary.percentage}%` }}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Ongoing Discussion Banner */}
+      {booth.booking_stage === 'discussion' && (
+        <div className="bg-[#15171e] border border-sky-500/30 rounded-2xl p-5 sm:p-6 shadow-sm space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0 mt-0.5">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-zinc-100">Ongoing Client Discussion</h2>
+                  <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                    Lead / Unconfirmed
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 max-w-2xl">
+                  This stall is in discussion and not yet confirmed. Production checklist tasks, artwork proofs, and fabrication tracking will become available once confirmed.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmStallNumber(
+                  booth.booth_number && booth.booth_number.toLowerCase() !== 'pending'
+                    ? booth.booth_number
+                    : ''
+                );
+                setConfirmError('');
+                setIsConfirmModalOpen(true);
+              }}
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Check className="w-4 h-4" />
+              <span>Confirm Stall</span>
+            </button>
+          </div>
+
+          {booth.discussion_remark && (
+            <div className="p-3.5 rounded-xl bg-[#121319] border border-white/[0.06] text-xs">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                Discussion Remark
+              </span>
+              <p className="text-zinc-200 italic">"{booth.discussion_remark}"</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Checklist: 6 Expandable Cards */}
       <div className="space-y-3">
@@ -1526,10 +1720,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         {/* Goodies Items List */}
                         {goodiesItems.length > 0 ? (
                           <div className="space-y-2">
-                            <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                              Promotional Items
+                            <span className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              Saved Requirements ({goodiesItems.length})
                             </span>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               {goodiesItems.map((itm) => (
                                 <ItemRow
                                   key={itm.id}
@@ -1558,9 +1753,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         )}
 
                         {/* Quick Add Presets: Book, Pen, Leaflet, Custom Item */}
-                        <div className="space-y-2 pt-1">
+                        <div className="space-y-2 pt-3 border-t border-zinc-800/80">
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+                            <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <Plus className="w-3 h-3 text-amber-400" />
                               Quick Add Presets
                             </span>
                             <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
@@ -1571,23 +1767,23 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                 key={preset}
                                 type="button"
                                 onClick={() => handleQuickAddSimpleItem('goodies', preset)}
-                                className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800/90 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                                className="min-h-[38px] px-3 py-2 rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/40 hover:bg-zinc-800/60 hover:border-amber-500/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group"
                               >
                                 <span>{preset}</span>
-                                <Plus className="w-3.5 h-3.5 text-amber-400" />
+                                <Plus className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-amber-400 group-hover:scale-110 transition-transform" />
                               </button>
                             ))}
                             <button
                               type="button"
                               onClick={() => setShowCustomGoodiesForm((prev) => !prev)}
-                              className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                              className={`min-h-[38px] px-3 py-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group ${
                                 showCustomGoodiesForm
-                                  ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold'
-                                  : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700'
+                                  ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
+                                  : 'border-dashed border-zinc-700/80 bg-zinc-950/40 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60 hover:border-amber-500/60'
                               }`}
                             >
                               <span>Custom Item</span>
-                              <Plus className={`w-3.5 h-3.5 transition-transform ${showCustomGoodiesForm ? 'rotate-45 text-amber-400' : 'text-zinc-500'}`} />
+                              <Plus className={`w-3.5 h-3.5 transition-transform ${showCustomGoodiesForm ? 'rotate-45 text-amber-400' : 'text-amber-400/80 group-hover:text-amber-400'}`} />
                             </button>
                           </div>
                         </div>
@@ -1775,13 +1971,203 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                   {/* SECTION 3: REFINED PRODUCTION QUICK ADD */}
                   {sec.key === 'production' && (
                     <div className="space-y-4">
+                      {/* Booth Wall Configuration Block */}
+                      <div className="bg-[#12141a] border border-white/[0.08] rounded-xl p-3 sm:p-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <Layers className="w-3.5 h-3.5 text-amber-400" />
+                                Booth Wall Configuration
+                              </span>
+                              {booth?.wall_configuration ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[11px] font-bold">
+                                  {booth.wall_configuration}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-800/80 border border-white/[0.08] text-zinc-400 font-mono text-[10px]">
+                                  Unset
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-0.5">
+                              Stall wall structure for production fabrication & site setup
+                            </p>
+                          </div>
+
+                          {booth?.wall_configuration && (
+                            <button
+                              type="button"
+                              disabled={isSavingWallConfig}
+                              onClick={handleClearWallConfig}
+                              className="text-[11px] text-zinc-400 hover:text-zinc-200 underline cursor-pointer disabled:opacity-50"
+                            >
+                              Clear Selection
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Three Selectable Configuration Cards */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {/* Option 1: 3 Sides */}
+                          <button
+                            type="button"
+                            disabled={isSavingWallConfig}
+                            onClick={() => handleSelectWallConfig('3 Sides')}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
+                              booth?.wall_configuration === '3 Sides'
+                                ? 'bg-amber-500/10 border-amber-500/60 ring-1 ring-amber-500/40 text-zinc-100 shadow-sm'
+                                : 'bg-[#161922] border-white/[0.07] text-zinc-300 hover:bg-[#1a1e29] hover:border-white/[0.14]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-zinc-100 flex items-center gap-1.5">
+                                3 Sides
+                              </span>
+                              <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
+                                <rect x="5" y="5" width="22" height="22" rx="2" className="fill-white/[0.02] stroke-white/[0.06]" strokeDasharray="2 2" />
+                                <path d="M 7 27 L 7 7 L 25 7 L 25 27" className={booth?.wall_configuration === '3 Sides' ? 'stroke-amber-400' : 'stroke-zinc-400'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M 7 27 L 25 27" className="stroke-emerald-400/50" strokeWidth="1.5" strokeDasharray="3 3" />
+                              </svg>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 leading-snug">
+                              Back Wall + Left Wall + Right Wall (1 Open Front)
+                            </div>
+                            <div className="pt-1 flex items-center justify-between text-[10px] font-mono">
+                              <span className={booth?.wall_configuration === '3 Sides' ? 'text-amber-400 font-bold' : 'text-zinc-500'}>
+                                {booth?.wall_configuration === '3 Sides' ? '✓ Selected' : 'Tap to select'}
+                              </span>
+                            </div>
+                          </button>
+
+                          {/* Option 2: 2 Sides */}
+                          {(() => {
+                            const is2SidesActive = booth?.wall_configuration === 'Back + Left' || booth?.wall_configuration === 'Back + Right';
+                            return (
+                              <button
+                                type="button"
+                                disabled={isSavingWallConfig}
+                                onClick={() => {
+                                  if (!is2SidesActive) {
+                                    handleSelectWallConfig('Back + Left');
+                                  }
+                                }}
+                                className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
+                                  is2SidesActive
+                                    ? 'bg-amber-500/10 border-amber-500/60 ring-1 ring-amber-500/40 text-zinc-100 shadow-sm'
+                                    : 'bg-[#161922] border-white/[0.07] text-zinc-300 hover:bg-[#1a1e29] hover:border-white/[0.14]'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-xs text-zinc-100 flex items-center gap-1.5">
+                                    2 Sides
+                                    {is2SidesActive && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono">
+                                        {booth?.wall_configuration}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
+                                    <rect x="5" y="5" width="22" height="22" rx="2" className="fill-white/[0.02] stroke-white/[0.06]" strokeDasharray="2 2" />
+                                    {booth?.wall_configuration === 'Back + Right' ? (
+                                      <>
+                                        <path d="M 7 7 L 25 7 L 25 27" className={is2SidesActive ? 'stroke-amber-400' : 'stroke-zinc-400'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d="M 7 7 L 7 27 L 25 27" className="stroke-emerald-400/50" strokeWidth="1.5" strokeDasharray="3 3" />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <path d="M 7 27 L 7 7 L 25 7" className={is2SidesActive ? 'stroke-amber-400' : 'stroke-zinc-400'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d="M 25 7 L 25 27 L 7 27" className="stroke-emerald-400/50" strokeWidth="1.5" strokeDasharray="3 3" />
+                                      </>
+                                    )}
+                                  </svg>
+                                </div>
+                                <div className="text-[10px] text-zinc-400 leading-snug">
+                                  Back Wall + One Side Wall (Corner Stall)
+                                </div>
+                                <div className="pt-1 flex items-center justify-between text-[10px] font-mono">
+                                  <span className={is2SidesActive ? 'text-amber-400 font-bold' : 'text-zinc-500'}>
+                                    {is2SidesActive ? `✓ ${booth?.wall_configuration}` : 'Tap to select'}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })()}
+
+                          {/* Option 3: Back Wall Only */}
+                          <button
+                            type="button"
+                            disabled={isSavingWallConfig}
+                            onClick={() => handleSelectWallConfig('Back Wall Only')}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2.5 ${
+                              booth?.wall_configuration === 'Back Wall Only'
+                                ? 'bg-amber-500/10 border-amber-500/60 ring-1 ring-amber-500/40 text-zinc-100 shadow-sm'
+                                : 'bg-[#161922] border-white/[0.07] text-zinc-300 hover:bg-[#1a1e29] hover:border-white/[0.14]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-zinc-100 flex items-center gap-1.5">
+                                Back Wall Only
+                              </span>
+                              <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
+                                <rect x="5" y="5" width="22" height="22" rx="2" className="fill-white/[0.02] stroke-white/[0.06]" strokeDasharray="2 2" />
+                                <path d="M 7 7 L 25 7" className={booth?.wall_configuration === 'Back Wall Only' ? 'stroke-amber-400' : 'stroke-zinc-400'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M 7 7 L 7 27 L 25 27 L 25 7" className="stroke-emerald-400/50" strokeWidth="1.5" strokeDasharray="3 3" />
+                              </svg>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 leading-snug">
+                              Only Back Wall (3 Open Sides / Peninsula Stall)
+                            </div>
+                            <div className="pt-1 flex items-center justify-between text-[10px] font-mono">
+                              <span className={booth?.wall_configuration === 'Back Wall Only' ? 'text-amber-400 font-bold' : 'text-zinc-500'}>
+                                {booth?.wall_configuration === 'Back Wall Only' ? '✓ Selected' : 'Tap to select'}
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+
+                        {/* Additional Selector for 2 Sides */}
+                        {(booth?.wall_configuration === 'Back + Left' || booth?.wall_configuration === 'Back + Right') && (
+                          <div className="pt-2 border-t border-white/[0.06] flex flex-wrap items-center gap-2.5 animate-in fade-in duration-150">
+                            <span className="text-xs font-semibold text-zinc-300">Side Wall Orientation:</span>
+                            <div className="inline-flex rounded-lg bg-zinc-900 border border-white/[0.08] p-0.5">
+                              <button
+                                type="button"
+                                disabled={isSavingWallConfig}
+                                onClick={() => handleSelectWallConfig('Back + Left')}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                                  booth?.wall_configuration === 'Back + Left'
+                                    ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
+                                    : 'text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                Back + Left
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isSavingWallConfig}
+                                onClick={() => handleSelectWallConfig('Back + Right')}
+                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                                  booth?.wall_configuration === 'Back + Right'
+                                    ? 'bg-amber-500 text-zinc-950 font-bold shadow-sm'
+                                    : 'text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                Back + Right
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       {/* Production Items List */}
                       {prodItems.length > 0 ? (
                         <div className="space-y-2">
-                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                            Fabrication & Production Requirements
+                          <span className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Saved Requirements ({prodItems.length})
                           </span>
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {prodItems.map((itm) => (
                               <ItemRow
                                 key={itm.id}
@@ -1810,9 +2196,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                       )}
 
                       {/* 1. Production Quick Add Presets */}
-                      <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                      <div className="space-y-2 pt-3 border-t border-zinc-800/80">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <Plus className="w-3 h-3 text-amber-400" />
                             Quick Add Presets
                           </span>
                           <span className="text-[10px] text-zinc-500">Tap to add</span>
@@ -1824,10 +2211,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           <button
                             type="button"
                             onClick={() => setActiveSpecialPanel(activeSpecialPanel === 'flooring' ? 'none' : 'flooring')}
-                            className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                            className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group ${
                               activeSpecialPanel === 'flooring'
-                                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700'
+                                ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
+                                : 'border-dashed border-zinc-700/80 bg-zinc-950/40 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60 hover:border-amber-500/60'
                             }`}
                           >
                             <span>1. Wooden Platform Flooring</span>
@@ -1840,20 +2227,20 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           <button
                             type="button"
                             onClick={() => handleQuickAddSimpleItem('production', 'Selfie Booth')}
-                            className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700 text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                            className="min-h-[40px] px-3 py-2 rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/40 hover:bg-zinc-800/60 hover:border-amber-500/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group"
                           >
                             <span>2. Selfie Booth</span>
-                            <Plus className="w-3.5 h-3.5 text-zinc-500" />
+                            <Plus className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-amber-400 group-hover:scale-110 transition-transform" />
                           </button>
 
                           {/* 3. Table Vinyl Branding */}
                           <button
                             type="button"
                             onClick={() => handleQuickAddSimpleItem('production', 'Table Vinyl Branding')}
-                            className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700 text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                            className="min-h-[40px] px-3 py-2 rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/40 hover:bg-zinc-800/60 hover:border-amber-500/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group"
                           >
                             <span>3. Table Vinyl Branding</span>
-                            <Plus className="w-3.5 h-3.5 text-zinc-500" />
+                            <Plus className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-amber-400 group-hover:scale-110 transition-transform" />
                           </button>
 
                           {/* 4. TV — 42 inch */}
@@ -1861,12 +2248,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                             type="button"
                             onClick={() => {
                               setTvSize('42 inch');
-                              setActiveSpecialPanel('tv');
+                              setActiveSpecialPanel(activeSpecialPanel === 'tv' && tvSize === '42 inch' ? 'none' : 'tv');
                             }}
-                            className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                            className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group ${
                               activeSpecialPanel === 'tv' && tvSize === '42 inch'
-                                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700'
+                                ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
+                                : 'border-dashed border-zinc-700/80 bg-zinc-950/40 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60 hover:border-amber-500/60'
                             }`}
                           >
                             <span className="flex items-center gap-1.5">
@@ -1881,12 +2268,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                             type="button"
                             onClick={() => {
                               setTvSize('50–55 inch');
-                              setActiveSpecialPanel('tv');
+                              setActiveSpecialPanel(activeSpecialPanel === 'tv' && tvSize === '50–55 inch' ? 'none' : 'tv');
                             }}
-                            className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                            className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group ${
                               activeSpecialPanel === 'tv' && tvSize === '50–55 inch'
-                                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-zinc-100 hover:border-zinc-700'
+                                ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-bold'
+                                : 'border-dashed border-zinc-700/80 bg-zinc-950/40 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/60 hover:border-amber-500/60'
                             }`}
                           >
                             <span className="flex items-center gap-1.5">
@@ -2139,10 +2526,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                       {/* Furniture Items List */}
                       {furnItems.length > 0 ? (
                         <div className="space-y-2">
-                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                            Furniture Requirements
+                          <span className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Saved Requirements ({furnItems.length})
                           </span>
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {furnItems.map((itm) => (
                               <ItemRow
                                 key={itm.id}
@@ -2171,9 +2559,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                       )}
 
                       {/* 1. Quick Add Presets: Glass Round Table, 2 Seater Sofa, Chair */}
-                      <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                      <div className="space-y-2 pt-3 border-t border-zinc-800/80">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <Plus className="w-3 h-3 text-amber-400" />
                             Quick Add Presets
                           </span>
                           <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
@@ -2184,10 +2573,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                               key={preset}
                               type="button"
                               onClick={() => handleQuickAddSimpleItem('furniture', preset)}
-                              className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800/90 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                              className="min-h-[38px] px-3 py-2 rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/40 hover:bg-zinc-800/60 hover:border-amber-500/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group"
                             >
                               <span>{preset}</span>
-                              <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                              <Plus className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-amber-400 group-hover:scale-110 transition-transform" />
                             </button>
                           ))}
                         </div>
@@ -2258,10 +2647,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                       {/* Electrical Items List */}
                       {elecItems.length > 0 ? (
                         <div className="space-y-2">
-                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                            Electrical & Lighting Items
+                          <span className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Saved Requirements ({elecItems.length})
                           </span>
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {elecItems.map((itm) => (
                               <ItemRow
                                 key={itm.id}
@@ -2290,9 +2680,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                       )}
 
                       {/* 1. Quick Add Presets: Power Socket, Palmenent Light */}
-                      <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                      <div className="space-y-2 pt-3 border-t border-zinc-800/80">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <Plus className="w-3 h-3 text-amber-400" />
                             Quick Add Presets
                           </span>
                           <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
@@ -2303,10 +2694,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                               key={preset}
                               type="button"
                               onClick={() => handleQuickAddSimpleItem('electrical', preset)}
-                              className="min-h-[44px] p-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800/90 text-zinc-200 hover:text-white text-xs font-semibold transition-all flex items-center justify-between cursor-pointer"
+                              className="min-h-[38px] px-3 py-2 rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/40 hover:bg-zinc-800/60 hover:border-amber-500/60 text-zinc-300 hover:text-zinc-100 text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] group"
                             >
                               <span>{preset}</span>
-                              <Plus className="w-3.5 h-3.5 text-amber-400" />
+                              <Plus className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-amber-400 group-hover:scale-110 transition-transform" />
                             </button>
                           ))}
                         </div>
@@ -2366,25 +2757,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                               Add
                             </button>
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SECTION 6: INSTALLATION */}
-                  {sec.key === 'installation' && (
-                    <div className="space-y-3">
-                      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                        Site Execution & Handover
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
-                          <div className="font-semibold text-zinc-200">1. Fabrication Dispatch</div>
-                          <div className="text-[11px] text-zinc-400">Material loaded from workshop</div>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
-                          <div className="font-semibold text-zinc-200">2. Venue Setup Completed</div>
-                          <div className="text-[11px] text-zinc-400">Carpentry, graphics & lighting erected</div>
                         </div>
                       </div>
                     </div>
@@ -2541,6 +2913,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
             </div>
           </div>
 
+          {booth.booking_stage === 'discussion' && (
+            <div className="space-y-1.5">
+              <label className="block text-zinc-300 font-semibold">Discussion Remark</label>
+              <textarea
+                rows={2}
+                value={editDiscussionRemark}
+                onChange={(e) => setEditDiscussionRemark(e.target.value)}
+                placeholder="e.g. Client requested 3x3 layout quote..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 resize-none"
+              />
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
             <button
               type="button"
@@ -2629,6 +3014,119 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
             await loadAllData();
           }
         }}
+      />
+
+      {/* Confirm Stall Modal */}
+      <Modal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        title="Confirm Exhibition Stall"
+        subtitle="Convert ongoing discussion into an active confirmed project"
+        maxWidth="max-w-[460px]"
+      >
+        <form onSubmit={handleConfirmStallSubmit} className="space-y-4 text-xs" noValidate>
+          {confirmError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{confirmError}</span>
+            </div>
+          )}
+
+          <div className="bg-[#1c1f2a] border border-white/[0.08] rounded-xl p-3.5 space-y-1.5">
+            <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+              <span>Company:</span>
+              <span className="font-bold text-zinc-100 text-xs">{booth.client_name}</span>
+            </div>
+            <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+              <span>Exhibition:</span>
+              <span className="font-medium text-zinc-200">{booth.event_name || 'Selected Exhibition'}</span>
+            </div>
+            {booth.phone && (
+              <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+                <span>Contact:</span>
+                <span className="font-mono text-zinc-300">{booth.phone}</span>
+              </div>
+            )}
+            {booth.discussion_remark && (
+              <div className="text-zinc-400 text-[11px] pt-1 border-t border-white/[0.04]">
+                <span className="text-zinc-500 block">Discussion Remark:</span>
+                <span className="italic text-zinc-300">"{booth.discussion_remark}"</span>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-zinc-300 font-semibold">
+              Allot Stall / Booth Number <span className="text-amber-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              autoFocus
+              value={confirmStallNumber}
+              onChange={(e) => setConfirmStallNumber(e.target.value)}
+              placeholder="e.g. A-12, B-05, D-02..."
+              className="w-full bg-[#1c1f2a] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 font-mono transition-all"
+            />
+          </div>
+
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] space-y-1">
+            <p className="font-semibold flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-amber-400" />
+              <span>What happens upon confirmation:</span>
+            </p>
+            <ul className="list-disc list-inside text-zinc-400 space-y-0.5 pl-1">
+              <li>Initializes the 5-section production & design checklist.</li>
+              <li>Moves this stall to the Confirmed Stalls directory.</li>
+              <li>Updates dashboard statistics immediately.</li>
+            </ul>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsConfirmModalOpen(false)}
+              disabled={confirmSubmitting}
+              className="px-4 py-2 rounded-xl border border-white/[0.08] text-zinc-400 hover:text-zinc-200 text-xs font-medium cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={confirmSubmitting}
+              className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {confirmSubmitting ? (
+                <span>Confirming...</span>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Confirm Stall</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Print Checklist Modal */}
+      <PrintChecklistModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title={`Stall #${booth.booth_number} — ${booth.client_name}`}
+        subtitle={`${booth.event_name || 'Exhibition'} • ${getStallTypeLabel(booth.booth_type)} (${booth.stand_size || '3 × 3 m'})`}
+        stalls={[
+          {
+            booth,
+            eventName: booth.event_name || 'Exhibition',
+            tasks,
+            productionItems: prodItems,
+            furnitureItems: furnItems,
+            electricalItems: elecItems,
+            goodiesItems,
+            views3D,
+          },
+        ]}
       />
     </div>
   );
@@ -2793,24 +3291,35 @@ function ItemRow({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs gap-2">
-      <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-        <span className="font-semibold text-zinc-200 truncate">{item.item_name}</span>
-        {item.specification && (
-          <span className="text-[11px] text-amber-300/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 font-medium">
-            {item.specification}
-          </span>
-        )}
+    <div className="flex items-center justify-between p-2.5 px-3 rounded-xl bg-zinc-800/80 border border-zinc-700/60 hover:border-zinc-600/70 text-xs gap-2 transition-colors">
+      <div className="flex items-start gap-2.5 flex-1 min-w-0">
+        <span
+          className="w-4 h-4 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0 mt-0.5"
+          title="Added to requirements list"
+        >
+          <Check className="w-2.5 h-2.5 text-emerald-400 stroke-[2.5]" />
+        </span>
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="font-semibold text-zinc-100 truncate text-[13px]">{item.item_name}</span>
+          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[11px] text-zinc-400">
+            <span className="font-mono text-zinc-300 font-medium">Qty: {item.quantity}</span>
+            {item.specification && (
+              <>
+                <span className="text-zinc-600">•</span>
+                <span className="text-amber-300/90 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 font-normal truncate max-w-[280px]">
+                  {item.specification}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
-        <span className="font-mono text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded-md border border-zinc-800 text-[11px]">
-          Qty: {item.quantity}
-        </span>
+      <div className="flex items-center gap-1 shrink-0">
         <button
           type="button"
           onClick={onStartEdit}
-          className="min-h-[34px] min-w-[34px] flex items-center justify-center p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer"
+          className="min-h-[32px] min-w-[32px] flex items-center justify-center p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-zinc-700/60 rounded-lg transition-colors cursor-pointer"
           title="Edit Item"
         >
           <Edit2 className="w-3.5 h-3.5" />
@@ -2818,7 +3327,7 @@ function ItemRow({
         <button
           type="button"
           onClick={onDelete}
-          className="min-h-[34px] min-w-[34px] flex items-center justify-center p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800/80 rounded-lg transition-colors cursor-pointer"
+          className="min-h-[32px] min-w-[32px] flex items-center justify-center p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-700/60 rounded-lg transition-colors cursor-pointer"
           title="Delete Item"
         >
           <Trash2 className="w-3.5 h-3.5" />

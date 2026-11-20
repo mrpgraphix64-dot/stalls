@@ -10,6 +10,10 @@ $files = [
     __DIR__ . '/test_quick_add_refinement.php',
     __DIR__ . '/test_goodies_promotional_printing.php',
     __DIR__ . '/test_design_3d_views.php',
+    __DIR__ . '/test_ongoing_discussions.php',
+    __DIR__ . '/test_printable_checklist.php',
+    __DIR__ . '/test_remove_installation_section.php',
+    __DIR__ . '/test_wall_configuration.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {
@@ -24,7 +28,7 @@ foreach ($files as $file) {
 }
 echo "\n========================================================\n";
 if ($totalFailed === 0) {
-    echo "ALL 8 TEST SUITES (264 TESTS) PASSED SUCCESSFULLY!\n";
+    echo "ALL " . count($files) . " TEST SUITES PASSED SUCCESSFULLY!\n";
     exit(0);
 } else {
     echo "$totalFailed SUITES FAILED!\n";

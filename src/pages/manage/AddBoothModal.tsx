@@ -49,9 +49,11 @@ export function AddBoothModal({
 }: AddBoothModalProps) {
   // Form State
   const [selectedEventId, setSelectedEventId] = useState<string>(defaultEventId);
+  const [bookingStage, setBookingStage] = useState<'confirmed' | 'discussion'>('confirmed');
   const [companyName, setCompanyName] = useState<string>('');
   const [stallNumber, setStallNumber] = useState<string>('');
   const [mobileNumber, setMobileNumber] = useState<string>('');
+  const [discussionRemark, setDiscussionRemark] = useState<string>('');
   const [boothSize, setBoothSize] = useState<string>('3 × 3 m (9 sq.m)');
   const [structureType, setStructureType] = useState<'Wooden' | 'Frame' | 'Customize'>('Wooden');
 
@@ -73,9 +75,11 @@ export function AddBoothModal({
   useEffect(() => {
     if (isOpen) {
       setSelectedEventId(defaultEventId || (events[0]?.id ?? ''));
+      setBookingStage('confirmed');
       setCompanyName('');
       setStallNumber('');
       setMobileNumber('');
+      setDiscussionRemark('');
       setBoothSize('3 × 3 m (9 sq.m)');
       setStructureType('Wooden');
       setError('');
@@ -187,8 +191,8 @@ export function AddBoothModal({
       setError('Please select an exhibition.');
       return;
     }
-    if (!stallNumber.trim()) {
-      setError('Stall number is required.');
+    if (bookingStage === 'confirmed' && !stallNumber.trim()) {
+      setError('Stall number is required for confirmed stalls.');
       return;
     }
     if (!companyName.trim() || companyName.trim().length < 2) {
@@ -206,11 +210,13 @@ export function AddBoothModal({
     try {
       const newBooth = await createBooth({
         event_id: selectedEventId,
-        booth_number: stallNumber.trim(),
+        booth_number: stallNumber.trim() || (bookingStage === 'discussion' ? 'Pending' : ''),
         client_name: companyName.trim(),
         phone: phoneClean || undefined,
         stand_size: boothSize,
         booth_type: structureType,
+        booking_stage: bookingStage,
+        discussion_remark: discussionRemark.trim() || undefined,
         status: 'draft',
       });
 
@@ -273,6 +279,44 @@ export function AddBoothModal({
               </div>
             )}
 
+            {/* Booking Stage: Confirmed vs Ongoing Discussion */}
+            <div className="space-y-1.5">
+              <label className="block text-zinc-300 font-medium">Booking Stage</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBookingStage('confirmed')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    bookingStage === 'confirmed'
+                      ? 'bg-amber-500/10 border-amber-500/60 text-amber-400 font-bold'
+                      : 'bg-[#1c1f2a] border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs">Confirmed</span>
+                    {bookingStage === 'confirmed' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                  </div>
+                  <span className="text-[10px] text-zinc-500 font-normal">Active checklist & production</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBookingStage('discussion')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    bookingStage === 'discussion'
+                      ? 'bg-sky-500/10 border-sky-500/60 text-sky-400 font-bold'
+                      : 'bg-[#1c1f2a] border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs">Ongoing Discussion</span>
+                    {bookingStage === 'discussion' && <Check className="w-3.5 h-3.5 text-sky-400" />}
+                  </div>
+                  <span className="text-[10px] text-zinc-500 font-normal">Preliminary lead / not yet confirmed</span>
+                </button>
+              </div>
+            </div>
+
             {/* 2. Company Name with compact autocomplete */}
             <div className="space-y-1.5 relative" ref={companyRef}>
               <div className="flex items-center justify-between">
@@ -332,7 +376,12 @@ export function AddBoothModal({
             <div className="space-y-1.5 relative" ref={stallRef}>
               <div className="flex items-center justify-between">
                 <label className="block text-zinc-300 font-medium">
-                  Stall Number <span className="text-amber-500">*</span>
+                  Stall Number{' '}
+                  {bookingStage === 'confirmed' ? (
+                    <span className="text-amber-500">*</span>
+                  ) : (
+                    <span className="text-zinc-500 font-normal">(Optional)</span>
+                  )}
                 </label>
 
                 {/* Floor Plan Link placed directly beside stall-number label */}
@@ -349,7 +398,7 @@ export function AddBoothModal({
               <div className="relative">
                 <input
                   type="text"
-                  required
+                  required={bookingStage === 'confirmed'}
                   value={stallNumber}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -361,7 +410,11 @@ export function AddBoothModal({
                     }
                   }}
                   onFocus={() => setIsStallDropdownOpen(true)}
-                  placeholder="e.g. A-12, B-05, D-02 or type directly..."
+                  placeholder={
+                    bookingStage === 'confirmed'
+                      ? 'e.g. A-12, B-05, D-02 or type directly...'
+                      : 'Optional or leave blank (allot later)...'
+                  }
                   className={`w-full bg-[#1c1f2a] border ${
                     duplicateWarning ? 'border-amber-500/80' : 'border-white/[0.08] focus:border-amber-500/80'
                   } rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none font-mono transition-all`}
@@ -496,6 +549,25 @@ export function AddBoothModal({
                 </button>
               </div>
             </div>
+
+            {/* 6. Discussion Remark (when Ongoing Discussion is chosen) */}
+            {bookingStage === 'discussion' && (
+              <div className="space-y-1.5 animate-in fade-in duration-150">
+                <label className="block text-zinc-300 font-medium">
+                  Discussion Remark <span className="text-zinc-500 font-normal">(Optional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={discussionRemark}
+                  onChange={(e) => setDiscussionRemark(e.target.value)}
+                  placeholder="e.g. Client requested 3x3 layout quote; awaiting approval on wooden flooring..."
+                  className="w-full bg-[#1c1f2a] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 transition-all resize-none"
+                />
+                <p className="text-[11px] text-zinc-500">
+                  Note: Checklist tasks and production progress will initialize once this stall is confirmed.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Sticky Modal Footer */}
@@ -516,12 +588,12 @@ export function AddBoothModal({
               {submitting ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Registering...</span>
+                  <span>{bookingStage === 'discussion' ? 'Saving Discussion...' : 'Registering...'}</span>
                 </>
               ) : (
                 <>
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Stall</span>
+                  <span>{bookingStage === 'discussion' ? 'Save Discussion' : 'Add Stall'}</span>
                 </>
               )}
             </button>

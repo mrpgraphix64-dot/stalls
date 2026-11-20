@@ -181,7 +181,7 @@ export function ManageApp() {
               const isActive =
                 currentRoute === item.id ||
                 (item.id === 'events' && currentRoute.startsWith('event:')) ||
-                (item.id === 'booths' && currentRoute.startsWith('booth:'));
+                (item.id === 'booths' && (currentRoute.startsWith('booth:') || currentRoute.startsWith('booths')));
 
               return (
                 <button
@@ -294,11 +294,12 @@ export function ManageApp() {
             />
           )}
 
-          {currentRoute === 'booths' && (
+          {(currentRoute === 'booths' || currentRoute === 'booths:discussions') && (
             <BoothsView
               onNavigate={handleNavigate}
               createModalOpen={createBoothModalOpen}
               defaultEventId={defaultBoothEventId}
+              initialTab={currentRoute === 'booths:discussions' ? 'discussions' : 'confirmed'}
               onCloseCreateModal={() => {
                 setCreateBoothModalOpen(false);
                 setDefaultBoothEventId('');

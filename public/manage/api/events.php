@@ -47,14 +47,67 @@ if ($method === 'GET') {
             SELECT 
                 b.*,
                 (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1) AS tasks_completed,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id) AS tasks_total
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%') AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total
             FROM booths b
             WHERE b.event_id = :event_id AND b.status != 'archived'
             ORDER BY b.booth_number ASC, b.created_at DESC
         ");
         $boothStmt->execute([':event_id' => $id]);
         $booths = $boothStmt->fetchAll();
+
+        // 1A-1. Dedicated Print Checklists Batch Data for Event Stalls
+        if (($_GET['action'] ?? '') === 'print_checklists') {
+            $boothIds = array_column($booths, 'id');
+            $itemsByBooth = [];
+            $tasksByBooth = [];
+            $linksByBooth = [];
+
+            if (!empty($boothIds)) {
+                $placeholders = implode(',', array_fill(0, count($boothIds), '?'));
+
+                $itemStmt = $pdo->prepare("SELECT * FROM booth_items WHERE booth_id IN ($placeholders) ORDER BY category, created_at");
+                $itemStmt->execute($boothIds);
+                while ($itm = $itemStmt->fetch()) {
+                    $itemsByBooth[$itm['booth_id']][] = $itm;
+                }
+
+                $taskStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE booth_id IN ($placeholders) AND LOWER(task_name) NOT LIKE '%install%' ORDER BY sort_order, display_order");
+                $taskStmt->execute($boothIds);
+                while ($tsk = $taskStmt->fetch()) {
+                    $tasksByBooth[$tsk['booth_id']][] = $tsk;
+                }
+
+                $linkStmt = $pdo->prepare("SELECT * FROM booth_links WHERE booth_id IN ($placeholders) AND category = 'render_3d' ORDER BY created_at");
+                $linkStmt->execute($boothIds);
+                while ($lnk = $linkStmt->fetch()) {
+                    $linksByBooth[$lnk['booth_id']][] = $lnk;
+                }
+            }
+
+            $printData = [];
+            foreach ($booths as $b) {
+                $bId = $b['id'];
+                $bItems = $itemsByBooth[$bId] ?? [];
+                $printData[] = [
+                    'booth' => $b,
+                    'eventName' => $event['name'],
+                    'tasks' => $tasksByBooth[$bId] ?? [],
+                    'productionItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'production')),
+                    'furnitureItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'furniture')),
+                    'electricalItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'electrical')),
+                    'goodiesItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'goodies')),
+                    'views3D' => $linksByBooth[$bId] ?? [],
+                ];
+            }
+
+            reworkzone_json_response([
+                'success' => true,
+                'event'   => $event,
+                'stalls'  => $printData,
+                'count'   => count($printData)
+            ]);
+        }
 
         $event['booths'] = $booths;
 

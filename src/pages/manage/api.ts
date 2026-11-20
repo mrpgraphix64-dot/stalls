@@ -16,6 +16,7 @@ import {
   ExpensesSummary,
   ActivityLog,
   ExhibitorItem,
+  StallPrintData,
 } from './types';
 
 let cachedCsrfToken: string | null = null;
@@ -149,14 +150,23 @@ export async function deleteEvent(id: string): Promise<void> {
   });
 }
 
+export async function fetchEventChecklistsPrintData(
+  eventId: string
+): Promise<{ success: boolean; event: EventItem; stalls: StallPrintData[]; count: number }> {
+  return request<{ success: boolean; event: EventItem; stalls: StallPrintData[]; count: number }>(
+    `/manage/api/events.php?id=${encodeURIComponent(eventId)}&action=print_checklists`
+  );
+}
+
 // -------------------------------------------------------------
 // Booths API
 // -------------------------------------------------------------
-export async function fetchBooths(params?: { event_id?: string; status?: string; search?: string }): Promise<BoothItem[]> {
+export async function fetchBooths(params?: { event_id?: string; status?: string; search?: string; booking_stage?: string }): Promise<BoothItem[]> {
   const query = new URLSearchParams();
   if (params?.event_id) query.set('event_id', params.event_id);
   if (params?.status) query.set('status', params.status);
   if (params?.search) query.set('search', params.search);
+  if (params?.booking_stage) query.set('booking_stage', params.booking_stage);
 
   const res = await request<{ success: boolean; booths: BoothItem[] }>(`/manage/api/booths.php?${query.toString()}`);
   return res.booths;
@@ -179,6 +189,14 @@ export async function updateBooth(id: string, boothData: Partial<BoothItem>): Pr
   const res = await request<{ success: boolean; booth: BoothItem }>('/manage/api/booths.php?action=update', {
     method: 'POST',
     body: JSON.stringify({ ...boothData, id }),
+  });
+  return res.booth;
+}
+
+export async function confirmBooth(id: string, boothNumber: string): Promise<BoothItem> {
+  const res = await request<{ success: boolean; message: string; booth: BoothItem }>('/manage/api/booths.php?action=confirm', {
+    method: 'POST',
+    body: JSON.stringify({ id, booth_number: boothNumber }),
   });
   return res.booth;
 }

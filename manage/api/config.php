@@ -268,6 +268,16 @@ function reworkzone_init_schema(PDO $pdo) {
     if (!in_array('goodies_remark', $boothColNames, true)) {
         $pdo->exec("ALTER TABLE booths ADD COLUMN goodies_remark TEXT DEFAULT NULL;");
     }
+    if (!in_array('booking_stage', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN booking_stage TEXT NOT NULL DEFAULT 'confirmed';");
+        $pdo->exec("UPDATE booths SET booking_stage = 'confirmed' WHERE booking_stage IS NULL OR booking_stage = '';");
+    }
+    if (!in_array('discussion_remark', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN discussion_remark TEXT DEFAULT NULL;");
+    }
+    if (!in_array('wall_configuration', $boothColNames, true)) {
+        $pdo->exec("ALTER TABLE booths ADD COLUMN wall_configuration TEXT DEFAULT NULL;");
+    }
 
     // 5. Booth Links (Google Drive URLs only; NO file uploads)
     $pdo->exec("

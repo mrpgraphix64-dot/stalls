@@ -25,41 +25,39 @@ try {
     // 2. Active events (upcoming, in_progress, live)
     $activeEvents = (int)$pdo->query("SELECT COUNT(*) FROM events WHERE status IN ('upcoming', 'in_progress', 'live')")->fetchColumn();
 
-    // 3. Total booths (excluding archived)
-    $totalBooths = (int)$pdo->query("SELECT COUNT(*) FROM booths WHERE status != 'archived'")->fetchColumn();
+    // 3. Confirmed Stalls (all confirmed non-archived booths)
+    $confirmedStalls = (int)$pdo->query("
+        SELECT COUNT(*) 
+        FROM booths 
+        WHERE status != 'archived' 
+          AND (booking_stage = 'confirmed' OR booking_stage IS NULL OR booking_stage = '')
+    ")->fetchColumn();
 
-    // 4. Booths in production / Work in progress
-    $boothsInProduction = (int)$pdo->query("SELECT COUNT(*) FROM booths WHERE status IN ('in_production', 'production', 'approved')")->fetchColumn();
-    $workInProgress = (int)$pdo->query("SELECT COUNT(*) FROM booths WHERE status IN ('draft', 'approved', 'in_production', 'production')")->fetchColumn();
-    $readyCompleted = (int)$pdo->query("SELECT COUNT(*) FROM booths WHERE status IN ('installed', 'completed', 'handover')")->fetchColumn();
-
-    // 5. Pending tasks (for active non-archived booths)
-    $pendingTasks = (int)$pdo->query("
-        SELECT COUNT(*)
-        FROM booth_tasks t
-        INNER JOIN booths b ON t.booth_id = b.id
-        WHERE (t.is_completed = 0 AND (t.status IS NULL OR t.status = 'pending')) AND b.status != 'archived'
+    // 4. Ongoing Discussions (unconfirmed non-archived booth discussions)
+    $ongoingDiscussions = (int)$pdo->query("
+        SELECT COUNT(*) 
+        FROM booths 
+        WHERE status != 'archived' 
+          AND booking_stage = 'discussion'
     ")->fetchColumn();
 
     // Task progress mapping per booth
     $progressStmt = $pdo->query("
         SELECT 
-            booth_id,
-            COUNT(*) as total_tasks,
-            SUM(CASE WHEN status != 'not_applicable' THEN 1 ELSE 0 END) as applicable_tasks,
-            SUM(CASE WHEN is_completed = 1 OR status = 'completed' THEN 1 ELSE 0 END) as completed_tasks
-        FROM booth_tasks
-        GROUP BY booth_id
+            t.booth_id,
+            COUNT(t.id) as total_tasks,
+            SUM(CASE WHEN t.status != 'not_applicable' THEN 1 ELSE 0 END) as applicable_tasks,
+            SUM(CASE WHEN t.is_completed = 1 OR t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks
+        FROM booth_tasks t
+        INNER JOIN booths b ON t.booth_id = b.id
+        WHERE b.status != 'archived' AND LOWER(t.task_name) NOT LIKE '%install%'
+        GROUP BY t.booth_id
     ");
     $progressMap = [];
-    $completedChecklists = 0;
     while ($pRow = $progressStmt->fetch()) {
         $app = (int)$pRow['applicable_tasks'];
         $comp = (int)$pRow['completed_tasks'];
         $pct = $app > 0 ? round(($comp / $app) * 100, 1) : 0.0;
-        if ($app > 0 && $comp >= $app) {
-            $completedChecklists++;
-        }
         $progressMap[$pRow['booth_id']] = [
             'total'      => (int)$pRow['total_tasks'],
             'applicable' => $app,
@@ -68,10 +66,48 @@ try {
         ];
     }
 
-    // 6. Recent booths / All active managed stalls for operations table
+    // 5. Compute In Progress & Completed subsets for Confirmed Stalls
+    // Completed: Confirmed booths whose applicable checklist requirements are complete
+    // In Progress: Confirmed booths with some checklist work underway but not fully completed
+    $confirmedBoothsList = $pdo->query("
+        SELECT id, status 
+        FROM booths 
+        WHERE status != 'archived' 
+          AND (booking_stage = 'confirmed' OR booking_stage IS NULL OR booking_stage = '')
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    $completedCount = 0;
+    $inProgressCount = 0;
+
+    foreach ($confirmedBoothsList as $cb) {
+        $pr = $progressMap[$cb['id']] ?? null;
+        $app = $pr ? $pr['applicable'] : 0;
+        $comp = $pr ? $pr['completed'] : 0;
+        $st = $cb['status'] ?? 'draft';
+
+        $isComplete = ($app > 0 && $comp >= $app) || in_array($st, ['completed', 'installed', 'handover'], true);
+        if ($isComplete) {
+            $completedCount++;
+        } elseif ($comp > 0 || in_array($st, ['in_production', 'production', 'approved', 'design'], true)) {
+            $inProgressCount++;
+        }
+    }
+
+    // 6. Pending tasks (for active non-archived CONFIRMED booths only; ongoing discussions and legacy installation excluded)
+    $pendingTasks = (int)$pdo->query("
+        SELECT COUNT(*)
+        FROM booth_tasks t
+        INNER JOIN booths b ON t.booth_id = b.id
+        WHERE (t.is_completed = 0 AND (t.status IS NULL OR t.status = 'pending')) 
+          AND b.status != 'archived'
+          AND (b.booking_stage = 'confirmed' OR b.booking_stage IS NULL OR b.booking_stage = '')
+          AND LOWER(t.task_name) NOT LIKE '%install%'
+    ")->fetchColumn();
+
+    // 7. Recent booths / All active managed stalls for operations table
     $boothsStmt = $pdo->query("
         SELECT 
-            b.id, b.event_id, b.booth_number, b.client_name, b.stand_size, b.booth_type, b.status, b.main_drive_folder_url, b.created_at, b.updated_at,
+            b.id, b.event_id, b.booth_number, b.client_name, b.phone, b.stand_size, b.booth_type, b.booking_stage, b.discussion_remark, b.status, b.main_drive_folder_url, b.created_at, b.updated_at,
             e.name AS event_name, e.city AS event_city, e.setup_date, e.start_date
         FROM booths b
         LEFT JOIN events e ON b.event_id = e.id
@@ -104,13 +140,17 @@ try {
     reworkzone_json_response([
         'success' => true,
         'data'    => [
+            'confirmed_stalls'      => $confirmedStalls,
+            'ongoing_discussions'   => $ongoingDiscussions,
+            'in_progress'           => $inProgressCount,
+            'completed'             => $completedCount,
             'total_events'          => $totalEvents,
             'active_events'         => $activeEvents,
-            'total_booths'          => $totalBooths,
-            'completed_checklists'  => $completedChecklists,
-            'booths_in_production'  => $boothsInProduction,
-            'work_in_progress'      => $workInProgress,
-            'ready_completed'       => $readyCompleted,
+            'total_booths'          => $confirmedStalls,
+            'completed_checklists'  => $completedCount,
+            'booths_in_production'  => $inProgressCount,
+            'work_in_progress'      => $inProgressCount,
+            'ready_completed'       => $completedCount,
             'pending_tasks'         => $pendingTasks,
             'recent_booths'         => $recentBooths,
             'all_booths'            => $allManagedBooths,

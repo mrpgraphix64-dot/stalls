@@ -54,6 +54,9 @@ export interface BoothItem {
   goodies_status?: 'Awaiting Client Artwork' | 'Artwork Received' | 'Ready for Printing' | string;
   goodies_drive_url?: string | null;
   goodies_remark?: string | null;
+  booking_stage?: 'confirmed' | 'discussion';
+  discussion_remark?: string | null;
+  wall_configuration?: '3 Sides' | 'Back + Left' | 'Back + Right' | 'Back Wall Only' | string | null;
   status: BoothStatus;
   notes?: string;
   created_at?: string;
@@ -93,6 +96,10 @@ export interface ExhibitorItem {
 }
 
 export interface DashboardData {
+  confirmed_stalls?: number;
+  ongoing_discussions?: number;
+  in_progress?: number;
+  completed?: number;
   total_events: number;
   active_events: number;
   total_booths: number;
@@ -236,3 +243,15 @@ export interface ActivityLog {
   description: string;
   created_at: string;
 }
+
+export interface StallPrintData {
+  booth: BoothItem;
+  eventName: string;
+  tasks: BoothTask[];
+  productionItems: BoothItemRecord[];
+  furnitureItems: BoothItemRecord[];
+  electricalItems: BoothItemRecord[];
+  goodiesItems: BoothItemRecord[];
+  views3D?: BoothLink[];
+}
+

@@ -38,8 +38,8 @@ if ($method === 'GET') {
                 e.status AS event_status,
                 e.floor_plan_url AS event_floor_plan_url,
                 (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id) AS task_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1) AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS task_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%') AS tasks_completed,
                 (SELECT COUNT(*) FROM booth_items WHERE booth_id = b.id) AS item_count,
                 (SELECT COUNT(*) FROM booth_expenses WHERE booth_id = b.id) AS expense_count
             FROM booths b
@@ -74,8 +74,8 @@ if ($method === 'GET') {
             e.setup_date AS event_setup_date,
             e.floor_plan_url AS event_floor_plan_url,
             (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id) AS task_count,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1) AS tasks_completed
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS task_count,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%') AS tasks_completed
         FROM booths b
         LEFT JOIN events e ON b.event_id = e.id
         WHERE 1=1
@@ -86,6 +86,14 @@ if ($method === 'GET') {
     if (!empty($eventId)) {
         $sql .= " AND b.event_id = :event_id";
         $params[':event_id'] = $eventId;
+    }
+
+    // Filter by Booking Stage (confirmed vs discussion)
+    $bookingStageFilter = trim($_GET['booking_stage'] ?? '');
+    if ($bookingStageFilter === 'confirmed') {
+        $sql .= " AND (b.booking_stage = 'confirmed' OR b.booking_stage IS NULL OR b.booking_stage = '')";
+    } elseif ($bookingStageFilter === 'discussion') {
+        $sql .= " AND b.booking_stage = 'discussion'";
     }
 
     // Filter by Status
@@ -156,6 +164,17 @@ if ($method === 'POST') {
         $goodiesRemark        = trim($body['goodies_remark'] ?? '');
         $status               = trim($body['status'] ?? 'draft');
         $notes                = trim($body['notes'] ?? '');
+        $bookingStage         = trim($body['booking_stage'] ?? 'confirmed');
+        if (!in_array($bookingStage, ['confirmed', 'discussion'], true)) {
+            $bookingStage = 'confirmed';
+        }
+        $discussionRemark     = trim($body['discussion_remark'] ?? '');
+        $wallConfiguration    = array_key_exists('wall_configuration', $body)
+            ? (trim((string)$body['wall_configuration']) !== '' ? trim((string)$body['wall_configuration']) : null)
+            : null;
+        if ($wallConfiguration !== null && !in_array($wallConfiguration, ['3 Sides', 'Back + Left', 'Back + Right', 'Back Wall Only'], true)) {
+            $wallConfiguration = null;
+        }
 
         if (!in_array($designResponsibility, ['Client Side', 'Our Side'], true)) {
             $designResponsibility = 'Client Side';
@@ -188,8 +207,30 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Selected event does not exist.'], 400);
         }
 
-        if (empty($boothNumber)) {
-            reworkzone_json_response(['success' => false, 'error' => 'Booth / Stall number is required.'], 400);
+        if ($bookingStage === 'discussion') {
+            if (empty($boothNumber)) {
+                $boothNumber = 'Pending';
+            }
+        } else {
+            if (empty($boothNumber) || strtolower($boothNumber) === 'pending') {
+                reworkzone_json_response(['success' => false, 'error' => 'Booth / Stall number is required for confirmed stalls.'], 400);
+            }
+
+            // Conflict check: prevent duplicate confirmed stall number within the same event
+            $dupCheck = $pdo->prepare("
+                SELECT id, booth_number, client_name FROM booths 
+                WHERE event_id = :event_id 
+                  AND UPPER(TRIM(booth_number)) = UPPER(TRIM(:booth_number))
+                  AND (booking_stage = 'confirmed' OR booking_stage IS NULL OR booking_stage = '')
+                  AND status != 'archived'
+            ");
+            $dupCheck->execute([':event_id' => $eventId, ':booth_number' => $boothNumber]);
+            if ($dupRow = $dupCheck->fetch()) {
+                reworkzone_json_response([
+                    'success' => false,
+                    'error'   => "Stall #{$boothNumber} is already confirmed for this event ({$dupRow['client_name']})."
+                ], 400);
+            }
         }
 
         if (strlen($clientName) < 2) {
@@ -215,12 +256,14 @@ if ($method === 'POST') {
                 stand_size, booth_type, budget, quoted_amount, main_drive_folder_url,
                 design_responsibility, print_file_status, print_drive_url, print_remark,
                 goodies_status, goodies_drive_url, goodies_remark,
+                booking_stage, discussion_remark, wall_configuration,
                 status, notes, created_at, updated_at
             ) VALUES (
                 :id, :event_id, :booth_number, :client_name, :contact_person, :phone, :email,
                 :stand_size, :booth_type, :budget, :quoted_amount, :main_drive_folder_url,
                 :design_responsibility, :print_file_status, :print_drive_url, :print_remark,
                 :goodies_status, :goodies_drive_url, :goodies_remark,
+                :booking_stage, :discussion_remark, :wall_configuration,
                 :status, :notes, :created_at, :updated_at
             )
         ");
@@ -244,6 +287,9 @@ if ($method === 'POST') {
             ':goodies_status'        => $goodiesStatus,
             ':goodies_drive_url'      => !empty($goodiesDriveUrl) ? $goodiesDriveUrl : null,
             ':goodies_remark'        => !empty($goodiesRemark) ? $goodiesRemark : null,
+            ':booking_stage'         => $bookingStage,
+            ':discussion_remark'     => !empty($discussionRemark) ? $discussionRemark : null,
+            ':wall_configuration'    => $wallConfiguration,
             ':status'                => $status,
             ':notes'                 => $notes,
             ':created_at'            => $now,
@@ -261,30 +307,31 @@ if ($method === 'POST') {
             ':desc'     => "Created booth '{$boothNumber}' for client '{$clientName}' under event '{$eventRecord['name']}'."
         ]);
 
-        // Auto-seed default 6 checklist tasks for this new booth
-        $defaultTasks = [
-            'Design',
-            'Print Files',
-            'Production',
-            'Furniture',
-            'Electrical',
-            'Installation',
-        ];
-        $insertTaskStmt = $pdo->prepare("
-            INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, status, created_at, updated_at)
-            VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :sort_order, 0, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ");
-        foreach ($defaultTasks as $idx => $taskName) {
-            $tId = 'tsk_' . bin2hex(random_bytes(6));
-            $order = $idx + 1;
-            $phase = $taskName;
-            $insertTaskStmt->execute([
-                ':id'         => $tId,
-                ':booth_id'   => $id,
-                ':phase'      => $phase,
-                ':task_name'  => $taskName,
-                ':sort_order' => $order,
-            ]);
+        // Auto-seed default 5 checklist tasks ONLY for confirmed booths
+        if ($bookingStage === 'confirmed') {
+            $defaultTasks = [
+                'Design',
+                'Print Files',
+                'Production',
+                'Furniture',
+                'Electrical',
+            ];
+            $insertTaskStmt = $pdo->prepare("
+                INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, status, created_at, updated_at)
+                VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :sort_order, 0, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ");
+            foreach ($defaultTasks as $idx => $taskName) {
+                $tId = 'tsk_' . bin2hex(random_bytes(6));
+                $order = $idx + 1;
+                $phase = $taskName;
+                $insertTaskStmt->execute([
+                    ':id'         => $tId,
+                    ':booth_id'   => $id,
+                    ':phase'      => $phase,
+                    ':task_name'  => $taskName,
+                    ':sort_order' => $order,
+                ]);
+            }
         }
 
         // Retrieve inserted booth
@@ -337,6 +384,19 @@ if ($method === 'POST') {
         $goodiesRemark        = array_key_exists('goodies_remark', $body) ? trim((string)$body['goodies_remark']) : ($existing['goodies_remark'] ?? '');
         $status               = trim($body['status'] ?? 'draft');
         $notes                = trim($body['notes'] ?? '');
+        $bookingStage         = trim($body['booking_stage'] ?? ($existing['booking_stage'] ?? 'confirmed'));
+        if (!in_array($bookingStage, ['confirmed', 'discussion'], true)) {
+            $bookingStage = $existing['booking_stage'] ?? 'confirmed';
+        }
+        $discussionRemark     = array_key_exists('discussion_remark', $body)
+            ? trim((string)$body['discussion_remark'])
+            : ($existing['discussion_remark'] ?? null);
+        $wallConfiguration    = array_key_exists('wall_configuration', $body)
+            ? (trim((string)$body['wall_configuration']) !== '' ? trim((string)$body['wall_configuration']) : null)
+            : ($existing['wall_configuration'] ?? null);
+        if ($wallConfiguration !== null && !in_array($wallConfiguration, ['3 Sides', 'Back + Left', 'Back + Right', 'Back Wall Only'], true)) {
+            $wallConfiguration = $existing['wall_configuration'] ?? null;
+        }
 
         if (!in_array($designResponsibility, ['Client Side', 'Our Side'], true)) {
             $designResponsibility = $existing['design_responsibility'] ?? 'Client Side';
@@ -355,9 +415,37 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Client Artwork Google Drive URL must be a valid web link.'], 400);
         }
 
-        if (empty($boothNumber)) {
-            reworkzone_json_response(['success' => false, 'error' => 'Booth number is required.'], 400);
+        if ($bookingStage === 'discussion') {
+            if (empty($boothNumber)) {
+                $boothNumber = 'Pending';
+            }
+        } else {
+            if (empty($boothNumber) || strtolower($boothNumber) === 'pending') {
+                reworkzone_json_response(['success' => false, 'error' => 'Booth / Stall number is required for confirmed stalls.'], 400);
+            }
+
+            // Conflict check: prevent duplicate confirmed stall number within the same event
+            $dupCheck = $pdo->prepare("
+                SELECT id, booth_number, client_name FROM booths 
+                WHERE event_id = :event_id 
+                  AND UPPER(TRIM(booth_number)) = UPPER(TRIM(:booth_number))
+                  AND id != :id
+                  AND (booking_stage = 'confirmed' OR booking_stage IS NULL OR booking_stage = '')
+                  AND status != 'archived'
+            ");
+            $dupCheck->execute([
+                ':event_id'     => $eventId,
+                ':booth_number' => $boothNumber,
+                ':id'           => $id,
+            ]);
+            if ($dupRow = $dupCheck->fetch()) {
+                reworkzone_json_response([
+                    'success' => false,
+                    'error'   => "Stall #{$boothNumber} is already confirmed for this event ({$dupRow['client_name']})."
+                ], 400);
+            }
         }
+
         if (strlen($clientName) < 2) {
             reworkzone_json_response(['success' => false, 'error' => 'Client name must be at least 2 characters.'], 400);
         }
@@ -392,6 +480,9 @@ if ($method === 'POST') {
                 goodies_status = :goodies_status,
                 goodies_drive_url = :goodies_drive_url,
                 goodies_remark = :goodies_remark,
+                booking_stage = :booking_stage,
+                discussion_remark = :discussion_remark,
+                wall_configuration = :wall_configuration,
                 status = :status,
                 notes = :notes,
                 updated_at = :updated_at
@@ -416,11 +507,42 @@ if ($method === 'POST') {
             ':goodies_status'        => $goodiesStatus,
             ':goodies_drive_url'      => !empty($goodiesDriveUrl) ? $goodiesDriveUrl : null,
             ':goodies_remark'        => !empty($goodiesRemark) ? $goodiesRemark : null,
+            ':booking_stage'         => $bookingStage,
+            ':discussion_remark'     => !empty($discussionRemark) ? $discussionRemark : null,
+            ':wall_configuration'    => $wallConfiguration,
             ':status'                => $status,
             ':notes'                 => $notes,
             ':updated_at'            => $now,
             ':id'                    => $id,
         ]);
+
+        // Auto-seed default 6 checklist tasks if this booth is confirmed and has no tasks
+        if ($bookingStage === 'confirmed') {
+            $taskCheck = $pdo->prepare("SELECT COUNT(*) FROM booth_tasks WHERE booth_id = :id");
+            $taskCheck->execute([':id' => $id]);
+            if ((int)$taskCheck->fetchColumn() === 0) {
+                $defaultTasks = [
+                    'Design',
+                    'Print Files',
+                    'Production',
+                    'Furniture',
+                    'Electrical',
+                ];
+                $insertTaskStmt = $pdo->prepare("
+                    INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, status, created_at, updated_at)
+                    VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :sort_order, 0, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ");
+                foreach ($defaultTasks as $idx => $taskName) {
+                    $insertTaskStmt->execute([
+                        ':id'         => 'tsk_' . bin2hex(random_bytes(6)),
+                        ':booth_id'   => $id,
+                        ':phase'      => $taskName,
+                        ':task_name'  => $taskName,
+                        ':sort_order' => $idx + 1,
+                    ]);
+                }
+            }
+        }
 
         // Audit Log
         $logStmt = $pdo->prepare("
@@ -440,6 +562,118 @@ if ($method === 'POST') {
         reworkzone_json_response([
             'success' => true,
             'message' => 'Booth updated successfully.',
+            'booth'   => $updated
+        ]);
+    }
+
+    // ---------------------------------------------------------------------
+    // 2B-2. CONFIRM BOOTH (Convert Ongoing Discussion to Confirmed Stall)
+    // ---------------------------------------------------------------------
+    if ($action === 'confirm') {
+        $id = trim($body['id'] ?? ($_GET['id'] ?? ''));
+
+        if (empty($id)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Booth ID is required.'], 400);
+        }
+
+        $check = $pdo->prepare("SELECT * FROM booths WHERE id = :id");
+        $check->execute([':id' => $id]);
+        $existing = $check->fetch();
+
+        if (!$existing) {
+            reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
+        }
+
+        $boothNumber = trim($body['booth_number'] ?? ($existing['booth_number'] ?? ''));
+        if (empty($boothNumber) || strtolower($boothNumber) === 'pending') {
+            reworkzone_json_response(['success' => false, 'error' => 'Booth / Stall number is required to confirm this stall.'], 400);
+        }
+
+        // Conflict check: prevent duplicate confirmed stall number within the same event
+        $dupCheck = $pdo->prepare("
+            SELECT id, booth_number, client_name FROM booths 
+            WHERE event_id = :event_id 
+              AND UPPER(TRIM(booth_number)) = UPPER(TRIM(:booth_number))
+              AND id != :id
+              AND (booking_stage = 'confirmed' OR booking_stage IS NULL OR booking_stage = '')
+              AND status != 'archived'
+        ");
+        $dupCheck->execute([
+            ':event_id'     => $existing['event_id'],
+            ':booth_number' => $boothNumber,
+            ':id'           => $id,
+        ]);
+        if ($dupRow = $dupCheck->fetch()) {
+            reworkzone_json_response([
+                'success' => false,
+                'error'   => "Stall #{$boothNumber} is already confirmed for this event ({$dupRow['client_name']})."
+            ], 400);
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $stmt = $pdo->prepare("
+            UPDATE booths 
+            SET booking_stage = 'confirmed',
+                booth_number = :booth_number,
+                updated_at = :now
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':booth_number' => $boothNumber,
+            ':now'          => $now,
+            ':id'           => $id,
+        ]);
+
+        // Auto-seed default 5 checklist tasks exactly once if not already present
+        $taskCheck = $pdo->prepare("SELECT COUNT(*) FROM booth_tasks WHERE booth_id = :id");
+        $taskCheck->execute([':id' => $id]);
+        if ((int)$taskCheck->fetchColumn() === 0) {
+            $defaultTasks = [
+                'Design',
+                'Print Files',
+                'Production',
+                'Furniture',
+                'Electrical',
+            ];
+            $insertTaskStmt = $pdo->prepare("
+                INSERT INTO booth_tasks (id, booth_id, phase, task_name, sort_order, display_order, is_completed, status, created_at, updated_at)
+                VALUES (:id, :booth_id, :phase, :task_name, :sort_order, :sort_order, 0, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ");
+            foreach ($defaultTasks as $idx => $taskName) {
+                $insertTaskStmt->execute([
+                    ':id'         => 'tsk_' . bin2hex(random_bytes(6)),
+                    ':booth_id'   => $id,
+                    ':phase'      => $taskName,
+                    ':task_name'  => $taskName,
+                    ':sort_order' => $idx + 1,
+                ]);
+            }
+        }
+
+        // Audit Log
+        $logStmt = $pdo->prepare("
+            INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)
+            VALUES (:id, :booth_id, 'booth_confirmed', 'Master Admin', :desc)
+        ");
+        $logStmt->execute([
+            ':id'       => bin2hex(random_bytes(16)),
+            ':booth_id' => $id,
+            ':desc'     => "Confirmed stall '{$boothNumber}' for client '{$existing['client_name']}'."
+        ]);
+
+        // Retrieve updated booth
+        $getStmt = $pdo->prepare("
+            SELECT b.*, e.name AS event_name, e.city AS event_city
+            FROM booths b
+            LEFT JOIN events e ON b.event_id = e.id
+            WHERE b.id = :id
+        ");
+        $getStmt->execute([':id' => $id]);
+        $updated = $getStmt->fetch();
+
+        reworkzone_json_response([
+            'success' => true,
+            'message' => "Stall #{$boothNumber} confirmed successfully.",
             'booth'   => $updated
         ]);
     }

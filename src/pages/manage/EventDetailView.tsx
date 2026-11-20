@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   ArrowLeft,
   Calendar,
@@ -16,13 +16,32 @@ import {
   Layers,
   CheckCircle2,
   Trash2,
+  ArrowUp,
+  ArrowDown,
+  Search,
+  Printer,
+  Check,
 } from 'lucide-react';
-import { fetchEvent, updateEvent, archiveEvent, deleteEvent, deleteBooth, archiveBooth } from './api';
-import { EventItem, EventStatus, BoothItem } from './types';
+import {
+  fetchEvent,
+  updateEvent,
+  archiveEvent,
+  deleteEvent,
+  deleteBooth,
+  archiveBooth,
+  fetchEventChecklistsPrintData,
+  fetchBooth,
+  fetchTasks,
+  fetchItems,
+  fetchLinks,
+} from './api';
+import { EventItem, EventStatus, BoothItem, StallPrintData } from './types';
 import { Modal } from './Modal';
 import { AddBoothModal } from './AddBoothModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { SortDirection, sortBoothsByNumber } from './boothSort';
+import { PrintChecklistModal } from './PrintChecklistModal';
 
 interface EventDetailViewProps {
   eventId: string;
@@ -46,6 +65,71 @@ export function EventDetailView({
   const [deletingBooth, setDeletingBooth] = useState<BoothItem | null>(null);
   const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
   const [isAddBoothOpen, setIsAddBoothOpen] = useState<boolean>(false);
+
+  // Sorting & Filtering for Booths Registered Under This Event
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const toggleSortDirection = () => {
+    setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+  };
+
+  // Printable Stall Checklist State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+  const [printStallsData, setPrintStallsData] = useState<StallPrintData[]>([]);
+  const [printModalTitle, setPrintModalTitle] = useState<string>('');
+  const [printModalSubtitle, setPrintModalSubtitle] = useState<string>('');
+  const [loadingPrint, setLoadingPrint] = useState<boolean>(false);
+
+  const handlePrintAllStalls = async () => {
+    try {
+      setLoadingPrint(true);
+      const res = await fetchEventChecklistsPrintData(eventId);
+      setPrintStallsData(res.stalls || []);
+      setPrintModalTitle(`All Stall Checklists: ${event?.name || 'Exhibition'}`);
+      setPrintModalSubtitle(`${res.stalls?.length || 0} Stalls Registered • 1 Stall Per A4 Page`);
+      setIsPrintModalOpen(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to prepare stall checklists for printing.');
+    } finally {
+      setLoadingPrint(false);
+    }
+  };
+
+  const handlePrintSingleBooth = async (bthSummary: BoothItem) => {
+    try {
+      setLoadingPrint(true);
+      const [bth, tskRes, pItems, fItems, eItems, gItems, d3dViews] = await Promise.all([
+        fetchBooth(bthSummary.id),
+        fetchTasks(bthSummary.id).catch(() => ({ tasks: [], total: 5, completed: 0, percentage: 0, success: true })),
+        fetchItems(bthSummary.id, 'production').catch(() => []),
+        fetchItems(bthSummary.id, 'furniture').catch(() => []),
+        fetchItems(bthSummary.id, 'electrical').catch(() => []),
+        fetchItems(bthSummary.id, 'goodies').catch(() => []),
+        fetchLinks(bthSummary.id, 'render_3d').catch(() => []),
+      ]);
+
+      setPrintStallsData([
+        {
+          booth: bth,
+          eventName: event?.name || bth.event_name || 'Exhibition',
+          tasks: tskRes.tasks || [],
+          productionItems: pItems || [],
+          furnitureItems: fItems || [],
+          electricalItems: eItems || [],
+          goodiesItems: gItems || [],
+          views3D: d3dViews || [],
+        },
+      ]);
+      setPrintModalTitle(`Stall #${bth.booth_number} — ${bth.client_name}`);
+      setPrintModalSubtitle(`${event?.name || 'Exhibition'} • ${bth.stand_size || '3 × 3 m'}`);
+      setIsPrintModalOpen(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to prepare stall checklist for printing.');
+    } finally {
+      setLoadingPrint(false);
+    }
+  };
 
   // Edit Form State
   const [formName, setFormName] = useState<string>('');
@@ -179,6 +263,25 @@ export function EventDetailView({
     }
   };
 
+  const boothsList = event?.booths || [];
+
+  const filteredBooths = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return boothsList;
+    return boothsList.filter((b) => {
+      return (
+        (b.booth_number || '').toLowerCase().includes(q) ||
+        (b.client_name || '').toLowerCase().includes(q) ||
+        (b.phone || '').toLowerCase().includes(q) ||
+        (b.stand_size || '').toLowerCase().includes(q)
+      );
+    });
+  }, [boothsList, searchQuery]);
+
+  const sortedBooths = useMemo(() => {
+    return sortBoothsByNumber(filteredBooths, sortDirection);
+  }, [filteredBooths, sortDirection]);
+
   if (loading) {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-zinc-400 gap-3">
@@ -202,8 +305,6 @@ export function EventDetailView({
     );
   }
 
-  const boothsList = event.booths || [];
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl mx-auto">
       {/* Navigation & Actions Bar */}
@@ -217,6 +318,17 @@ export function EventDetailView({
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={loadingPrint || boothsList.length === 0}
+            onClick={handlePrintAllStalls}
+            className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Print Clean A4 Checklists for All Stalls in this Exhibition (1 Stall per page)"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>{loadingPrint ? 'Preparing...' : 'Print All Stall Checklists'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsFloorplanModalOpen(true)}
@@ -318,22 +430,48 @@ export function EventDetailView({
 
       {/* Booths List under this Event */}
       <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-amber-400" />
             <h2 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-              Booths Registered Under This Event ({boothsList.length})
+              Booths Registered Under This Event ({searchQuery ? `${sortedBooths.length} of ${boothsList.length}` : boothsList.length})
             </h2>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsAddBoothOpen(true)}
-            className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Add Booth</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {boothsList.length > 2 && (
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter booths..."
+                  className="bg-[#121319] border border-white/[0.08] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 w-36 sm:w-48 transition-all"
+                />
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={loadingPrint || boothsList.length === 0}
+              onClick={handlePrintAllStalls}
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition-colors px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-50"
+              title="Print All Stall Checklists"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print All</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsAddBoothOpen(true)}
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition-colors px-2 py-1.5 rounded-lg hover:bg-white/[0.04]"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Add Booth</span>
+            </button>
+          </div>
         </div>
 
         {boothsList.length === 0 ? (
@@ -352,23 +490,162 @@ export function EventDetailView({
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto border border-white/[0.07] rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#121319] border-b border-white/[0.07] text-zinc-400 font-medium">
-                <tr>
-                  <th className="py-3 px-3.5">Booth #</th>
-                  <th className="py-3 px-3.5">Company Name</th>
-                  <th className="py-3 px-3.5">Mobile</th>
-                  <th className="py-3 px-3.5">Size</th>
-                  <th className="py-3 px-3.5">Structure</th>
-                  <th className="py-3 px-3.5">Checklist Progress</th>
-                  <th className="py-3 px-3.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.05] text-zinc-300">
-                {boothsList.map((b) => {
+          <div className="bg-[#15171e] border border-white/[0.08] rounded-2xl overflow-hidden shadow-sm">
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#121319] border-b border-white/[0.08] text-zinc-400 font-medium">
+                  <tr>
+                    <th className="py-3.5 px-4" aria-sort={sortDirection === 'asc' ? 'ascending' : 'descending'}>
+                      <button
+                        type="button"
+                        onClick={toggleSortDirection}
+                        className="inline-flex items-center gap-1.5 font-semibold text-zinc-300 hover:text-amber-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500 rounded py-0.5 px-1 -ml-1 transition-colors cursor-pointer select-none group"
+                        title={`Sorted by Booth # (${sortDirection === 'asc' ? 'Ascending' : 'Descending'}). Click to toggle.`}
+                      >
+                        <span>Booth #</span>
+                        {sortDirection === 'asc' ? (
+                          <ArrowUp className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+                        ) : (
+                          <ArrowDown className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+                        )}
+                      </button>
+                    </th>
+                    <th className="py-3.5 px-4">Company Name</th>
+                    <th className="py-3.5 px-4">Mobile</th>
+                    <th className="py-3.5 px-4">Size & Structure</th>
+                    <th className="py-3.5 px-4">Checklist Progress</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.05] text-zinc-300">
+                  {sortedBooths.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-zinc-500 text-xs">
+                        No booths match your filter query "{searchQuery}".
+                      </td>
+                    </tr>
+                  ) : (
+                    sortedBooths.map((b) => {
+                      const comp = b.tasks_completed ?? 0;
+                      const total = b.task_count ?? 5;
+                      const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
+                      const rawSt = (b.booth_type || '').toLowerCase();
+                      const structure = rawSt.includes('frame') || rawSt.includes('octonorm')
+                        ? 'Frame'
+                        : rawSt.includes('custom')
+                        ? 'Customize'
+                        : 'Wooden';
+
+                      return (
+                        <tr
+                          key={b.id}
+                          onClick={() => onNavigate(`booth:${b.id}`)}
+                          className="group hover:bg-zinc-800/40 odd:bg-transparent even:bg-white/[0.015] cursor-pointer transition-colors"
+                        >
+                          <td className="py-3.5 px-4 font-mono">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/25 font-mono font-bold text-amber-300 text-xs tracking-tight group-hover:border-amber-500/50 group-hover:bg-amber-500/20 transition-all">
+                              {b.booth_number}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate max-w-[220px]" title={b.client_name}>
+                              {b.client_name}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4 font-mono text-zinc-400">
+                            {b.phone ? (
+                              <a
+                                href={`tel:${b.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-zinc-300 hover:text-amber-400 hover:underline transition-colors"
+                                title={`Call ${b.phone}`}
+                              >
+                                {b.phone}
+                              </a>
+                            ) : (
+                              <span className="text-zinc-600">—</span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-400">
+                              <span className="px-2 py-0.5 rounded bg-[#1a1d26] border border-white/[0.08] font-medium text-zinc-300 text-[11px]">
+                                {structure}
+                              </span>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-zinc-300">{b.stand_size || '3 × 3 m'}</span>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            {pct === 100 ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[11px] font-medium">
+                                <Check className="w-3 h-3" />
+                                <span>{total}/{total} Done</span>
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-20 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                                  <div
+                                    className="h-full bg-amber-500 rounded-full"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="font-mono text-[11px] text-zinc-300">
+                                  {comp}/{total} <span className="text-zinc-500">({pct}%)</span>
+                                </span>
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePrintSingleBooth(b);
+                                }}
+                                className="p-1.5 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-colors cursor-pointer"
+                                title="Print Stall Checklist Sheet"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingBooth(b);
+                                }}
+                                className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+                                title="Delete Stall"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all ml-1 shrink-0" />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Card View */}
+            <div className="block sm:hidden divide-y divide-white/[0.06]">
+              {sortedBooths.length === 0 ? (
+                <div className="p-6 text-center text-zinc-500 text-xs">
+                  No booths match your filter query "{searchQuery}".
+                </div>
+              ) : (
+                sortedBooths.map((b) => {
                   const comp = b.tasks_completed ?? 0;
-                  const total = b.task_count ?? 6;
+                  const total = b.task_count ?? 5;
                   const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
                   const rawSt = (b.booth_type || '').toLowerCase();
                   const structure = rawSt.includes('frame') || rawSt.includes('octonorm')
@@ -378,66 +655,67 @@ export function EventDetailView({
                     : 'Wooden';
 
                   return (
-                    <tr
+                    <div
                       key={b.id}
                       onClick={() => onNavigate(`booth:${b.id}`)}
-                      className="group hover:bg-white/[0.03] cursor-pointer transition-colors"
+                      className="p-3.5 hover:bg-zinc-800/40 active:bg-zinc-800/60 cursor-pointer transition-colors space-y-2.5"
                     >
-                      <td className="py-3 px-3.5 font-mono font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">
-                        {b.booth_number}
-                      </td>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 font-mono font-bold text-amber-300 text-xs tracking-tight shrink-0">
+                            {b.booth_number}
+                          </span>
+                          <span className="font-semibold text-zinc-100 text-sm truncate">
+                            {b.client_name}
+                          </span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                      </div>
 
-                      <td className="py-3 px-3.5 font-semibold text-zinc-100">
-                        {b.client_name}
-                      </td>
-
-                      <td className="py-3 px-3.5 font-mono text-zinc-400">
-                        {b.phone ? (
-                          <a
-                            href={`tel:${b.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-zinc-300 hover:text-amber-400 hover:underline"
-                          >
-                            {b.phone}
-                          </a>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-3.5 font-mono text-zinc-400">
-                        {b.stand_size || '3 × 3 m'}
-                      </td>
-
-                      <td className="py-3 px-3.5">
-                        <span className="px-2 py-0.5 rounded-md bg-[#191c25] border border-white/[0.08] font-medium text-zinc-300 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-400">
+                        <span className="px-1.5 py-0.5 rounded bg-[#1a1d26] border border-white/[0.08] font-medium text-zinc-300 text-[10px]">
                           {structure}
                         </span>
-                      </td>
+                        <span className="text-zinc-600">•</span>
+                        <span className="font-mono text-zinc-300 text-[11px]">{b.stand_size || '3 × 3 m'}</span>
+                        {b.phone && (
+                          <>
+                            <span className="text-zinc-600">•</span>
+                            <a
+                              href={`tel:${b.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-zinc-400 hover:text-amber-400 font-mono text-[11px]"
+                            >
+                              {b.phone}
+                            </a>
+                          </>
+                        )}
+                      </div>
 
-                      <td className="py-3 px-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-24 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                      <div className="flex items-center justify-between gap-3 pt-1">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="flex-1 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full"
+                              className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
                               style={{ width: `${pct}%` }}
                             />
                           </div>
-                          <span className="font-mono text-[11px] text-zinc-400">
+                          <span className="font-mono text-[11px] text-zinc-400 shrink-0">
                             {comp}/{total} ({pct}%)
                           </span>
                         </div>
-                      </td>
 
-                      <td className="py-3 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
-                            onClick={() => onNavigate(`booth:${b.id}`)}
-                            className="px-2.5 py-1 bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 text-[11px] font-semibold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrintSingleBooth(b);
+                            }}
+                            className="p-1.5 text-zinc-400 hover:text-amber-400 active:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                            title="Print Stall Checklist Sheet"
                           >
-                            <span>Open</span>
-                            <ChevronRight className="w-3 h-3 text-amber-400" />
+                            <Printer className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
@@ -445,18 +723,18 @@ export function EventDetailView({
                               e.stopPropagation();
                               setDeletingBooth(b);
                             }}
-                            className="p-1 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-zinc-500 hover:text-red-400 active:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
                             title="Delete Stall"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   );
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -686,6 +964,15 @@ export function EventDetailView({
             await loadEvent();
           }
         }}
+      />
+
+      {/* Bulk & Single Print Checklists Modal */}
+      <PrintChecklistModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title={printModalTitle}
+        subtitle={printModalSubtitle}
+        stalls={printStallsData}
       />
     </div>
   );
