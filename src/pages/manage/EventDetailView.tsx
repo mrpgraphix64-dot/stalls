@@ -20,6 +20,8 @@ import {
   ArrowDown,
   Search,
   Printer,
+  Download,
+  FileSpreadsheet,
   Check,
 } from 'lucide-react';
 import {
@@ -45,6 +47,18 @@ import { SortDirection, sortBoothsByNumber, isPendingOrEmpty } from './boothSort
 import { PrintChecklistModal } from './PrintChecklistModal';
 import { EditBoothModal } from './EditBoothModal';
 import { BoothWallIndicator } from './BoothWallIndicator';
+import { StallChecklistSheet } from './StallChecklistSheet';
+import {
+  CHECKLIST_FILTER_OPTIONS,
+  ChecklistFilterType,
+  getExportFilename,
+  exportElementsToPdf,
+} from './pdfExport';
+import {
+  generateStallRequirementsWorkbook,
+  downloadWorkbookAsXlsx,
+  getExcelExportFilename,
+} from './excelExport';
 
 interface EventDetailViewProps {
   eventId: string;
@@ -266,7 +280,12 @@ export function EventDetailView({
     }
   };
 
-  const [stageFilter, setStageFilter] = useState<'all' | 'confirmed' | 'discussions'>('all');
+  const [checklistFilter, setChecklistFilter] = useState<ChecklistFilterType>('all');
+  const [loadingPdf, setLoadingPdf] = useState<boolean>(false);
+  const [pdfProgressText, setPdfProgressText] = useState<string>('');
+  const [loadingExcel, setLoadingExcel] = useState<boolean>(false);
+  const [excelProgressText, setExcelProgressText] = useState<string>('');
+  const [pdfExportData, setPdfExportData] = useState<StallPrintData[] | null>(null);
   const [editingBooth, setEditingBooth] = useState<BoothItem | null>(null);
   const [confirmingBooth, setConfirmingBooth] = useState<BoothItem | null>(null);
   const [confirmStallNumber, setConfirmStallNumber] = useState<string>('');
@@ -274,15 +293,61 @@ export function EventDetailView({
   const [confirmSubmitting, setConfirmSubmitting] = useState<boolean>(false);
 
   const boothsList = event?.booths || [];
-  const confirmedCount = boothsList.filter((b) => b.booking_stage !== 'discussion').length;
-  const discussionsCount = boothsList.filter((b) => b.booking_stage === 'discussion').length;
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<ChecklistFilterType, number> = {
+      all: boothsList.length,
+      done: 0,
+      in_progress: 0,
+      not_started: 0,
+      discussions: 0,
+    };
+
+    for (const b of boothsList) {
+      if (b.booking_stage === 'discussion') {
+        counts.discussions++;
+      } else {
+        const applicable = b.task_count ?? 0;
+        const comp = b.tasks_completed ?? 0;
+        if (applicable > 0 && comp === applicable) {
+          counts.done++;
+        } else if (applicable > 0 && comp > 0 && comp < applicable) {
+          counts.in_progress++;
+        } else {
+          counts.not_started++;
+        }
+      }
+    }
+
+    return counts;
+  }, [boothsList]);
+
+  const confirmedCount = boothsList.length - filterCounts.discussions;
+  const discussionsCount = filterCounts.discussions;
 
   const filteredBooths = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return boothsList.filter((b) => {
-      if (stageFilter === 'confirmed' && b.booking_stage === 'discussion') return false;
-      if (stageFilter === 'discussions' && b.booking_stage !== 'discussion') return false;
+      // 1. Checklist Filter
+      if (checklistFilter === 'done') {
+        if (b.booking_stage === 'discussion') return false;
+        const applicable = b.task_count ?? 0;
+        const comp = b.tasks_completed ?? 0;
+        if (!(applicable > 0 && comp === applicable)) return false;
+      } else if (checklistFilter === 'in_progress') {
+        if (b.booking_stage === 'discussion') return false;
+        const applicable = b.task_count ?? 0;
+        const comp = b.tasks_completed ?? 0;
+        if (!(applicable > 0 && comp > 0 && comp < applicable)) return false;
+      } else if (checklistFilter === 'not_started') {
+        if (b.booking_stage === 'discussion') return false;
+        const comp = b.tasks_completed ?? 0;
+        if (comp > 0) return false;
+      } else if (checklistFilter === 'discussions') {
+        if (b.booking_stage !== 'discussion') return false;
+      }
 
+      // 2. Search Query
       if (!q) return true;
       return (
         (b.booth_number || '').toLowerCase().includes(q) ||
@@ -291,11 +356,108 @@ export function EventDetailView({
         (b.stand_size || '').toLowerCase().includes(q)
       );
     });
-  }, [boothsList, searchQuery, stageFilter]);
+  }, [boothsList, searchQuery, checklistFilter]);
 
   const sortedBooths = useMemo(() => {
     return sortBoothsByNumber(filteredBooths, sortDirection);
   }, [filteredBooths, sortDirection]);
+
+  // Stalls to export for checklists (excludes ongoing discussions unless explicitly selected)
+  const matchingStallsForExport = useMemo(() => {
+    if (checklistFilter === 'discussions') {
+      return sortedBooths;
+    }
+    return sortedBooths.filter((b) => b.booking_stage !== 'discussion');
+  }, [sortedBooths, checklistFilter]);
+
+  const handleDownloadPDF = async () => {
+    if (loadingPdf || matchingStallsForExport.length === 0) return;
+    try {
+      setLoadingPdf(true);
+      setPdfProgressText('Loading data...');
+      const boothIds = matchingStallsForExport.map((b) => b.id);
+      const includeDiscussions = checklistFilter === 'discussions';
+      const res = await fetchEventChecklistsPrintData(eventId, boothIds, includeDiscussions);
+      const stalls = res.stalls || [];
+      if (stalls.length === 0) {
+        alert('No matching stalls available to export.');
+        return;
+      }
+      setPdfExportData(stalls);
+      setPdfProgressText('Rendering...');
+      // Allow React to mount the scratch container
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      const sheets = Array.from(document.querySelectorAll<HTMLElement>('#event-pdf-export-scratch .event-pdf-sheet'));
+      const filename = getExportFilename(event?.name || 'Exhibition', checklistFilter);
+      await exportElementsToPdf(sheets, filename, (curr, total) => {
+        setPdfProgressText(`${curr}/${total}`);
+      });
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF. You can also use "Print All" to Save as PDF.');
+    } finally {
+      setPdfExportData(null);
+      setLoadingPdf(false);
+      setPdfProgressText('');
+    }
+  };
+
+  const handlePrintFilteredStalls = async () => {
+    if (loadingPrint || matchingStallsForExport.length === 0) return;
+    try {
+      setLoadingPrint(true);
+      const boothIds = matchingStallsForExport.map((b) => b.id);
+      const includeDiscussions = checklistFilter === 'discussions';
+      const res = await fetchEventChecklistsPrintData(eventId, boothIds, includeDiscussions);
+      setPrintStallsData(res.stalls || []);
+      const filterLabel = CHECKLIST_FILTER_OPTIONS.find((f) => f.id === checklistFilter)?.label || 'Stalls';
+      setPrintModalTitle(
+        checklistFilter === 'all'
+          ? `All Stall Checklists: ${event?.name || 'Exhibition'}`
+          : `${filterLabel}: ${event?.name || 'Exhibition'}`
+      );
+      setPrintModalSubtitle(
+        `${res.stalls?.length || 0} Stalls Included • 1 Stall Per A4 Page`
+      );
+      setIsPrintModalOpen(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to prepare stall checklists for printing.');
+    } finally {
+      setLoadingPrint(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (loadingExcel || matchingStallsForExport.length === 0) return;
+    try {
+      setLoadingExcel(true);
+      setExcelProgressText('Loading data...');
+      const boothIds = matchingStallsForExport.map((b) => b.id);
+      const includeDiscussions = checklistFilter === 'all' || checklistFilter === 'discussions';
+      const res = await fetchEventChecklistsPrintData(eventId, boothIds, includeDiscussions);
+      const stalls = res.stalls || [];
+      if (stalls.length === 0) {
+        alert('No matching stalls available to export.');
+        return;
+      }
+      setExcelProgressText('Generating Excel...');
+      const eventMetadata = {
+        name: event?.name || 'Exhibition',
+        venue: event?.venue || null,
+        city: event?.city || null,
+        startDate: event?.start_date || null,
+        endDate: event?.end_date || null,
+      };
+      const workbook = await generateStallRequirementsWorkbook(stalls, eventMetadata);
+      const filename = getExcelExportFilename(event?.name || 'Exhibition', checklistFilter);
+      await downloadWorkbookAsXlsx(workbook, filename);
+    } catch (err: any) {
+      alert(err.message || 'Failed to export Excel workbook. Please try again.');
+    } finally {
+      setLoadingExcel(false);
+      setExcelProgressText('');
+    }
+  };
 
   const openConfirmModal = (bth: BoothItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -491,59 +653,40 @@ export function EventDetailView({
 
       {/* Booths List under this Event */}
       <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
-        {/* Stage Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.06] pb-3.5">
-          <button
-            type="button"
-            onClick={() => setStageFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-              stageFilter === 'all'
-                ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold'
-                : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08]'
-            }`}
-          >
-            <span>All Stalls</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${stageFilter === 'all' ? 'bg-zinc-950/20 text-zinc-950 font-bold' : 'bg-white/[0.08] text-zinc-400'}`}>
-              {boothsList.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStageFilter('confirmed')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-              stageFilter === 'confirmed'
-                ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold'
-                : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08]'
-            }`}
-          >
-            <span>Confirmed</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${stageFilter === 'confirmed' ? 'bg-zinc-950/20 text-zinc-950 font-bold' : 'bg-white/[0.08] text-zinc-400'}`}>
-              {confirmedCount}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStageFilter('discussions')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-              stageFilter === 'discussions'
-                ? 'bg-sky-500 text-zinc-950 shadow-sm font-bold'
-                : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08]'
-            }`}
-          >
-            <span>Ongoing Discussions</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${stageFilter === 'discussions' ? 'bg-zinc-950/20 text-zinc-950 font-bold' : 'bg-white/[0.08] text-zinc-400'}`}>
-              {discussionsCount}
-            </span>
-          </button>
+        {/* Quick Filter Segmented Chips */}
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1 shrink-0 -mx-1 px-1 sm:mx-0 sm:px-0 border-b border-white/[0.06] pb-3.5">
+          {CHECKLIST_FILTER_OPTIONS.map((opt) => {
+            const count = filterCounts[opt.id];
+            const isSelected = checklistFilter === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setChecklistFilter(opt.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+                  isSelected
+                    ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold shadow-amber-500/20'
+                    : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08] border border-white/[0.06]'
+                }`}
+              >
+                <span>{opt.label}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    isSelected ? 'bg-zinc-950/20 text-zinc-950 font-bold' : 'bg-white/[0.08] text-zinc-400'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-amber-400" />
             <h2 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-              Booths Registered Under This Event ({searchQuery || stageFilter !== 'all' ? `${sortedBooths.length} of ${boothsList.length}` : boothsList.length})
+              Booths Registered Under This Event ({searchQuery || checklistFilter !== 'all' ? `${sortedBooths.length} of ${boothsList.length}` : boothsList.length})
             </h2>
           </div>
 
@@ -555,21 +698,70 @@ export function EventDetailView({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter booths..."
+                  placeholder="Search stalls..."
                   className="bg-[#121319] border border-white/[0.08] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 w-36 sm:w-48 transition-all"
                 />
               </div>
             )}
 
+            {/* Download PDF Action */}
             <button
               type="button"
-              disabled={loadingPrint || boothsList.length === 0}
-              onClick={handlePrintAllStalls}
-              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition-colors px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-50"
-              title="Print All Stall Checklists"
+              disabled={loadingPdf || matchingStallsForExport.length === 0}
+              onClick={handleDownloadPDF}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title={
+                matchingStallsForExport.length > 0
+                  ? `Download combined PDF checklist for ${matchingStallsForExport.length} stall(s)`
+                  : 'No stalls match current filter to download'
+              }
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print All</span>
+              {loadingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>{loadingPdf ? (pdfProgressText || 'Saving...') : `Download PDF (${matchingStallsForExport.length})`}</span>
+            </button>
+
+            {/* Export Excel Action */}
+            <button
+              type="button"
+              disabled={loadingExcel || matchingStallsForExport.length === 0}
+              onClick={handleExportExcel}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title={
+                matchingStallsForExport.length > 0
+                  ? `Export landscape Excel requirements workbook for ${matchingStallsForExport.length} stall(s)`
+                  : 'No stalls match current filter to export'
+              }
+            >
+              {loadingExcel ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-100" />
+              )}
+              <span>{loadingExcel ? (excelProgressText || 'Exporting...') : `Export Excel (${matchingStallsForExport.length})`}</span>
+            </button>
+
+            {/* Print All / Print Filtered Action */}
+            <button
+              type="button"
+              disabled={loadingPrint || matchingStallsForExport.length === 0}
+              onClick={handlePrintFilteredStalls}
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5 cursor-pointer transition-colors px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed"
+              title={
+                matchingStallsForExport.length > 0
+                  ? `Print Clean A4 Checklists for ${matchingStallsForExport.length} stall(s)`
+                  : 'No stalls match current filter to print'
+              }
+            >
+              {loadingPrint ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Printer className="w-3.5 h-3.5" />
+              )}
+              <span>{loadingPrint ? 'Loading...' : `Print (${matchingStallsForExport.length})`}</span>
             </button>
 
             <button
@@ -630,15 +822,31 @@ export function EventDetailView({
                 <tbody className="divide-y divide-white/[0.05] text-zinc-300">
                   {sortedBooths.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-zinc-500 text-xs">
-                        No booths match your filter query "{searchQuery}".
+                      <td colSpan={6} className="py-12 text-center space-y-2">
+                        <p className="text-zinc-300 font-medium text-xs">
+                          No stalls match filter &ldquo;{CHECKLIST_FILTER_OPTIONS.find((f) => f.id === checklistFilter)?.label}&rdquo;{searchQuery ? ` and search &ldquo;${searchQuery}&rdquo;` : ''}.
+                        </p>
+                        {(checklistFilter !== 'all' || searchQuery) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setChecklistFilter('all');
+                              setSearchQuery('');
+                            }}
+                            className="text-amber-400 hover:text-amber-300 text-xs font-semibold underline underline-offset-4 cursor-pointer"
+                          >
+                            Reset filters
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ) : (
                     sortedBooths.map((b) => {
                       const comp = b.tasks_completed ?? 0;
-                      const total = b.task_count ?? 5;
-                      const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
+                      const applicable = b.task_count ?? 0;
+                      const na = b.tasks_na ?? 0;
+                      const pct = applicable > 0 ? Math.round((comp / applicable) * 100) : 0;
+                      const hasNoApplicable = applicable === 0;
                       const rawSt = (b.booth_type || '').toLowerCase();
                       const structure = rawSt.includes('frame') || rawSt.includes('octonorm')
                         ? 'Frame'
@@ -696,11 +904,29 @@ export function EventDetailView({
                               <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 font-mono text-[11px]">
                                 Discussion Only
                               </span>
-                            ) : pct === 100 ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[11px] font-medium">
-                                <Check className="w-3 h-3" />
-                                <span>{total}/{total} Done</span>
+                            ) : hasNoApplicable ? (
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-mono text-[11px] font-medium"
+                                title={na > 0 ? `${na} section${na > 1 ? 's' : ''} marked Not Required (N/A)` : 'No applicable tasks'}
+                              >
+                                <span>No Applicable Tasks</span>
+                                {na > 0 && <span className="text-zinc-500 text-[10px]">({na} N/A)</span>}
                               </span>
+                            ) : pct === 100 ? (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[11px] font-medium">
+                                  <Check className="w-3 h-3" />
+                                  <span>{comp}/{applicable} Done</span>
+                                </span>
+                                {na > 0 && (
+                                  <span
+                                    className="text-[10px] text-zinc-400 font-mono bg-zinc-800/80 border border-zinc-700/50 px-1.5 py-0.5 rounded"
+                                    title={`${na} section${na > 1 ? 's' : ''} marked Not Required`}
+                                  >
+                                    {na} N/A
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <div className="flex items-center gap-2.5">
                                 <div className="w-20 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
@@ -710,8 +936,16 @@ export function EventDetailView({
                                   />
                                 </div>
                                 <span className="font-mono text-[11px] text-zinc-300">
-                                  {comp}/{total} <span className="text-zinc-500">({pct}%)</span>
+                                  {comp}/{applicable} <span className="text-zinc-500">({pct}%)</span>
                                 </span>
+                                {na > 0 && (
+                                  <span
+                                    className="text-[10px] text-zinc-400 font-mono bg-zinc-800/80 border border-zinc-700/50 px-1.5 py-0.5 rounded"
+                                    title={`${na} section${na > 1 ? 's' : ''} marked Not Required`}
+                                  >
+                                    {na} N/A
+                                  </span>
+                                )}
                               </div>
                             )}
                           </td>
@@ -776,14 +1010,30 @@ export function EventDetailView({
             {/* Mobile Stacked Card View */}
             <div className="block sm:hidden divide-y divide-white/[0.06]">
               {sortedBooths.length === 0 ? (
-                <div className="p-6 text-center text-zinc-500 text-xs">
-                  No booths match your filter query "{searchQuery}".
+                <div className="p-8 text-center space-y-2">
+                  <p className="text-zinc-300 font-medium text-xs">
+                    No stalls match filter &ldquo;{CHECKLIST_FILTER_OPTIONS.find((f) => f.id === checklistFilter)?.label}&rdquo;{searchQuery ? ` and search &ldquo;${searchQuery}&rdquo;` : ''}.
+                  </p>
+                  {(checklistFilter !== 'all' || searchQuery) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChecklistFilter('all');
+                        setSearchQuery('');
+                      }}
+                      className="text-amber-400 hover:text-amber-300 text-xs font-semibold underline underline-offset-4 cursor-pointer"
+                    >
+                      Reset filters
+                    </button>
+                  )}
                 </div>
               ) : (
                 sortedBooths.map((b) => {
                   const comp = b.tasks_completed ?? 0;
-                  const total = b.task_count ?? 5;
-                  const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
+                  const applicable = b.task_count ?? 0;
+                  const na = b.tasks_na ?? 0;
+                  const pct = applicable > 0 ? Math.round((comp / applicable) * 100) : 0;
+                  const hasNoApplicable = applicable === 0;
                   const rawSt = (b.booth_type || '').toLowerCase();
                   const structure = rawSt.includes('frame') || rawSt.includes('octonorm')
                     ? 'Frame'
@@ -837,6 +1087,10 @@ export function EventDetailView({
                           <span className="text-[11px] font-mono text-sky-400">
                             Discussion Only
                           </span>
+                        ) : hasNoApplicable ? (
+                          <span className="font-mono text-[11px] text-zinc-400 bg-zinc-800 border border-zinc-700/60 px-2 py-0.5 rounded">
+                            No Applicable Tasks {na > 0 ? `(${na} N/A)` : ''}
+                          </span>
                         ) : (
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <div className="flex-1 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
@@ -846,7 +1100,8 @@ export function EventDetailView({
                               />
                             </div>
                             <span className="font-mono text-[11px] text-zinc-400 shrink-0">
-                              {comp}/{total} ({pct}%)
+                              {comp}/{applicable} ({pct}%)
+                              {na > 0 && <span className="ml-1 text-zinc-500 text-[10px]">[{na} N/A]</span>}
                             </span>
                           </div>
                         )}
@@ -1141,6 +1396,7 @@ export function EventDetailView({
         title={printModalTitle}
         subtitle={printModalSubtitle}
         stalls={printStallsData}
+        filterType={checklistFilter}
       />
 
       {/* Edit Booth Modal */}
@@ -1253,6 +1509,37 @@ export function EventDetailView({
           </div>
         </form>
       </Modal>
+
+      {/* Hidden scratch container for client-side direct PDF generation */}
+      {pdfExportData && (
+        <div
+          id="event-pdf-export-scratch"
+          style={{
+            position: 'fixed',
+            left: '-9999px',
+            top: 0,
+            width: '794px',
+            background: '#ffffff',
+            zIndex: -9999,
+            pointerEvents: 'none',
+          }}
+          aria-hidden="true"
+        >
+          {pdfExportData.map((stall, idx) => (
+            <div
+              key={stall.booth.id || idx}
+              className="event-pdf-sheet bg-white p-6"
+              style={{ width: '794px', minHeight: '1120px' }}
+            >
+              <StallChecklistSheet
+                data={stall}
+                isBulk={pdfExportData.length > 1}
+                isLast={idx === pdfExportData.length - 1}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

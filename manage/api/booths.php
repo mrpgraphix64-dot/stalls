@@ -38,8 +38,10 @@ if ($method === 'GET') {
                 e.status AS event_status,
                 e.floor_plan_url AS event_floor_plan_url,
                 (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS task_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%') AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total,
                 (SELECT COUNT(*) FROM booth_items WHERE booth_id = b.id) AS item_count,
                 (SELECT COUNT(*) FROM booth_expenses WHERE booth_id = b.id) AS expense_count
             FROM booths b
@@ -60,6 +62,104 @@ if ($method === 'GET') {
         ]);
     }
 
+    // 1A-1. Dedicated Print Checklists Batch Data for Booths Directory
+    if (($_GET['action'] ?? '') === 'print_checklists') {
+        $requestedBoothIds = !empty($_GET['booth_ids']) ? array_filter(array_map('trim', explode(',', (string)$_GET['booth_ids']))) : null;
+        $eventId = trim($_GET['event_id'] ?? '');
+
+        $sql = "
+            SELECT 
+                b.*,
+                e.name AS event_name,
+                e.city AS event_city,
+                e.start_date AS event_start_date,
+                e.setup_date AS event_setup_date,
+                e.floor_plan_url AS event_floor_plan_url,
+                (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total
+            FROM booths b
+            LEFT JOIN events e ON b.event_id = e.id
+            WHERE b.status != 'archived'
+        ";
+        $params = [];
+        if ($eventId !== '') {
+            $sql .= " AND b.event_id = :event_id";
+            $params[':event_id'] = $eventId;
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $allBooths = $stmt->fetchAll();
+
+        if ($requestedBoothIds !== null) {
+            $booths = array_values(array_filter($allBooths, fn($b) => in_array($b['id'], $requestedBoothIds, true)));
+        } else {
+            $includeDiscussions = isset($_GET['include_discussions']) && ($_GET['include_discussions'] === '1' || $_GET['include_discussions'] === 'true');
+            if (!$includeDiscussions) {
+                $booths = array_values(array_filter($allBooths, fn($b) => ($b['booking_stage'] ?? '') !== 'discussion'));
+            } else {
+                $booths = $allBooths;
+            }
+        }
+
+        // Natural ascending sort by booth number
+        usort($booths, function($a, $b) {
+            return strnatcasecmp($a['booth_number'] ?? '', $b['booth_number'] ?? '');
+        });
+
+        $boothIds = array_column($booths, 'id');
+        $itemsByBooth = [];
+        $tasksByBooth = [];
+        $linksByBooth = [];
+
+        if (!empty($boothIds)) {
+            $placeholders = implode(',', array_fill(0, count($boothIds), '?'));
+
+            $itemStmt = $pdo->prepare("SELECT * FROM booth_items WHERE booth_id IN ($placeholders) ORDER BY category, created_at");
+            $itemStmt->execute($boothIds);
+            while ($itm = $itemStmt->fetch()) {
+                $itemsByBooth[$itm['booth_id']][] = $itm;
+            }
+
+            $taskStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE booth_id IN ($placeholders) AND LOWER(task_name) NOT LIKE '%install%' ORDER BY sort_order, display_order");
+            $taskStmt->execute($boothIds);
+            while ($tsk = $taskStmt->fetch()) {
+                $tasksByBooth[$tsk['booth_id']][] = $tsk;
+            }
+
+            $linkStmt = $pdo->prepare("SELECT * FROM booth_links WHERE booth_id IN ($placeholders) AND category = 'render_3d' ORDER BY created_at");
+            $linkStmt->execute($boothIds);
+            while ($lnk = $linkStmt->fetch()) {
+                $linksByBooth[$lnk['booth_id']][] = $lnk;
+            }
+        }
+
+        $printData = [];
+        foreach ($booths as $b) {
+            $bId = $b['id'];
+            $bItems = $itemsByBooth[$bId] ?? [];
+            $printData[] = [
+                'booth' => $b,
+                'eventName' => $b['event_name'] ?? 'Exhibition',
+                'tasks' => $tasksByBooth[$bId] ?? [],
+                'productionItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'production')),
+                'furnitureItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'furniture')),
+                'electricalItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'electrical')),
+                'goodiesItems' => array_values(array_filter($bItems, fn($i) => ($i['category'] ?? '') === 'goodies')),
+                'views3D' => $linksByBooth[$bId] ?? [],
+            ];
+        }
+
+        reworkzone_json_response([
+            'success' => true,
+            'stalls'  => $printData,
+            'count'   => count($printData)
+        ]);
+    }
+
     // 1B. Fetch Booth List with Filters & Search
     $eventId = trim($_GET['event_id'] ?? '');
     $status  = trim($_GET['status'] ?? '');
@@ -74,8 +174,10 @@ if ($method === 'GET') {
             e.setup_date AS event_setup_date,
             e.floor_plan_url AS event_floor_plan_url,
             (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS task_count,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%') AS tasks_completed
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total
         FROM booths b
         LEFT JOIN events e ON b.event_id = e.id
         WHERE 1=1

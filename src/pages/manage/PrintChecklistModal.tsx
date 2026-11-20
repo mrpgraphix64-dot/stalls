@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Printer, ArrowLeft } from 'lucide-react';
+import { X, Printer, ArrowLeft, Download, Loader2 } from 'lucide-react';
 import { StallPrintData } from './types';
 import { StallChecklistSheet, getStallTypeLabel } from './StallChecklistSheet';
 import { isPendingOrEmpty } from './boothSort';
+import { exportElementsToPdf, getExportFilename } from './pdfExport';
 
 interface PrintChecklistModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface PrintChecklistModalProps {
   title: string;
   subtitle?: string;
   stalls: StallPrintData[];
+  filterType?: string;
 }
 
 export function PrintChecklistModal({
@@ -19,8 +21,11 @@ export function PrintChecklistModal({
   title,
   subtitle,
   stalls,
+  filterType = 'all',
 }: PrintChecklistModalProps) {
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState('');
   const printBtnRef = useRef<HTMLButtonElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +93,44 @@ export function PrintChecklistModal({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    if (isDownloading) return;
+    try {
+      setIsDownloading(true);
+      setDownloadProgress('1/1');
+      const previewContainer = scrollContainerRef.current;
+      const visibleSheets = previewContainer
+        ? Array.from(previewContainer.querySelectorAll<HTMLElement>('.stall-print-sheet'))
+        : [];
+      const targetSheets =
+        visibleSheets.length > 0
+          ? visibleSheets
+          : Array.from(document.querySelectorAll<HTMLElement>('.stall-print-sheet')).filter(
+              (el) => el.offsetWidth > 0 && el.offsetHeight > 0
+            );
+
+      if (targetSheets.length === 0) {
+        throw new Error('No visible stall checklist found to export.');
+      }
+
+      const evtName = stalls[0]?.eventName || singleBooth?.event_name || 'Exhibition';
+      const filename = getExportFilename(
+        evtName,
+        filterType || 'all',
+        isSingleStall ? singleBooth?.booth_number : undefined
+      );
+
+      await exportElementsToPdf(targetSheets, filename, (curr, total) => {
+        setDownloadProgress(`${curr}/${total}`);
+      });
+    } catch (err: any) {
+      alert(err.message || 'Failed to download PDF. Please use "Print / Save as PDF" instead.');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress('');
+    }
   };
 
   const isSingleStall = stalls.length === 1;
@@ -239,8 +282,25 @@ export function PrintChecklistModal({
             )}
           </div>
 
-          {/* Right: Print / Save as PDF + Close Icon */}
+          {/* Right: Download PDF + Print / Save as PDF + Close Icon */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <button
+              type="button"
+              disabled={isDownloading}
+              onClick={handleDownloadPDF}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-white/[0.08] hover:bg-white/[0.14] text-zinc-100 hover:text-amber-300 border border-white/[0.1] font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none disabled:opacity-50"
+              title="Download combined PDF checklist directly"
+              aria-label="Download combined PDF checklist"
+            >
+              {isDownloading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+              ) : (
+                <Download className="w-4 h-4 text-amber-400 shrink-0" />
+              )}
+              <span className="hidden xs:inline">{isDownloading ? `Saving ${downloadProgress}...` : 'Download PDF'}</span>
+              <span className="xs:hidden">{isDownloading ? downloadProgress : 'PDF'}</span>
+            </button>
+
             <button
               ref={printBtnRef}
               type="button"

@@ -75,6 +75,8 @@ export interface BoothItem {
   link_count?: number;
   task_count?: number;
   tasks_completed?: number;
+  tasks_na?: number;
+  tasks_total?: number;
 }
 
 export interface ExhibitorItem {
@@ -115,6 +117,7 @@ export interface DashboardData {
       total: number;
       applicable: number;
       completed: number;
+      na?: number;
       percentage: number;
     };
   })[];
@@ -123,6 +126,7 @@ export interface DashboardData {
       total: number;
       applicable: number;
       completed: number;
+      na?: number;
       percentage: number;
     };
   })[];
@@ -198,6 +202,8 @@ export interface TasksSummary {
   total: number;
   applicable_count?: number;
   completed: number;
+  na_count?: number;
+  pending_count?: number;
   percentage: number;
   tasks: BoothTask[];
 }

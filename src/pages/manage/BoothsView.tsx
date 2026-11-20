@@ -16,6 +16,9 @@ import {
   ArrowUp,
   ArrowDown,
   Printer,
+  Download,
+  FileSpreadsheet,
+  Loader2,
 } from 'lucide-react';
 import {
   fetchBooths,
@@ -29,6 +32,7 @@ import {
   fetchTasks,
   fetchItems,
   fetchLinks,
+  fetchBoothsChecklistsPrintData,
 } from './api';
 import { BoothItem, EventItem, StallPrintData } from './types';
 import { Modal } from './Modal';
@@ -39,6 +43,18 @@ import { SortDirection, sortBoothsByNumber, isPendingOrEmpty } from './boothSort
 import { PrintChecklistModal } from './PrintChecklistModal';
 import { EditBoothModal } from './EditBoothModal';
 import { BoothWallIndicator } from './BoothWallIndicator';
+import { StallChecklistSheet } from './StallChecklistSheet';
+import {
+  CHECKLIST_FILTER_OPTIONS,
+  ChecklistFilterType,
+  getExportFilename,
+  exportElementsToPdf,
+} from './pdfExport';
+import {
+  generateStallRequirementsWorkbook,
+  downloadWorkbookAsXlsx,
+  getExcelExportFilename,
+} from './excelExport';
 
 interface BoothsViewProps {
   onNavigate: (route: string) => void;
@@ -69,12 +85,16 @@ export function BoothsView({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
-  // Active Tab: Confirmed Stalls vs. Ongoing Discussions
-  const [activeTab, setActiveTab] = useState<'confirmed' | 'discussions'>(initialTab);
+  // Quick Checklist Filter State
+  const [checklistFilter, setChecklistFilter] = useState<ChecklistFilterType>(
+    initialTab === 'discussions' ? 'discussions' : 'all'
+  );
 
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
+    if (initialTab === 'discussions') {
+      setChecklistFilter('discussions');
+    } else if (initialTab === 'confirmed') {
+      setChecklistFilter('all');
     }
   }, [initialTab]);
 
@@ -108,6 +128,12 @@ export function BoothsView({
   const [printModalTitle, setPrintModalTitle] = useState<string>('');
   const [printModalSubtitle, setPrintModalSubtitle] = useState<string>('');
   const [loadingPrintId, setLoadingPrintId] = useState<string | null>(null);
+  const [loadingPrint, setLoadingPrint] = useState<boolean>(false);
+  const [loadingPdf, setLoadingPdf] = useState<boolean>(false);
+  const [pdfProgressText, setPdfProgressText] = useState<string>('');
+  const [loadingExcel, setLoadingExcel] = useState<boolean>(false);
+  const [excelProgressText, setExcelProgressText] = useState<string>('');
+  const [pdfExportData, setPdfExportData] = useState<StallPrintData[] | null>(null);
 
   const handlePrintSingleBooth = async (bthSummary: BoothItem) => {
     try {
@@ -241,26 +267,167 @@ export function BoothsView({
     return 'Wooden';
   };
 
-  const confirmedCount = booths.filter((b) => b.booking_stage !== 'discussion').length;
-  const discussionsCount = booths.filter((b) => b.booking_stage === 'discussion').length;
+  const filterCounts = useMemo(() => {
+    const counts: Record<ChecklistFilterType, number> = {
+      all: booths.length,
+      done: 0,
+      in_progress: 0,
+      not_started: 0,
+      discussions: 0,
+    };
 
-  // Filter booths by active tab and structure
+    for (const b of booths) {
+      if (b.booking_stage === 'discussion') {
+        counts.discussions++;
+      } else {
+        const applicable = b.task_count ?? 0;
+        const comp = b.tasks_completed ?? 0;
+        if (applicable > 0 && comp === applicable) {
+          counts.done++;
+        } else if (applicable > 0 && comp > 0 && comp < applicable) {
+          counts.in_progress++;
+        } else {
+          counts.not_started++;
+        }
+      }
+    }
+
+    return counts;
+  }, [booths]);
+
+  // Filter booths by quick checklist filter and structure
   const filteredBooths = useMemo(() => {
     return booths.filter((b) => {
-      if (activeTab === 'confirmed' && b.booking_stage === 'discussion') return false;
-      if (activeTab === 'discussions' && b.booking_stage !== 'discussion') return false;
+      // 1. Checklist Filter
+      if (checklistFilter === 'done') {
+        if (b.booking_stage === 'discussion') return false;
+        const applicable = b.task_count ?? 0;
+        const comp = b.tasks_completed ?? 0;
+        if (!(applicable > 0 && comp === applicable)) return false;
+      } else if (checklistFilter === 'in_progress') {
+        if (b.booking_stage === 'discussion') return false;
+        const applicable = b.task_count ?? 0;
+        const comp = b.tasks_completed ?? 0;
+        if (!(applicable > 0 && comp > 0 && comp < applicable)) return false;
+      } else if (checklistFilter === 'not_started') {
+        if (b.booking_stage === 'discussion') return false;
+        const comp = b.tasks_completed ?? 0;
+        if (comp > 0) return false;
+      } else if (checklistFilter === 'discussions') {
+        if (b.booking_stage !== 'discussion') return false;
+      }
 
+      // 2. Structure Filter
       const typeLabel = getStallTypeLabel(b.booth_type);
       if (structureFilter === 'wooden') return typeLabel === 'Wooden';
       if (structureFilter === 'frame') return typeLabel === 'Frame';
       if (structureFilter === 'customize') return typeLabel === 'Customize';
       return true;
     });
-  }, [booths, activeTab, structureFilter]);
+  }, [booths, checklistFilter, structureFilter]);
 
   const sortedBooths = useMemo(() => {
     return sortBoothsByNumber(filteredBooths, sortDirection);
   }, [filteredBooths, sortDirection]);
+
+  // Stalls to export for checklists (excludes ongoing discussions unless explicitly selected)
+  const matchingStallsForExport = useMemo(() => {
+    if (checklistFilter === 'discussions') {
+      return sortedBooths;
+    }
+    return sortedBooths.filter((b) => b.booking_stage !== 'discussion');
+  }, [sortedBooths, checklistFilter]);
+
+  const handleDownloadPDF = async () => {
+    if (loadingPdf || matchingStallsForExport.length === 0) return;
+    try {
+      setLoadingPdf(true);
+      setPdfProgressText('Loading data...');
+      const boothIds = matchingStallsForExport.map((b) => b.id);
+      const includeDiscussions = checklistFilter === 'discussions';
+      const res = await fetchBoothsChecklistsPrintData(boothIds, selectedEventId || undefined, includeDiscussions);
+      const stalls = res.stalls || [];
+      if (stalls.length === 0) {
+        alert('No matching stalls available to export.');
+        return;
+      }
+      setPdfExportData(stalls);
+      setPdfProgressText('Rendering...');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
+      const sheets = Array.from(document.querySelectorAll<HTMLElement>('#booths-pdf-export-scratch .booths-pdf-sheet'));
+      const eventName = events.find((e) => e.id === selectedEventId)?.name || 'Exhibition';
+      const filename = getExportFilename(eventName, checklistFilter);
+      await exportElementsToPdf(sheets, filename, (curr, total) => {
+        setPdfProgressText(`${curr}/${total}`);
+      });
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate PDF. You can also use "Print" to Save as PDF.');
+    } finally {
+      setPdfExportData(null);
+      setLoadingPdf(false);
+      setPdfProgressText('');
+    }
+  };
+
+  const handlePrintFilteredStalls = async () => {
+    if (loadingPrint || matchingStallsForExport.length === 0) return;
+    try {
+      setLoadingPrint(true);
+      const boothIds = matchingStallsForExport.map((b) => b.id);
+      const includeDiscussions = checklistFilter === 'discussions';
+      const res = await fetchBoothsChecklistsPrintData(boothIds, selectedEventId || undefined, includeDiscussions);
+      setPrintStallsData(res.stalls || []);
+      const filterLabel = CHECKLIST_FILTER_OPTIONS.find((f) => f.id === checklistFilter)?.label || 'Stalls';
+      const eventName = events.find((e) => e.id === selectedEventId)?.name || 'Exhibitions';
+      setPrintModalTitle(
+        checklistFilter === 'all'
+          ? `All Stall Checklists: ${eventName}`
+          : `${filterLabel}: ${eventName}`
+      );
+      setPrintModalSubtitle(
+        `${res.stalls?.length || 0} Stalls Included • 1 Stall Per A4 Page`
+      );
+      setIsPrintModalOpen(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to prepare stall checklists for printing.');
+    } finally {
+      setLoadingPrint(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (loadingExcel || matchingStallsForExport.length === 0) return;
+    try {
+      setLoadingExcel(true);
+      setExcelProgressText('Loading data...');
+      const boothIds = matchingStallsForExport.map((b) => b.id);
+      const includeDiscussions = checklistFilter === 'all' || checklistFilter === 'discussions';
+      const res = await fetchBoothsChecklistsPrintData(boothIds, selectedEventId || undefined, includeDiscussions);
+      const stalls = res.stalls || [];
+      if (stalls.length === 0) {
+        alert('No matching stalls available to export.');
+        return;
+      }
+      setExcelProgressText('Generating Excel...');
+      const evt = events.find((e) => e.id === selectedEventId);
+      const eventMetadata = {
+        name: evt?.name || 'All Exhibitions',
+        venue: evt?.venue || null,
+        city: evt?.city || null,
+        startDate: evt?.start_date || null,
+        endDate: evt?.end_date || null,
+      };
+      const workbook = await generateStallRequirementsWorkbook(stalls, eventMetadata);
+      const filename = getExcelExportFilename(evt?.name || 'All_Stalls', checklistFilter);
+      await downloadWorkbookAsXlsx(workbook, filename);
+    } catch (err: any) {
+      alert(err.message || 'Failed to export Excel workbook. Please try again.');
+    } finally {
+      setLoadingExcel(false);
+      setExcelProgressText('');
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 max-w-6xl mx-auto pb-12">
@@ -298,45 +465,33 @@ export function BoothsView({
         </div>
       </div>
 
-      {/* Tab Switcher: Confirmed Stalls vs Ongoing Discussions */}
-      <div className="flex items-center gap-2 border-b border-white/[0.08] pb-1">
-        <button
-          type="button"
-          onClick={() => setActiveTab('confirmed')}
-          className={`px-4 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'confirmed'
-              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
-          }`}
-        >
-          <span>Confirmed Stalls</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-              activeTab === 'confirmed' ? 'bg-amber-500/30 text-amber-300' : 'bg-zinc-800 text-zinc-400'
-            }`}
-          >
-            {confirmedCount}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('discussions')}
-          className={`px-4 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'discussions'
-              ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30 font-bold'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
-          }`}
-        >
-          <span>Ongoing Discussions</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-              activeTab === 'discussions' ? 'bg-sky-500/30 text-sky-300' : 'bg-zinc-800 text-zinc-400'
-            }`}
-          >
-            {discussionsCount}
-          </span>
-        </button>
+      {/* Quick Filter Segmented Chips */}
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1 shrink-0 -mx-1 px-1 sm:mx-0 sm:px-0 border-b border-white/[0.08] pb-3">
+        {CHECKLIST_FILTER_OPTIONS.map((opt) => {
+          const count = filterCounts[opt.id];
+          const isSelected = checklistFilter === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setChecklistFilter(opt.id)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 shrink-0 whitespace-nowrap ${
+                isSelected
+                  ? 'bg-amber-500 text-zinc-950 shadow-sm font-bold shadow-amber-500/20'
+                  : 'bg-white/[0.04] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.08] border border-white/[0.06]'
+              }`}
+            >
+              <span>{opt.label}</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  isSelected ? 'bg-zinc-950/20 text-zinc-950 font-bold' : 'bg-white/[0.08] text-zinc-400'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Filter and Search Bar */}
@@ -348,11 +503,7 @@ export function BoothsView({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={
-              activeTab === 'confirmed'
-                ? 'Search by client or booth #...'
-                : 'Search discussion by company or remark...'
-            }
+            placeholder="Search by client, booth #, or remark..."
             className="w-full bg-[#15171e] border border-white/[0.08] rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 transition-all"
           />
         </form>
@@ -420,6 +571,66 @@ export function BoothsView({
               Customize
             </button>
           </div>
+
+          {/* Download PDF Action */}
+          <button
+            type="button"
+            disabled={loadingPdf || matchingStallsForExport.length === 0}
+            onClick={handleDownloadPDF}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title={
+              matchingStallsForExport.length > 0
+                ? `Download combined PDF checklist for ${matchingStallsForExport.length} stall(s)`
+                : 'No stalls match current filter to download'
+            }
+          >
+            {loadingPdf ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+            <span>{loadingPdf ? (pdfProgressText || 'Saving...') : `Download PDF (${matchingStallsForExport.length})`}</span>
+          </button>
+
+          {/* Export Excel Action */}
+          <button
+            type="button"
+            disabled={loadingExcel || matchingStallsForExport.length === 0}
+            onClick={handleExportExcel}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title={
+              matchingStallsForExport.length > 0
+                ? `Export landscape Excel requirements workbook for ${matchingStallsForExport.length} stall(s)`
+                : 'No stalls match current filter to export'
+            }
+          >
+            {loadingExcel ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-100" />
+            )}
+            <span>{loadingExcel ? (excelProgressText || 'Exporting...') : `Export Excel (${matchingStallsForExport.length})`}</span>
+          </button>
+
+          {/* Print Filtered Action */}
+          <button
+            type="button"
+            disabled={loadingPrint || matchingStallsForExport.length === 0}
+            onClick={handlePrintFilteredStalls}
+            className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5 cursor-pointer transition-colors px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed"
+            title={
+              matchingStallsForExport.length > 0
+                ? `Print Clean A4 Checklists for ${matchingStallsForExport.length} stall(s)`
+                : 'No stalls match current filter to print'
+            }
+          >
+            {loadingPrint ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Printer className="w-3.5 h-3.5" />
+            )}
+            <span>{loadingPrint ? 'Loading...' : `Print (${matchingStallsForExport.length})`}</span>
+          </button>
         </div>
       </div>
 
@@ -427,32 +638,41 @@ export function BoothsView({
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center text-zinc-400 gap-3">
           <div className="w-8 h-8 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-          <span className="text-xs">
-            {activeTab === 'confirmed' ? 'Loading stalls directory...' : 'Loading ongoing discussions...'}
-          </span>
+          <span className="text-xs">Loading stalls directory...</span>
         </div>
       ) : filteredBooths.length === 0 ? (
         <div className="bg-[#15171e] border border-dashed border-white/[0.1] rounded-2xl p-12 text-center space-y-3">
           <p className="text-sm font-medium text-zinc-300">
-            {activeTab === 'confirmed' ? 'No confirmed stalls found' : 'No ongoing discussions found'}
+            No stalls match filter &ldquo;{CHECKLIST_FILTER_OPTIONS.find((f) => f.id === checklistFilter)?.label}&rdquo;{search ? ` and search &ldquo;${search}&rdquo;` : ''}.
           </p>
           <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-            {search || selectedEventId
-              ? 'No records match your active search filters.'
-              : activeTab === 'confirmed'
-              ? 'Register a confirmed booth to begin tracking checklist execution.'
-              : 'Add an inquiry or prospective stall to track client discussions before confirmation.'}
+            Try adjusting your search keywords, exhibition selection, or switch to All Stalls.
           </p>
-          <button
-            type="button"
-            onClick={() => setIsAddOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm shadow-amber-500/20 mt-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{activeTab === 'confirmed' ? '+ Add Booth' : '+ Add Discussion'}</span>
-          </button>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            {(checklistFilter !== 'all' || search || structureFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setChecklistFilter('all');
+                  setSearch('');
+                  setStructureFilter('all');
+                }}
+                className="px-3.5 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-amber-400 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+              >
+                Reset filters
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsAddOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm shadow-amber-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add Booth</span>
+            </button>
+          </div>
         </div>
-      ) : activeTab === 'confirmed' ? (
+      ) : checklistFilter !== 'discussions' ? (
         /* 1. Confirmed Stalls List */
         <div className="bg-[#15171e] border border-white/[0.08] rounded-2xl overflow-hidden shadow-sm">
           {/* Desktop Table View */}
@@ -485,8 +705,10 @@ export function BoothsView({
               <tbody className="divide-y divide-white/[0.05] text-zinc-300">
                 {sortedBooths.map((b) => {
                   const comp = b.tasks_completed ?? 0;
-                  const total = b.task_count ?? 5;
-                  const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
+                  const applicable = b.task_count ?? 0;
+                  const na = b.tasks_na ?? 0;
+                  const pct = applicable > 0 ? Math.round((comp / applicable) * 100) : 0;
+                  const hasNoApplicable = applicable === 0;
                   const structure = getStallTypeLabel(b.booth_type);
 
                   return (
@@ -528,11 +750,29 @@ export function BoothsView({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        {pct === 100 ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[11px] font-medium">
-                            <Check className="w-3 h-3" />
-                            <span>{total}/{total} Done</span>
+                        {hasNoApplicable ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-mono text-[11px] font-medium"
+                            title={na > 0 ? `${na} section${na > 1 ? 's' : ''} marked Not Required (N/A)` : 'No applicable tasks'}
+                          >
+                            <span>No Applicable Tasks</span>
+                            {na > 0 && <span className="text-zinc-500 text-[10px]">({na} N/A)</span>}
                           </span>
+                        ) : pct === 100 ? (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[11px] font-medium">
+                              <Check className="w-3 h-3" />
+                              <span>{comp}/{applicable} Done</span>
+                            </span>
+                            {na > 0 && (
+                              <span
+                                className="text-[10px] text-zinc-400 font-mono bg-zinc-800/80 border border-zinc-700/50 px-1.5 py-0.5 rounded"
+                                title={`${na} section${na > 1 ? 's' : ''} marked Not Required`}
+                              >
+                                {na} N/A
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <div className="flex items-center gap-2.5">
                             <div className="w-20 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
@@ -542,8 +782,16 @@ export function BoothsView({
                               />
                             </div>
                             <span className="font-mono text-[11px] text-zinc-300">
-                              {comp}/{total} <span className="text-zinc-500">({pct}%)</span>
+                              {comp}/{applicable} <span className="text-zinc-500">({pct}%)</span>
                             </span>
+                            {na > 0 && (
+                              <span
+                                className="text-[10px] text-zinc-400 font-mono bg-zinc-800/80 border border-zinc-700/50 px-1.5 py-0.5 rounded"
+                                title={`${na} section${na > 1 ? 's' : ''} marked Not Required`}
+                              >
+                                {na} N/A
+                              </span>
+                            )}
                           </div>
                         )}
                       </td>
@@ -609,8 +857,10 @@ export function BoothsView({
           <div className="block sm:hidden divide-y divide-white/[0.06]">
             {sortedBooths.map((b) => {
               const comp = b.tasks_completed ?? 0;
-              const total = b.task_count ?? 5;
-              const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
+              const applicable = b.task_count ?? 0;
+              const na = b.tasks_na ?? 0;
+              const pct = applicable > 0 ? Math.round((comp / applicable) * 100) : 0;
+              const hasNoApplicable = applicable === 0;
               const structure = getStallTypeLabel(b.booth_type);
 
               return (
@@ -651,15 +901,24 @@ export function BoothsView({
 
                   <div className="flex items-center justify-between gap-3 pt-1">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="flex-1 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="font-mono text-[11px] text-zinc-400 shrink-0">
-                        {comp}/{total} ({pct}%)
-                      </span>
+                      {hasNoApplicable ? (
+                        <span className="font-mono text-[11px] text-zinc-400 bg-zinc-800 border border-zinc-700/60 px-2 py-0.5 rounded">
+                          No Applicable Tasks {na > 0 ? `(${na} N/A)` : ''}
+                        </span>
+                      ) : (
+                        <>
+                          <div className="flex-1 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-[11px] text-zinc-400 shrink-0">
+                            {comp}/{applicable} ({pct}%)
+                            {na > 0 && <span className="ml-1 text-zinc-500 text-[10px]">[{na} N/A]</span>}
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -1160,7 +1419,39 @@ export function BoothsView({
         title={printModalTitle}
         subtitle={printModalSubtitle}
         stalls={printStallsData}
+        filterType={checklistFilter}
       />
+
+      {/* Hidden scratch container for client-side direct PDF generation */}
+      {pdfExportData && (
+        <div
+          id="booths-pdf-export-scratch"
+          style={{
+            position: 'fixed',
+            left: '-9999px',
+            top: 0,
+            width: '794px',
+            background: '#ffffff',
+            zIndex: -9999,
+            pointerEvents: 'none',
+          }}
+          aria-hidden="true"
+        >
+          {pdfExportData.map((stall, idx) => (
+            <div
+              key={stall.booth.id || idx}
+              className="booths-pdf-sheet bg-white p-6"
+              style={{ width: '794px', minHeight: '1120px' }}
+            >
+              <StallChecklistSheet
+                data={stall}
+                isBulk={pdfExportData.length > 1}
+                isLast={idx === pdfExportData.length - 1}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

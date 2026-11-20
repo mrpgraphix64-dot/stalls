@@ -17,6 +17,10 @@ $files = [
     __DIR__ . '/test_edit_booth_discussions.php',
     __DIR__ . '/test_event_booths_wall_column.php',
     __DIR__ . '/test_stall_type_wall_independence.php',
+    __DIR__ . '/test_na_checklist_progress.php',
+    __DIR__ . '/test_checklist_filters_and_bulk_pdf.php',
+    __DIR__ . '/test_pdf_links_and_qr.php',
+    __DIR__ . '/test_excel_requirements_export.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {

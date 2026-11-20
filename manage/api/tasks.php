@@ -96,16 +96,23 @@ if ($method === 'GET') {
     $total = count($tasks);
     $applicable = 0;
     $completed = 0;
+    $na = 0;
+    $pending = 0;
     foreach ($tasks as &$t) {
         // Normalize status
         if (empty($t['status'])) {
             $t['status'] = ((int)$t['is_completed'] === 1) ? 'completed' : 'pending';
         }
-        if ($t['status'] !== 'not_applicable') {
+        if ($t['status'] === 'not_applicable') {
+            $na++;
+            $t['is_completed'] = 0; // Enforce mutual exclusivity
+        } else {
             $applicable++;
-        }
-        if ($t['status'] === 'completed' || (int)$t['is_completed'] === 1) {
-            $completed++;
+            if ($t['status'] === 'completed' || (int)$t['is_completed'] === 1) {
+                $completed++;
+            } else {
+                $pending++;
+            }
         }
     }
     unset($t);
@@ -118,6 +125,8 @@ if ($method === 'GET') {
         'total'            => $total,
         'applicable_count' => $applicable,
         'completed'        => $completed,
+        'na_count'         => $na,
+        'pending_count'    => $pending,
         'percentage'       => $percentage,
         'tasks'            => $tasks,
     ]);
@@ -145,6 +154,11 @@ if ($method === 'POST') {
 
         if (!$task) {
             reworkzone_json_response(['success' => false, 'error' => 'Task not found.'], 404);
+        }
+
+        // Prevent toggling a Not Required (N/A) task directly to completed
+        if ($task['status'] === 'not_applicable') {
+            reworkzone_json_response(['success' => false, 'error' => 'Cannot mark a Not Required (N/A) task as completed. Clear N/A first.'], 400);
         }
 
         $newCompleted = (int)$task['is_completed'] === 1 ? 0 : 1;
@@ -182,13 +196,19 @@ if ($method === 'POST') {
         $total = count($bTasks);
         $applicable = 0;
         $completed = 0;
+        $na = 0;
+        $pending = 0;
         foreach ($bTasks as $bt) {
             $st = !empty($bt['status']) ? $bt['status'] : ((int)$bt['is_completed'] === 1 ? 'completed' : 'pending');
-            if ($st !== 'not_applicable') {
+            if ($st === 'not_applicable') {
+                $na++;
+            } else {
                 $applicable++;
-            }
-            if ($st === 'completed' || (int)$bt['is_completed'] === 1) {
-                $completed++;
+                if ($st === 'completed' || (int)$bt['is_completed'] === 1) {
+                    $completed++;
+                } else {
+                    $pending++;
+                }
             }
         }
         $percentage = $applicable > 0 ? round(($completed / $applicable) * 100, 1) : 0.0;
@@ -199,6 +219,8 @@ if ($method === 'POST') {
             'total'            => $total,
             'applicable_count' => $applicable,
             'completed'        => $completed,
+            'na_count'         => $na,
+            'pending_count'    => $pending,
             'percentage'       => $percentage,
             'message'          => "Task status updated successfully.",
         ]);
@@ -258,13 +280,19 @@ if ($method === 'POST') {
         $total = count($bTasks);
         $applicable = 0;
         $completed = 0;
+        $na = 0;
+        $pending = 0;
         foreach ($bTasks as $bt) {
             $st = !empty($bt['status']) ? $bt['status'] : ((int)$bt['is_completed'] === 1 ? 'completed' : 'pending');
-            if ($st !== 'not_applicable') {
+            if ($st === 'not_applicable') {
+                $na++;
+            } else {
                 $applicable++;
-            }
-            if ($st === 'completed' || (int)$bt['is_completed'] === 1) {
-                $completed++;
+                if ($st === 'completed' || (int)$bt['is_completed'] === 1) {
+                    $completed++;
+                } else {
+                    $pending++;
+                }
             }
         }
         $percentage = $applicable > 0 ? round(($completed / $applicable) * 100, 1) : 0.0;
@@ -275,8 +303,10 @@ if ($method === 'POST') {
             'total'            => $total,
             'applicable_count' => $applicable,
             'completed'        => $completed,
+            'na_count'         => $na,
+            'pending_count'    => $pending,
             'percentage'       => $percentage,
-            'message'          => "Task marked as " . str_replace('_', ' ', $status) . ".",
+            'message'          => "Task marked as " . ($status === 'not_applicable' ? 'Not Required' : str_replace('_', ' ', $status)) . ".",
         ]);
     }
 

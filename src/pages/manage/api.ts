@@ -151,10 +151,39 @@ export async function deleteEvent(id: string): Promise<void> {
 }
 
 export async function fetchEventChecklistsPrintData(
-  eventId: string
+  eventId: string,
+  boothIds?: string[],
+  includeDiscussions?: boolean
 ): Promise<{ success: boolean; event: EventItem; stalls: StallPrintData[]; count: number }> {
+  const query = new URLSearchParams({ id: eventId, action: 'print_checklists' });
+  if (boothIds && boothIds.length > 0) {
+    query.set('booth_ids', boothIds.join(','));
+  }
+  if (includeDiscussions) {
+    query.set('include_discussions', '1');
+  }
   return request<{ success: boolean; event: EventItem; stalls: StallPrintData[]; count: number }>(
-    `/manage/api/events.php?id=${encodeURIComponent(eventId)}&action=print_checklists`
+    `/manage/api/events.php?${query.toString()}`
+  );
+}
+
+export async function fetchBoothsChecklistsPrintData(
+  boothIds?: string[],
+  eventId?: string,
+  includeDiscussions?: boolean
+): Promise<{ success: boolean; stalls: StallPrintData[]; count: number }> {
+  const query = new URLSearchParams({ action: 'print_checklists' });
+  if (boothIds && boothIds.length > 0) {
+    query.set('booth_ids', boothIds.join(','));
+  }
+  if (eventId) {
+    query.set('event_id', eventId);
+  }
+  if (includeDiscussions) {
+    query.set('include_discussions', '1');
+  }
+  return request<{ success: boolean; stalls: StallPrintData[]; count: number }>(
+    `/manage/api/booths.php?${query.toString()}`
   );
 }
 
@@ -364,6 +393,8 @@ export async function toggleTask(id: string): Promise<{
   total: number;
   applicable_count?: number;
   completed: number;
+  na_count?: number;
+  pending_count?: number;
   percentage: number;
 }> {
   return request('/manage/api/tasks.php?action=toggle', {
@@ -381,6 +412,8 @@ export async function setTaskStatus(
   total: number;
   applicable_count?: number;
   completed: number;
+  na_count?: number;
+  pending_count?: number;
   percentage: number;
 }> {
   return request('/manage/api/tasks.php?action=set_status', {

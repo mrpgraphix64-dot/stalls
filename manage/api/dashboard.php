@@ -46,8 +46,9 @@ try {
         SELECT 
             t.booth_id,
             COUNT(t.id) as total_tasks,
-            SUM(CASE WHEN t.status != 'not_applicable' THEN 1 ELSE 0 END) as applicable_tasks,
-            SUM(CASE WHEN t.is_completed = 1 OR t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks
+            SUM(CASE WHEN t.status IS NULL OR t.status != 'not_applicable' THEN 1 ELSE 0 END) as applicable_tasks,
+            SUM(CASE WHEN (t.is_completed = 1 OR t.status = 'completed') AND (t.status IS NULL OR t.status != 'not_applicable') THEN 1 ELSE 0 END) as completed_tasks,
+            SUM(CASE WHEN t.status = 'not_applicable' THEN 1 ELSE 0 END) as na_tasks
         FROM booth_tasks t
         INNER JOIN booths b ON t.booth_id = b.id
         WHERE b.status != 'archived' AND LOWER(t.task_name) NOT LIKE '%install%'
@@ -57,17 +58,19 @@ try {
     while ($pRow = $progressStmt->fetch()) {
         $app = (int)$pRow['applicable_tasks'];
         $comp = (int)$pRow['completed_tasks'];
+        $na = (int)$pRow['na_tasks'];
         $pct = $app > 0 ? round(($comp / $app) * 100, 1) : 0.0;
         $progressMap[$pRow['booth_id']] = [
             'total'      => (int)$pRow['total_tasks'],
             'applicable' => $app,
             'completed'  => $comp,
+            'na'         => $na,
             'percentage' => $pct,
         ];
     }
 
     // 5. Compute In Progress & Completed subsets for Confirmed Stalls
-    // Completed: Confirmed booths whose applicable checklist requirements are complete
+    // Completed: Confirmed booths whose applicable checklist requirements are complete (applicable > 0)
     // In Progress: Confirmed booths with some checklist work underway but not fully completed
     $confirmedBoothsList = $pdo->query("
         SELECT id, status 
@@ -88,17 +91,18 @@ try {
         $isComplete = ($app > 0 && $comp >= $app) || in_array($st, ['completed', 'installed', 'handover'], true);
         if ($isComplete) {
             $completedCount++;
-        } elseif ($comp > 0 || in_array($st, ['in_production', 'production', 'approved', 'design'], true)) {
+        } elseif (($app > 0 && $comp > 0) || in_array($st, ['in_production', 'production', 'approved', 'design'], true)) {
             $inProgressCount++;
         }
     }
 
-    // 6. Pending tasks (for active non-archived CONFIRMED booths only; ongoing discussions and legacy installation excluded)
+    // 6. Pending tasks (for active non-archived CONFIRMED booths only; ongoing discussions, N/A tasks and legacy installation excluded)
     $pendingTasks = (int)$pdo->query("
         SELECT COUNT(*)
         FROM booth_tasks t
         INNER JOIN booths b ON t.booth_id = b.id
         WHERE (t.is_completed = 0 AND (t.status IS NULL OR t.status = 'pending')) 
+          AND (t.status IS NULL OR t.status != 'not_applicable')
           AND b.status != 'archived'
           AND (b.booking_stage = 'confirmed' OR b.booking_stage IS NULL OR b.booking_stage = '')
           AND LOWER(t.task_name) NOT LIKE '%install%'

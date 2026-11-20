@@ -47,7 +47,9 @@ if ($method === 'GET') {
             SELECT 
                 b.*,
                 (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%') AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total
             FROM booths b
             WHERE b.event_id = :event_id AND b.status != 'archived'
@@ -58,6 +60,22 @@ if ($method === 'GET') {
 
         // 1A-1. Dedicated Print Checklists Batch Data for Event Stalls
         if (($_GET['action'] ?? '') === 'print_checklists') {
+            $requestedBoothIds = !empty($_GET['booth_ids']) ? array_filter(array_map('trim', explode(',', (string)$_GET['booth_ids']))) : null;
+            if ($requestedBoothIds !== null) {
+                $booths = array_values(array_filter($booths, fn($b) => in_array($b['id'], $requestedBoothIds, true)));
+            } else {
+                // By default, exclude ongoing discussions from checklists unless explicitly requested
+                $includeDiscussions = isset($_GET['include_discussions']) && ($_GET['include_discussions'] === '1' || $_GET['include_discussions'] === 'true');
+                if (!$includeDiscussions) {
+                    $booths = array_values(array_filter($booths, fn($b) => ($b['booking_stage'] ?? '') !== 'discussion'));
+                }
+            }
+
+            // Natural ascending sort by booth number
+            usort($booths, function($a, $b) {
+                return strnatcasecmp($a['booth_number'] ?? '', $b['booth_number'] ?? '');
+            });
+
             $boothIds = array_column($booths, 'id');
             $itemsByBooth = [];
             $tasksByBooth = [];

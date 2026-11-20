@@ -407,8 +407,10 @@ export function DashboardView({
               <tbody className="divide-y divide-white/[0.05] text-zinc-300">
                 {filteredBooths.map((b) => {
                   const comp = b.progress?.completed ?? 0;
-                  const total = b.progress?.applicable ?? b.progress?.total ?? 5;
+                  const applicable = b.progress?.applicable ?? 0;
+                  const na = b.progress?.na ?? 0;
                   const pct = b.progress?.percentage ?? 0;
+                  const hasNoApplicable = applicable === 0;
                   const structure = getStallTypeLabel(b.booth_type);
 
                   return (
@@ -442,18 +444,36 @@ export function DashboardView({
                       </td>
 
                       <td className="py-3 px-3.5">
-                        <div className="w-28 space-y-1">
-                          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                            <span>{comp}/{total}</span>
-                            <span className="font-bold text-amber-400">{pct}%</span>
+                        {hasNoApplicable ? (
+                          <div className="w-28 text-[10px] text-zinc-400 font-mono">
+                            <span className="bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-700/50 block text-center truncate">
+                              No Tasks {na > 0 ? `(${na} N/A)` : ''}
+                            </span>
                           </div>
-                          <div className="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full"
-                              style={{ width: `${pct}%` }}
-                            />
+                        ) : pct === 100 ? (
+                          <div className="w-28 space-y-1">
+                            <div className="flex items-center justify-between text-[10px] text-emerald-400 font-mono">
+                              <span>{comp}/{applicable}</span>
+                              <span className="font-bold">100%</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-emerald-500/20 overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full w-full" />
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="w-28 space-y-1">
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
+                              <span>{comp}/{applicable}</span>
+                              <span className="font-bold text-amber-400">{pct}%</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>

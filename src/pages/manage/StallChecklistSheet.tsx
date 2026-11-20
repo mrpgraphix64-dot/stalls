@@ -1,6 +1,7 @@
 import React from 'react';
 import { StallPrintData, StallType, BoothTask } from './types';
 import { isPendingOrEmpty } from './boothSort';
+import { CompactQRCode } from './QRCodeComponent';
 
 interface StallChecklistSheetProps {
   data: StallPrintData;
@@ -23,9 +24,27 @@ export function getSectionStatus(tasks: BoothTask[] = [], sectionKey: string): s
     return p.includes(norm);
   });
   if (!task) return 'Pending';
-  if (task.status === 'not_applicable' || (task.status as string) === 'na') return 'N/A';
+  if (task.status === 'not_applicable' || (task.status as string) === 'na') return 'Not Required';
   if (task.is_completed || task.status === 'completed') return 'Done';
   return 'Pending';
+}
+
+export function renderStatusBadge(status: string) {
+  const isDone = status === 'Done';
+  const isNA = status === 'Not Required' || status === 'N/A';
+  return (
+    <span
+      className={
+        isDone
+          ? 'text-emerald-700 font-bold'
+          : isNA
+          ? 'text-zinc-500 font-semibold'
+          : 'text-zinc-950 font-bold'
+      }
+    >
+      {status}
+    </span>
+  );
 }
 
 export function getWallConfigDisplay(raw?: string | null): { label: string; hasDiagram: boolean } {
@@ -200,6 +219,28 @@ export function StallChecklistSheet({
   const structureType = getStallTypeLabel(booth.booth_type);
   const wallConfigInfo = getWallConfigDisplay(booth.wall_configuration);
 
+  // 3D Views processing
+  const valid3DViews = (views3D || []).filter((v) => {
+    const u = (v.drive_url || (v as any).url || '').trim();
+    return u.startsWith('http://') || u.startsWith('https://');
+  });
+  const mainFolderUrl = (booth.main_drive_folder_url || '').trim();
+  const hasMainFolder = mainFolderUrl.startsWith('http://') || mainFolderUrl.startsWith('https://');
+  const single3DUrl =
+    valid3DViews.length > 0
+      ? (valid3DViews[0].drive_url || (valid3DViews[0] as any).url).trim()
+      : hasMainFolder
+      ? mainFolderUrl
+      : '';
+  const has3D = Boolean(single3DUrl);
+
+  // Print & Goodies Links processing
+  const printUrl = (booth.print_drive_url || '').trim();
+  const hasPrintUrl = printUrl.startsWith('http://') || printUrl.startsWith('https://');
+
+  const goodiesUrl = (booth.goodies_drive_url || '').trim();
+  const hasGoodiesUrl = goodiesUrl.startsWith('http://') || goodiesUrl.startsWith('https://');
+
   const printDateStr = new Date().toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -347,40 +388,125 @@ export function StallChecklistSheet({
               </h2>
             </div>
             <span className="text-[10px] font-mono text-zinc-600 font-semibold">
-              Status: <span className="text-zinc-950">{designStatus}</span>
+              Status: {renderStatusBadge(designStatus)}
             </span>
           </div>
 
-          <div className="space-y-1.5 text-[11px] text-zinc-800">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2 text-[11px] text-zinc-800">
+            <div className="grid grid-cols-2 gap-3 items-start">
               <div>
                 <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-semibold">
                   Responsibility Assignment
                 </span>
-                <span className="font-bold text-zinc-950">
+                <span className="font-bold text-zinc-950 text-xs">
                   {booth.design_responsibility || 'Client Side'}
                 </span>
               </div>
 
-              {views3D && views3D.length > 0 && (
+              {booth.notes && (
                 <div>
                   <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-semibold">
-                    3D Views Reference ({views3D.length})
+                    Design Remarks / Notes
                   </span>
-                  <span className="font-semibold text-zinc-900 truncate block">
-                    {views3D.map((v) => v.title).join(', ')}
+                  <span className="text-[10px] text-zinc-700 italic block">
+                    {booth.notes}
                   </span>
                 </div>
               )}
             </div>
 
-            {booth.notes && (
-              <div className="text-[10px] text-zinc-700 italic pt-0.5">
-                Design Remarks / Notes: {booth.notes}
+            {/* 3D Stall View links & QR */}
+            {valid3DViews.length > 1 ? (
+              <div className="bg-zinc-50 border border-zinc-200 rounded p-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-bold">
+                    3D Stall Views ({valid3DViews.length})
+                  </span>
+                  <span className="text-[9px] text-zinc-400 font-mono">Multiple Angles Saved</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {valid3DViews.map((v, idx) => {
+                    const vUrl = (v.drive_url || (v as any).url || '').trim();
+                    const vTitle = v.title?.trim() || `3D View ${idx + 1}`;
+                    return (
+                      <div
+                        key={v.id || idx}
+                        className="flex items-center justify-between gap-2 bg-white border border-zinc-200 rounded p-1.5"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[8.5px] uppercase tracking-wider text-zinc-400 block font-medium">
+                            Angle {idx + 1}
+                          </span>
+                          <a
+                            href={vUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors text-[11px] truncate block"
+                            title={`Open ${vTitle} in new tab`}
+                          >
+                            {vTitle}
+                          </a>
+                          <span className="text-[9px] text-zinc-400 font-mono truncate block mt-0.5">
+                            {vUrl}
+                          </span>
+                        </div>
+                        <a
+                          href={vUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 block hover:opacity-80 transition-opacity"
+                          title={`Scan or click to open ${vTitle}`}
+                        >
+                          <CompactQRCode url={vUrl} size={44} label="Scan 3D" />
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : has3D ? (
+              <div className="flex items-center justify-between gap-3 bg-zinc-50 border border-zinc-200 rounded p-2">
+                <div className="flex-1 min-w-0">
+                  <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-semibold">
+                    3D Stall View
+                  </span>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <a
+                      href={single3DUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors text-xs"
+                      title="Open 3D Design View in new tab"
+                    >
+                      View 3D Design
+                    </a>
+                    {valid3DViews.length === 1 && valid3DViews[0].title && valid3DViews[0].title.toLowerCase() !== 'view 3d design' && (
+                      <span className="text-[10px] text-zinc-600 font-medium">
+                        ({valid3DViews[0].title})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[9.5px] text-zinc-400 font-mono truncate mt-0.5">
+                    {single3DUrl}
+                  </div>
+                </div>
+                <a
+                  href={single3DUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 block hover:opacity-80 transition-opacity"
+                  title="Scan or click to open 3D Design"
+                >
+                  <CompactQRCode url={single3DUrl} size={48} label="Scan 3D" />
+                </a>
+              </div>
+            ) : (
+              <div className="bg-zinc-50 border border-zinc-200 rounded p-2 text-[11px] text-zinc-500 italic">
+                3D View: Not Added
               </div>
             )}
 
-            <div className="pt-1 flex items-center gap-2 text-[10px] text-zinc-600">
+            <div className="pt-0.5 flex items-center gap-2 text-[10px] text-zinc-600">
               <span className="w-3 h-3 border border-zinc-700 rounded-sm inline-block shrink-0" />
               <span>Design approved and verified for site fabrication</span>
             </div>
@@ -397,34 +523,118 @@ export function StallChecklistSheet({
               </h2>
             </div>
             <span className="text-[10px] font-mono text-zinc-600 font-semibold">
-              Status: <span className="text-zinc-950">{printStatus}</span>
+              Status: {renderStatusBadge(printStatus)}
             </span>
           </div>
 
           <div className="space-y-2 text-[11px] text-zinc-800">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-semibold">
-                  Print Files Readiness
-                </span>
-                <span className="font-bold text-zinc-950">
-                  {booth.print_file_status || 'Designs Pending'}
-                </span>
-                {booth.print_drive_url && (
-                  <span className="text-[10px] text-zinc-500 block font-mono">
-                    Drive Folder: [Link Attached]
-                  </span>
-                )}
+            {/* Side-by-Side Artwork Link Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Primary Print Files */}
+              <div className="bg-zinc-50 border border-zinc-200 rounded p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-semibold">
+                      Print Artwork
+                    </span>
+                    {hasPrintUrl ? (
+                      <div className="mt-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={printUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors text-xs"
+                            title="Open Print Files in Google Drive"
+                          >
+                            Open Print Files
+                          </a>
+                        </div>
+                        <div className="text-[9.5px] text-zinc-400 font-mono truncate mt-0.5">
+                          {printUrl}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-zinc-500 italic mt-0.5">
+                        Print Files: Not Added
+                      </div>
+                    )}
+                    <div className="mt-1 text-[10px] text-zinc-800">
+                      <span className="text-zinc-500 font-medium">Readiness: </span>
+                      <span className="font-bold text-zinc-950">{booth.print_file_status || 'Designs Pending'}</span>
+                    </div>
+                    {booth.print_remark && (
+                      <div className="text-[9.5px] text-zinc-600 italic mt-0.5">
+                        Remark: {booth.print_remark}
+                      </div>
+                    )}
+                  </div>
+                  {hasPrintUrl && (
+                    <a
+                      href={printUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 block hover:opacity-80 transition-opacity"
+                      title="Scan or click to open Print Files"
+                    >
+                      <CompactQRCode url={printUrl} size={48} label="Scan Print" />
+                    </a>
+                  )}
+                </div>
               </div>
 
-              {booth.print_remark && (
-                <div>
-                  <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-semibold">
-                    Print Remark
-                  </span>
-                  <span className="italic text-zinc-900">{booth.print_remark}</span>
+              {/* Promotional Goodies Artwork */}
+              <div className="bg-zinc-50 border border-zinc-200 rounded p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-semibold">
+                      Goodies Artwork
+                    </span>
+                    {hasGoodiesUrl ? (
+                      <div className="mt-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={goodiesUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors text-xs"
+                            title="Open Goodies Artwork in Google Drive"
+                          >
+                            Open Goodies Artwork
+                          </a>
+                        </div>
+                        <div className="text-[9.5px] text-zinc-400 font-mono truncate mt-0.5">
+                          {goodiesUrl}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-zinc-500 italic mt-0.5">
+                        Artwork: Not Added
+                      </div>
+                    )}
+                    <div className="mt-1 text-[10px] text-zinc-800">
+                      <span className="text-zinc-500 font-medium">Status: </span>
+                      <span className="font-bold text-zinc-950">{booth.goodies_status || 'Awaiting Client Artwork'}</span>
+                    </div>
+                    {booth.goodies_remark && (
+                      <div className="text-[9.5px] text-zinc-600 italic mt-0.5">
+                        Note: {booth.goodies_remark}
+                      </div>
+                    )}
+                  </div>
+                  {hasGoodiesUrl && (
+                    <a
+                      href={goodiesUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 block hover:opacity-80 transition-opacity"
+                      title="Scan or click to open Goodies Artwork"
+                    >
+                      <CompactQRCode url={goodiesUrl} size={48} label="Scan Goodies" />
+                    </a>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Promotional Goodies Requirements */}
@@ -484,7 +694,7 @@ export function StallChecklistSheet({
               </h2>
             </div>
             <span className="text-[10px] font-mono text-zinc-600 font-semibold">
-              Status: <span className="text-zinc-950">{prodStatus}</span>
+              Status: {renderStatusBadge(prodStatus)}
             </span>
           </div>
 
@@ -541,7 +751,7 @@ export function StallChecklistSheet({
               </h2>
             </div>
             <span className="text-[10px] font-mono text-zinc-600 font-semibold">
-              Status: <span className="text-zinc-950">{furnStatus}</span>
+              Status: {renderStatusBadge(furnStatus)}
             </span>
           </div>
 
@@ -585,7 +795,7 @@ export function StallChecklistSheet({
               </h2>
             </div>
             <span className="text-[10px] font-mono text-zinc-600 font-semibold">
-              Status: <span className="text-zinc-950">{elecStatus}</span>
+              Status: {renderStatusBadge(elecStatus)}
             </span>
           </div>
 

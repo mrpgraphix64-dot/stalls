@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   ArrowLeft,
   Building,
@@ -57,6 +57,8 @@ interface ChecklistProgress {
   total: number;
   applicable_count: number;
   completed: number;
+  na_count?: number;
+  pending_count?: number;
   percentage: number;
 }
 
@@ -81,8 +83,34 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     total: 5,
     applicable_count: 5,
     completed: 0,
+    na_count: 0,
+    pending_count: 5,
     percentage: 0,
   });
+
+  // Dynamic checklist counts directly from tasks state
+  const checklistCounts = useMemo(() => {
+    const applicableTasks = tasks.filter((t) => t.status !== 'not_applicable');
+    const doneTasks = applicableTasks.filter((t) => t.status === 'completed' || t.is_completed === 1);
+    const naTasks = tasks.filter((t) => t.status === 'not_applicable');
+    const pendingTasks = applicableTasks.filter((t) => t.status !== 'completed' && t.is_completed !== 1);
+
+    const total = tasks.length;
+    const applicable = applicableTasks.length;
+    const done = doneTasks.length;
+    const na = naTasks.length;
+    const pending = pendingTasks.length;
+    const percentage = applicable > 0 ? Math.round((done / applicable) * 100) : 0;
+
+    return {
+      total,
+      applicable,
+      done,
+      na,
+      pending,
+      percentage,
+    };
+  }, [tasks]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [successToast, setSuccessToast] = useState<string>('');
@@ -232,6 +260,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         total: tskRes.total,
         applicable_count: tskRes.applicable_count ?? tskRes.total,
         completed: tskRes.completed,
+        na_count: tskRes.na_count ?? 0,
+        pending_count: tskRes.pending_count ?? 0,
         percentage: tskRes.percentage,
       });
 
@@ -320,13 +350,21 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setTasks((prev) =>
         prev.map((t) => (t.id === task.id ? { ...t, status: newStatus, is_completed: newStatus === 'completed' ? 1 : 0 } : t))
       );
+
+      // If marked as Not Required (N/A), collapse the section by default
+      if (newStatus === 'not_applicable') {
+        setExpanded((prev) => ({ ...prev, [sectionKey]: false }));
+      }
+
       setTasksSummary({
         total: res.total,
         applicable_count: res.applicable_count ?? res.total,
         completed: res.completed,
+        na_count: res.na_count ?? 0,
+        pending_count: res.pending_count ?? 0,
         percentage: res.percentage,
       });
-      showToast(`${sectionKey.toUpperCase()}: Marked as ${newStatus === 'not_applicable' ? 'Not Required' : newStatus}`);
+      showToast(`${sectionKey.toUpperCase()}: Marked as ${newStatus === 'not_applicable' ? 'Not Required' : newStatus === 'completed' ? 'Done' : 'Pending'}`);
     } catch (err: any) {
       alert(err.message || 'Failed to update task status.');
     }
@@ -1042,18 +1080,37 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
               </button>
             </div>
           ) : (
-            <div className="bg-[#121319] border border-white/[0.06] rounded-xl p-3 sm:p-3.5 min-w-[210px] space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
+            <div className="bg-[#121319] border border-white/[0.06] rounded-xl p-3 sm:p-3.5 min-w-[240px] space-y-1.5">
+              <div className="flex items-center justify-between text-xs gap-3">
                 <span className="text-zinc-400 font-medium">Checklist Progress</span>
                 <span className="font-bold text-amber-400 font-mono">
-                  {tasksSummary.completed} of {tasksSummary.applicable_count} ({tasksSummary.percentage}%)
+                  {checklistCounts.applicable === 0
+                    ? 'No Applicable Tasks'
+                    : `${checklistCounts.done} of ${checklistCounts.applicable} (${checklistCounts.percentage}%)`}
                 </span>
               </div>
               <div className="w-full h-2 rounded-full bg-white/[0.08] overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300"
-                  style={{ width: `${tasksSummary.percentage}%` }}
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    checklistCounts.applicable === 0
+                      ? 'bg-zinc-700'
+                      : checklistCounts.percentage === 100
+                      ? 'bg-emerald-500'
+                      : 'bg-gradient-to-r from-amber-500 to-amber-400'
+                  }`}
+                  style={{ width: `${checklistCounts.applicable === 0 ? 0 : checklistCounts.percentage}%` }}
                 />
+              </div>
+              <div className="text-[10px] text-zinc-400 flex items-center justify-between pt-0.5 font-mono">
+                <span>
+                  <span className="text-emerald-400 font-semibold">{checklistCounts.done} Done</span>
+                  {' • '}
+                  <span className="text-zinc-400">{checklistCounts.na} Not Required</span>
+                  {' • '}
+                  <span className={checklistCounts.pending > 0 ? 'text-amber-400 font-semibold' : 'text-zinc-500'}>
+                    {checklistCounts.pending} Pending
+                  </span>
+                </span>
               </div>
             </div>
           )}
@@ -1153,19 +1210,25 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       <h3
                         className={`text-sm font-bold tracking-wide truncate ${
-                          isDone ? 'text-zinc-100 line-through decoration-emerald-500/60' : 'text-zinc-100'
+                          isDone ? 'text-zinc-100 line-through decoration-emerald-500/60' : isNA ? 'text-zinc-400' : 'text-zinc-100'
                         }`}
                       >
                         {sec.label}
                       </h3>
                       {isDone && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          Completed
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <Check className="w-3 h-3" />
+                          <span>Done</span>
                         </span>
                       )}
                       {isNA && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-white/[0.05] text-zinc-400 border border-white/[0.08]">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-400 border border-zinc-700/60">
                           Not Required
+                        </span>
+                      )}
+                      {!isDone && !isNA && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400/90 border border-amber-500/20">
+                          Pending
                         </span>
                       )}
                     </div>
@@ -1177,11 +1240,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <button
                     type="button"
-                    title={isNA ? 'Re-enable as required' : 'Mark as Not Required'}
+                    title={isNA ? 'Re-enable as required (Pending)' : 'Mark as Not Required (N/A)'}
                     onClick={() => handleToggleTaskStatus(sec.key, isNA ? 'pending' : 'not_applicable')}
                     className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center ${
                       isNA
-                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
+                        ? 'bg-zinc-800 text-zinc-200 border-zinc-600 shadow-sm'
                         : 'bg-white/[0.04] text-zinc-400 border-white/[0.08] hover:text-zinc-200 hover:bg-white/[0.08]'
                     }`}
                   >
@@ -1192,12 +1255,13 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                     type="button"
                     onClick={() => handleToggleTaskStatus(sec.key)}
                     disabled={isNA}
-                    className={`min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
+                    title={isNA ? 'Section is Not Required — clear N/A to mark as Done' : isDone ? 'Reopen section' : 'Mark section as Done'}
+                    className={`min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-semibold ${
                       isDone
-                        ? 'bg-emerald-500 text-zinc-950 border-emerald-500 shadow-sm'
+                        ? 'bg-emerald-500 text-zinc-950 border-emerald-500 shadow-sm cursor-pointer'
                         : isNA
-                        ? 'bg-zinc-950 border-zinc-800 text-zinc-600 opacity-50 cursor-not-allowed'
-                        : 'bg-zinc-950 border-zinc-700 text-zinc-300 hover:border-amber-500 hover:text-amber-400'
+                        ? 'bg-zinc-900 border-zinc-800 text-zinc-600 opacity-40 cursor-not-allowed pointer-events-none'
+                        : 'bg-zinc-950 border-zinc-700 text-zinc-300 hover:border-amber-500 hover:text-amber-400 cursor-pointer'
                     }`}
                   >
                     {isDone ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
