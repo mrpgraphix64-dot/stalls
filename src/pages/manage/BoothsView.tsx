@@ -38,6 +38,7 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SortDirection, sortBoothsByNumber, isPendingOrEmpty } from './boothSort';
 import { PrintChecklistModal } from './PrintChecklistModal';
 import { EditBoothModal } from './EditBoothModal';
+import { BoothWallIndicator } from './BoothWallIndicator';
 
 interface BoothsViewProps {
   onNavigate: (route: string) => void;
@@ -475,7 +476,7 @@ export function BoothsView({
                     </button>
                   </th>
                   <th className="py-3.5 px-4">Company Name</th>
-                  <th className="py-3.5 px-4">Mobile Number</th>
+                  <th className="py-3.5 px-4">Walls</th>
                   <th className="py-3.5 px-4">Size & Structure</th>
                   <th className="py-3.5 px-4">Checklist Progress</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -512,19 +513,8 @@ export function BoothsView({
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono text-zinc-400">
-                        {b.phone ? (
-                          <a
-                            href={`tel:${b.phone}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-zinc-300 hover:text-amber-400 hover:underline transition-colors"
-                            title={`Call ${b.phone}`}
-                          >
-                            {b.phone}
-                          </a>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
+                      <td className="py-3.5 px-4">
+                        <BoothWallIndicator wallConfig={b.wall_configuration} />
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -653,18 +643,10 @@ export function BoothsView({
                     </span>
                     <span className="text-zinc-600">•</span>
                     <span className="font-mono text-zinc-300 text-[11px]">{b.stand_size || '3 × 3 m'}</span>
-                    {b.phone && (
-                      <>
-                        <span className="text-zinc-600">•</span>
-                        <a
-                          href={`tel:${b.phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-zinc-400 hover:text-amber-400 font-mono text-[11px]"
-                        >
-                          {b.phone}
-                        </a>
-                      </>
-                    )}
+                    <span className="text-zinc-600">•</span>
+                    <div className="inline-flex items-center">
+                      <BoothWallIndicator wallConfig={b.wall_configuration} size="sm" />
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-3 pt-1">

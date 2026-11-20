@@ -15,6 +15,7 @@ $files = [
     __DIR__ . '/test_remove_installation_section.php',
     __DIR__ . '/test_wall_configuration.php',
     __DIR__ . '/test_edit_booth_discussions.php',
+    __DIR__ . '/test_event_booths_wall_column.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {
