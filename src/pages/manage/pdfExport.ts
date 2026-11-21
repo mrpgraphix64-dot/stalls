@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
-export type ChecklistFilterType = 'all' | 'done' | 'in_progress' | 'not_started' | 'discussions';
+export type ChecklistFilterType = 'all' | 'without_discussions' | 'done' | 'in_progress' | 'not_started' | 'discussions';
 
 export interface ChecklistFilterOption {
   id: ChecklistFilterType;
@@ -10,6 +10,7 @@ export interface ChecklistFilterOption {
 
 export const CHECKLIST_FILTER_OPTIONS: ChecklistFilterOption[] = [
   { id: 'all', label: 'All Stalls' },
+  { id: 'without_discussions', label: 'Without Discussions' },
   { id: 'done', label: 'All Steps Done' },
   { id: 'in_progress', label: 'In Progress' },
   { id: 'not_started', label: 'Not Started' },
@@ -41,6 +42,9 @@ export function getExportFilename(
     return `${cleanEvent || 'Exhibition'}_Stall_${cleanBooth}_Checklist.pdf`;
   }
 
+  if (filterType === 'without_discussions') {
+    return `${cleanEvent || 'Exhibition'}_Without_Discussions.pdf`;
+  }
   if (filterType === 'done') {
     return `${cleanEvent || 'Exhibition'}_Completed_Stalls.pdf`;
   }

@@ -345,6 +345,7 @@ export function EventDetailView({
   const filterCounts = useMemo(() => {
     const counts: Record<ChecklistFilterType, number> = {
       all: boothsList.length,
+      without_discussions: 0,
       done: 0,
       in_progress: 0,
       not_started: 0,
@@ -355,6 +356,7 @@ export function EventDetailView({
       if (b.booking_stage === 'discussion') {
         counts.discussions++;
       } else {
+        counts.without_discussions++;
         const applicable = b.task_count ?? 0;
         const comp = b.tasks_completed ?? 0;
         if (applicable > 0 && comp === applicable) {
@@ -377,7 +379,9 @@ export function EventDetailView({
     const q = searchQuery.trim().toLowerCase();
     return boothsList.filter((b) => {
       // 1. Checklist Filter
-      if (checklistFilter === 'done') {
+      if (checklistFilter === 'without_discussions') {
+        if (b.booking_stage === 'discussion') return false;
+      } else if (checklistFilter === 'done') {
         if (b.booking_stage === 'discussion') return false;
         const applicable = b.task_count ?? 0;
         const comp = b.tasks_completed ?? 0;

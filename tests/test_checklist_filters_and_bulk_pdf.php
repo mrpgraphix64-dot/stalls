@@ -147,17 +147,19 @@ assertTest(count($booths) === 5, "Total active stalls seeded is 5");
 
 // Compute filter counts using the exact application logic
 $counts = [
-    'all'         => count($booths),
-    'done'        => 0,
-    'in_progress' => 0,
-    'not_started' => 0,
-    'discussions' => 0,
+    'all'                 => count($booths),
+    'without_discussions' => 0,
+    'done'                => 0,
+    'in_progress'         => 0,
+    'not_started'         => 0,
+    'discussions'         => 0,
 ];
 
 foreach ($booths as $b) {
     if ($b['booking_stage'] === 'discussion') {
         $counts['discussions']++;
     } else {
+        $counts['without_discussions']++;
         $app = (int)$b['task_count'];
         $comp = (int)$b['tasks_completed'];
         if ($app > 0 && $comp === $app) {
@@ -171,11 +173,13 @@ foreach ($booths as $b) {
 }
 
 assertTest($counts['all'] === 5, "All Stalls count is 5");
+assertTest($counts['without_discussions'] === 4, "Without Discussions count is 4 (all confirmed stalls excluding discussions)");
 assertTest($counts['done'] === 1, "All Steps Done count is 1 (A-01: 3/3 with 2 N/A)");
 assertTest($counts['in_progress'] === 1, "In Progress count is 1 (A-02: 2/4 with 1 N/A)");
 assertTest($counts['not_started'] === 2, "Not Started count is 2 (A-10 with 0/5, B-01 with 0 applicable)");
 assertTest($counts['discussions'] === 1, "Ongoing Discussions count is 1 (Epsilon Ventures)");
-assertTest($counts['done'] + $counts['in_progress'] + $counts['not_started'] + $counts['discussions'] === $counts['all'], "Sum of category counts equals total count");
+assertTest($counts['without_discussions'] === $counts['done'] + $counts['in_progress'] + $counts['not_started'], "Without Discussions count equals sum of done, in_progress, not_started");
+assertTest($counts['without_discussions'] + $counts['discussions'] === $counts['all'], "Sum of without_discussions and discussions equals total count");
 
 echo "\nTest 2: N/A Progress Formula & Display Denominator\n";
 $byBoothNum = [];

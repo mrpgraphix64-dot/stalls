@@ -22,6 +22,9 @@ export function getExcelExportFilename(eventName: string, filterType?: string): 
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '');
 
+  if (filterType === 'without_discussions') {
+    return `${cleanEvent || 'Exhibition'}_Without_Discussions_Requirements.xlsx`;
+  }
   if (filterType === 'done') {
     return `${cleanEvent || 'Exhibition'}_Completed_Stall_Requirements.xlsx`;
   }
