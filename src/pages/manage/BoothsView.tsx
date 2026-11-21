@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Layers,
   Plus,
@@ -55,6 +55,13 @@ import {
   downloadWorkbookAsXlsx,
   getExcelExportFilename,
 } from './excelExport';
+import {
+  getBoothsViewState,
+  saveBoothsViewState,
+  consumeBoothsRestoration,
+  restoreScrollAndHighlight,
+  setBoothOrigin,
+} from './scrollRestoration';
 
 interface BoothsViewProps {
   onNavigate: (route: string) => void;
@@ -85,28 +92,75 @@ export function BoothsView({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
+  // Restore previous filters/sorting if returning from Booth Details
+  const initialSavedState = useMemo(() => getBoothsViewState(), []);
+
   // Quick Checklist Filter State
   const [checklistFilter, setChecklistFilter] = useState<ChecklistFilterType>(
-    initialTab === 'discussions' ? 'discussions' : 'all'
+    initialSavedState?.checklistFilter ?? (initialTab === 'discussions' ? 'discussions' : 'all')
   );
 
   useEffect(() => {
-    if (initialTab === 'discussions') {
-      setChecklistFilter('discussions');
-    } else if (initialTab === 'confirmed') {
-      setChecklistFilter('all');
+    // Only reset if there was no active saved state being restored
+    if (!initialSavedState?.needsRestoration) {
+      if (initialTab === 'discussions') {
+        setChecklistFilter('discussions');
+      } else if (initialTab === 'confirmed') {
+        setChecklistFilter('all');
+      }
     }
-  }, [initialTab]);
+  }, [initialTab, initialSavedState]);
 
   // Filters
-  const [search, setSearch] = useState<string>('');
-  const [selectedEventId, setSelectedEventId] = useState<string>(defaultEventId);
-  const [structureFilter, setStructureFilter] = useState<'all' | 'wooden' | 'frame' | 'customize'>('all');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [search, setSearch] = useState<string>(initialSavedState?.searchQuery ?? '');
+  const [selectedEventId, setSelectedEventId] = useState<string>(
+    initialSavedState?.selectedEventId ?? defaultEventId
+  );
+  const [structureFilter, setStructureFilter] = useState<'all' | 'wooden' | 'frame' | 'customize'>(
+    (initialSavedState?.structureFilter as any) ?? 'all'
+  );
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    initialSavedState?.sortDirection ?? 'asc'
+  );
 
   const toggleSortDirection = () => {
     setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
   };
+
+  // Smart Navigation & Scroll Position Preservation
+  const handleOpenBooth = (boothId: string) => {
+    saveBoothsViewState({
+      scrollY: window.scrollY,
+      searchQuery: search,
+      checklistFilter,
+      sortDirection,
+      selectedEventId,
+      structureFilter,
+      activeTab: checklistFilter === 'discussions' ? 'discussions' : 'confirmed',
+      lastOpenedBoothId: boothId,
+      needsRestoration: true,
+    });
+    setBoothOrigin({
+      route: checklistFilter === 'discussions' ? 'booths:discussions' : 'booths',
+      title: 'Stalls Directory',
+      timestamp: Date.now(),
+    });
+    onNavigate(`booth:${boothId}`);
+  };
+
+  const restorationAttemptedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!loading && booths.length > 0 && !restorationAttemptedRef.current) {
+      const state = consumeBoothsRestoration();
+      if (state && state.needsRestoration) {
+        restorationAttemptedRef.current = true;
+        restoreScrollAndHighlight(state.lastOpenedBoothId, state.scrollY, {
+          dataAttr: 'data-booth-id',
+        });
+      }
+    }
+  }, [loading, booths]);
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState<boolean>(createModalOpen);
@@ -430,7 +484,7 @@ export function BoothsView({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 max-w-6xl mx-auto pb-12">
+    <div className="space-y-6 animate-in fade-in duration-200 w-full min-w-0 pb-12">
       {/* Top Banner & Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-zinc-800/60">
         <div>
@@ -676,11 +730,11 @@ export function BoothsView({
         /* 1. Confirmed Stalls List */
         <div className="bg-[#15171e] border border-white/[0.08] rounded-2xl overflow-hidden shadow-sm">
           {/* Desktop Table View */}
-          <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="hidden sm:block overflow-x-auto w-full">
+            <table className="w-full text-left text-xs min-w-[960px] table-auto">
               <thead className="bg-[#121319] border-b border-white/[0.08] text-zinc-400 font-medium">
                 <tr>
-                  <th className="py-3.5 px-4" aria-sort={sortDirection === 'asc' ? 'ascending' : 'descending'}>
+                  <th className="py-3.5 px-4 w-[115px] min-w-[105px] shrink-0" aria-sort={sortDirection === 'asc' ? 'ascending' : 'descending'}>
                     <button
                       type="button"
                       onClick={toggleSortDirection}
@@ -695,11 +749,11 @@ export function BoothsView({
                       )}
                     </button>
                   </th>
-                  <th className="py-3.5 px-4">Company Name</th>
-                  <th className="py-3.5 px-4">Walls</th>
-                  <th className="py-3.5 px-4">Size & Structure</th>
-                  <th className="py-3.5 px-4">Checklist Progress</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4 min-w-[220px]">Company Name</th>
+                  <th className="py-3.5 px-4 w-[140px] min-w-[130px] shrink-0 whitespace-nowrap">Walls</th>
+                  <th className="py-3.5 px-4 w-[170px] min-w-[160px] shrink-0 whitespace-nowrap">Size &amp; Structure</th>
+                  <th className="py-3.5 px-4 w-[240px] min-w-[220px] shrink-0 whitespace-nowrap">Checklist Progress</th>
+                  <th className="py-3.5 px-4 w-[150px] min-w-[140px] shrink-0 text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05] text-zinc-300">
@@ -714,10 +768,11 @@ export function BoothsView({
                   return (
                     <tr
                       key={b.id}
-                      onClick={() => onNavigate(`booth:${b.id}`)}
+                      data-booth-id={b.id}
+                      onClick={() => handleOpenBooth(b.id)}
                       className="group hover:bg-zinc-800/40 odd:bg-transparent even:bg-white/[0.015] cursor-pointer transition-colors"
                     >
-                      <td className="py-3.5 px-4 font-mono">
+                      <td className="py-3.5 px-4 font-mono whitespace-nowrap">
                         {isPendingOrEmpty(b.booth_number) ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-mono text-[11px] font-medium">
                             Not Assigned
@@ -730,16 +785,16 @@ export function BoothsView({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate max-w-[220px]" title={b.client_name}>
+                        <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate" title={b.client_name}>
                           {b.client_name}
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <BoothWallIndicator wallConfig={b.wall_configuration} />
                       </td>
 
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-400">
                           <span className="px-2 py-0.5 rounded bg-[#1a1d26] border border-white/[0.08] font-medium text-zinc-300 text-[11px]">
                             {structure}
@@ -749,7 +804,7 @@ export function BoothsView({
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         {hasNoApplicable ? (
                           <span
                             className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-mono text-[11px] font-medium"
@@ -796,7 +851,7 @@ export function BoothsView({
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
@@ -866,7 +921,8 @@ export function BoothsView({
               return (
                 <div
                   key={b.id}
-                  onClick={() => onNavigate(`booth:${b.id}`)}
+                  data-booth-id={b.id}
+                  onClick={() => handleOpenBooth(b.id)}
                   className="p-3.5 hover:bg-zinc-800/40 active:bg-zinc-800/60 cursor-pointer transition-colors space-y-2.5"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -974,8 +1030,8 @@ export function BoothsView({
         /* 2. Ongoing Discussions List */
         <div className="bg-[#15171e] border border-white/[0.08] rounded-2xl overflow-hidden shadow-sm">
           {/* Desktop Table View */}
-          <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="hidden sm:block overflow-x-auto w-full">
+            <table className="w-full text-left text-xs min-w-[960px]">
               <thead className="bg-[#121319] border-b border-white/[0.08] text-zinc-400 font-medium">
                 <tr>
                   <th className="py-3.5 px-4">Company Name</th>
@@ -1012,7 +1068,8 @@ export function BoothsView({
                   return (
                     <tr
                       key={b.id}
-                      onClick={() => onNavigate(`booth:${b.id}`)}
+                      data-booth-id={b.id}
+                      onClick={() => handleOpenBooth(b.id)}
                       className="group hover:bg-zinc-800/40 odd:bg-transparent even:bg-white/[0.015] cursor-pointer transition-colors"
                     >
                       <td className="py-3.5 px-4 font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">
@@ -1127,7 +1184,8 @@ export function BoothsView({
               return (
                 <div
                   key={b.id}
-                  onClick={() => onNavigate(`booth:${b.id}`)}
+                  data-booth-id={b.id}
+                  onClick={() => handleOpenBooth(b.id)}
                   className="p-3.5 hover:bg-zinc-800/40 active:bg-zinc-800/60 cursor-pointer transition-colors space-y-2.5"
                 >
                   <div className="flex items-center justify-between gap-2">

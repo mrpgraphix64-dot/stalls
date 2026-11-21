@@ -13,23 +13,23 @@ async function testWorkbookGeneration() {
       fitToPage: true,
       fitToWidth: 1,
       fitToHeight: 0,
-      printTitlesRow: '4:5',
+      printTitlesRow: '3:4',
       horizontalCentered: true,
     },
-    views: [{ state: 'frozen', xSplit: 2, ySplit: 5 }],
+    views: [{ state: 'frozen', xSplit: 3, ySplit: 4 }],
   });
 
   // Row 1: Main Title Banner
-  ws.mergeCells('A1:AJ1');
+  ws.mergeCells('A1:Y1');
   const titleCell = ws.getCell('A1');
-  titleCell.value = 'REWORKZONE EXHIBITIONS — STALL PRODUCTION & REQUIREMENTS MATRIX';
-  titleCell.font = { name: 'Segoe UI', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+  titleCell.value = 'REWORKZONE STALLS — MASTER STALL DETAIL & PRODUCTION REQUIREMENTS';
+  titleCell.font = { name: 'Segoe UI', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
   titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF18181B' } }; // Dark charcoal
   titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-  ws.getRow(1).height = 30;
+  ws.getRow(1).height = 26;
 
   // Row 2: Subtitle / Event metadata
-  ws.mergeCells('A2:AJ2');
+  ws.mergeCells('A2:Y2');
   const subCell = ws.getCell('A2');
   subCell.value = 'Exhibition: Tech Expo 2026 | Venue: Pragati Maidan Hall 12, New Delhi | Date: 12-15 Dec 2026 | Generated: ' + new Date().toLocaleDateString('en-GB');
   subCell.font = { name: 'Segoe UI', size: 9.5, italic: true, color: { argb: 'FF52525B' } };
@@ -37,165 +37,139 @@ async function testWorkbookGeneration() {
   subCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
   ws.getRow(2).height = 20;
 
-  // Row 3: Blank separator
-  ws.getRow(3).height = 8;
-
-  // Row 4: Section Group Headers
-  ws.mergeCells('A4:H4');
-  const g1 = ws.getCell('A4');
-  g1.value = 'IDENTIFYING DETAILS & STRUCTURE';
-  g1.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  // Row 3: Section Group Headers
+  ws.mergeCells('A3:F3');
+  const g1 = ws.getCell('A3');
+  g1.value = 'BASIC DETAILS';
+  g1.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
   g1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27272A' } };
   g1.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws.mergeCells('I4:K4');
-  const g2 = ws.getCell('I4');
-  g2.value = 'DESIGN';
-  g2.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF1E3A8A' } };
-  g2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+  ws.mergeCells('G3:N3');
+  const g2 = ws.getCell('G3');
+  g2.value = 'PRODUCTION REQUIREMENTS';
+  g2.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF78350F' } };
+  g2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
   g2.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws.mergeCells('L4:Q4');
-  const g3 = ws.getCell('L4');
-  g3.value = 'PRINTING & GOODIES';
-  g3.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF581C87' } };
-  g3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3E8FF' } };
+  ws.mergeCells('O3:Q3');
+  const g3 = ws.getCell('O3');
+  g3.value = 'FURNITURE';
+  g3.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF064E3B' } };
+  g3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
   g3.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws.mergeCells('R4:W4');
-  const g4 = ws.getCell('R4');
-  g4.value = 'PRODUCTION';
-  g4.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF78350F' } };
-  g4.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+  ws.mergeCells('R3:S3');
+  const g4 = ws.getCell('R3');
+  g4.value = 'ELECTRICAL';
+  g4.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF7C2D12' } };
+  g4.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
   g4.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws.mergeCells('X4:AA4');
-  const g5 = ws.getCell('X4');
-  g5.value = 'FURNITURE';
-  g5.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF064E3B' } };
-  g5.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+  ws.mergeCells('T3:X3');
+  const g5 = ws.getCell('T3');
+  g5.value = 'PRINTING & GOODIES';
+  g5.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF581C87' } };
+  g5.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3E8FF' } };
   g5.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  ws.mergeCells('AB4:AD4');
-  const g6 = ws.getCell('AB4');
-  g6.value = 'ELECTRICAL';
-  g6.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF7C2D12' } };
-  g6.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+  const g6 = ws.getCell('Y3');
+  g6.value = 'ADDITIONAL';
+  g6.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF1F2937' } };
+  g6.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
   g6.alignment = { vertical: 'middle', horizontal: 'center' };
+  ws.getRow(3).height = 18;
 
-  ws.mergeCells('AE4:AJ4');
-  const g7 = ws.getCell('AE4');
-  g7.value = 'CHECKLIST COMPLETION';
-  g7.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF1F2937' } };
-  g7.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
-  g7.alignment = { vertical: 'middle', horizontal: 'center' };
-
-  ws.getRow(4).height = 22;
-
-  // Row 5: Column Headers
-  const headers = [
-    'Booth #',
-    'Company Name',
-    'Booth Size',
-    'Booth Type',
-    'Wall Configuration',
-    'Flooring Required',
-    'Carpet Color',
-    'Booking Stage',
-    'Client Side',
-    'Our Side',
-    '3D View',
-    'Print Link',
-    'Print Ready',
-    'Book',
-    'Pen',
-    'Leaflet',
-    'Other Goodies',
-    'Selfie Booth',
-    'Table Vinyl',
-    'TV 42"',
-    'TV 50–55"',
-    'TV Mounting',
-    'Other Production',
-    'Glass Round Table',
-    '2 Seater Sofa',
-    'Chair',
-    'Other Furniture',
-    'Power Socket',
-    'Permanent Light',
-    'Other Electrical',
-    'Design Done',
-    'Print Done',
-    'Production Done',
-    'Furniture Done',
-    'Electrical Done',
-    'Overall Progress',
+  // Row 4: Column Headers (25 columns)
+  const columns = [
+    { header: 'Sr. No.', width: 8 },
+    { header: 'Company Name', width: 34 },
+    { header: 'Stall No.', width: 13 },
+    { header: 'Booth Type', width: 14 },
+    { header: 'Wall Configuration', width: 18 },
+    { header: 'Size', width: 12 },
+    { header: 'Wooden Platform Flooring', width: 15 },
+    { header: 'Carpet', width: 11 },
+    { header: 'Carpet Color', width: 14 },
+    { header: 'Selfie Booth', width: 13 },
+    { header: 'Table Vinyl Branding', width: 16 },
+    { header: 'TV 42 Inch', width: 13 },
+    { header: 'TV 50–55 Inch', width: 14 },
+    { header: 'TV Mount', width: 16 },
+    { header: 'Glass Round Table', width: 15 },
+    { header: '2-Seater Sofa', width: 14 },
+    { header: 'Chair', width: 11 },
+    { header: 'Power Socket', width: 13 },
+    { header: 'Permanent Light', width: 15 },
+    { header: 'Print Files', width: 12 },
+    { header: 'Book', width: 11 },
+    { header: 'Pen', width: 11 },
+    { header: 'Leaflet', width: 11 },
+    { header: 'Other Goodies', width: 20 },
+    { header: 'Other Requirements', width: 26 },
   ];
 
-  const headerRow = ws.addRow(headers);
-  headerRow.height = 24;
+  columns.forEach((c, idx) => {
+    ws.getColumn(idx + 1).width = c.width;
+  });
+
+  const headerRow = ws.addRow(columns.map((c) => c.header));
+  headerRow.height = 30;
   headerRow.eachCell((cell) => {
-    cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF18181B' } };
+    cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF18181B' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F4F5' } };
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.border = {
       top: { style: 'thin', color: { argb: 'FFD4D4D8' } },
-      bottom: { style: 'medium', color: { argb: 'FFA1A1AA' } },
+      bottom: { style: 'medium', color: { argb: 'FF71717A' } },
       left: { style: 'thin', color: { argb: 'FFE4E4E7' } },
       right: { style: 'thin', color: { argb: 'FFE4E4E7' } },
     };
   });
 
-  // Enable AutoFilter on row 5
   ws.autoFilter = {
-    from: { row: 5, column: 1 },
-    to: { row: 5, column: headers.length },
+    from: { row: 4, column: 1 },
+    to: { row: 4, column: 25 },
   };
 
-  // Sample data row
+  // Row 5: Sample Data Row
   const rowData = [
-    'A-01',
-    'Alpha Innovations Ltd.',
-    '6 × 3 m',
+    1,
+    'Softqube Technologies Pvt. Ltd.',
+    '#A119',
     'Wooden',
-    '3 Sides',
-    '✓ 1',
-    'Blue',
-    'Confirmed',
+    'Back + Left',
+    '3 × 3 m',
+    // Production
+    '1',
+    'YES',
+    'GREY',
     '—',
-    '✓',
-    '✓ 1',
-    '✓',
-    '✓',
-    '✓ 20',
-    '✓ 100',
-    '✓ 200',
+    '1',
     '—',
-    '✓ 1',
-    '✓ 1',
+    '1',
+    'WALL MOUNT',
+    // Furniture
+    '1',
+    '1',
+    '4',
+    // Electrical
+    '1',
+    '4 SPOTLIGHT',
+    // Printing & Goodies
+    'YES',
+    '50',
+    '100',
     '—',
-    '✓ 1',
-    'Wall Mounted (Without Stand)',
-    'Backdrop Wooden Frame (1)',
-    '✓ 1',
-    '✓ 1',
-    '✓ 4',
     '—',
-    '✓ 2',
-    '✓ 4',
-    'Spotlight 50W (2)',
-    'Done',
-    'Done',
-    'Done',
-    'Pending',
-    'Done',
-    '80% (4/5)',
+    // Other Requirements
+    'Brochure Stand (1), Plants (2)',
   ];
 
   const dataRow = ws.addRow(rowData);
-  dataRow.height = 22;
+  dataRow.height = 20;
   dataRow.eachCell((cell, colNum) => {
-    cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF18181B' } };
+    cell.font = { name: 'Segoe UI', size: 9, color: { argb: 'FF18181B' } };
     cell.border = {
       top: { style: 'thin', color: { argb: 'FFE4E4E7' } },
       bottom: { style: 'thin', color: { argb: 'FFE4E4E7' } },
@@ -205,16 +179,16 @@ async function testWorkbookGeneration() {
 
     if (colNum === 2) {
       cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+    } else if (colNum === 24 || colNum === 25) {
+      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
     } else {
       cell.alignment = { vertical: 'middle', horizontal: 'center' };
     }
 
-    // Carpet color special styling
-    if (colNum === 7) {
-      if (cell.value === 'Blue') {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }; // Soft pastel blue
-        cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF1E40AF' } };
-      }
+    if (colNum === 9 && cell.value === 'GREY') {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+      cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF374151' } };
     }
   });
 
@@ -229,7 +203,7 @@ async function testWorkbookGeneration() {
   console.log('Sheet 1 name:', readWb.worksheets[0].name);
   console.log('Row count:', readWb.worksheets[0].rowCount);
   console.log('Sample cell A1:', readWb.worksheets[0].getCell('A1').value);
-  console.log('Sample cell G6 (Carpet):', readWb.worksheets[0].getCell('G6').value);
+  console.log('Sample cell I5 (Carpet Color):', readWb.worksheets[0].getCell('I5').value);
   fs.unlinkSync('tests/test_output.xlsx');
 }
 

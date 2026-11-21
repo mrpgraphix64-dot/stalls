@@ -48,6 +48,7 @@ import {
 import { BoothItem, BoothTask, BoothItemRecord, StallType, BoothLink } from './types';
 import { Modal } from './Modal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { getBoothOrigin } from './scrollRestoration';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
 import { PrintChecklistModal } from './PrintChecklistModal';
 import { EditBoothModal } from './EditBoothModal';
@@ -928,7 +929,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl mx-auto pb-12 px-2 sm:px-0">
+    <div className="space-y-6 animate-in fade-in duration-200 w-full min-w-0 pb-12">
       {/* Toast Notification */}
       {successToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-amber-500 text-zinc-950 px-4 py-2.5 rounded-xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom duration-200">
@@ -939,13 +940,20 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
       {/* Top Navigation & Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/[0.07]">
-        <button
-          onClick={() => (booth.event_id ? onNavigate(`event:${booth.event_id}`) : onNavigate('booths'))}
-          className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer py-1"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="truncate max-w-[200px] sm:max-w-md">Back to {booth.event_name ? booth.event_name : 'Stalls Directory'}</span>
-        </button>
+        {(() => {
+          const originInfo = getBoothOrigin();
+          const backRoute = originInfo?.route || (booth.event_id ? `event:${booth.event_id}` : 'booths');
+          const backLabel = originInfo?.title || (booth.event_name ? booth.event_name : 'Stalls Directory');
+          return (
+            <button
+              onClick={() => onNavigate(backRoute)}
+              className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer py-1"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="truncate max-w-[200px] sm:max-w-md">Back to {backLabel}</span>
+            </button>
+          );
+        })()}
 
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button

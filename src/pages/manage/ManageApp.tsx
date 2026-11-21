@@ -21,6 +21,11 @@ import { EventDetailView } from './EventDetailView';
 import { BoothsView } from './BoothsView';
 import { BoothDetailView } from './BoothDetailView';
 import { SettingsView } from './SettingsView';
+import {
+  hasPendingRestoration,
+  consumeBoothsRestoration,
+  consumeEventsRestoration,
+} from './scrollRestoration';
 
 export function ManageApp() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
@@ -82,10 +87,25 @@ export function ManageApp() {
   const handleNavigate = (route: string) => {
     setCurrentRoute(route);
     setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Only scroll to top if this navigation does not have a pending scroll restoration return
+    if (!hasPendingRestoration(route)) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
     // Sync hash for easy back/forward navigation
     window.location.hash = `#/manage/${route}`;
+  };
+
+  const handleSidebarNavigate = (routeId: string) => {
+    // When clicking a primary navigation link in the sidebar, clear pending restorations to start fresh
+    if (routeId === 'booths') {
+      consumeBoothsRestoration();
+    } else if (routeId === 'events') {
+      consumeEventsRestoration();
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    handleNavigate(routeId);
   };
 
   const handleLogout = async () => {
@@ -156,7 +176,7 @@ export function ManageApp() {
 
       {/* Sidebar for Desktop & Mobile Drawer */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-30 h-screen w-64 bg-[#13151b] border-r border-white/[0.07] flex flex-col justify-between transition-transform duration-200 backdrop-blur-md ${
+        className={`fixed md:sticky top-0 left-0 z-30 h-screen w-60 bg-[#13151b] border-r border-white/[0.07] flex flex-col justify-between transition-transform duration-200 backdrop-blur-md shrink-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
@@ -186,7 +206,7 @@ export function ManageApp() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => handleNavigate(item.id)}
+                  onClick={() => handleSidebarNavigate(item.id)}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-sm'
@@ -234,9 +254,9 @@ export function ManageApp() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-screen overflow-x-hidden">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         {/* Desktop Top Bar */}
-        <header className="hidden md:flex items-center justify-between px-8 py-4 bg-[#13151b]/80 border-b border-white/[0.07] backdrop-blur-md sticky top-0 z-20">
+        <header className="hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-[#13151b]/80 border-b border-white/[0.07] backdrop-blur-md sticky top-0 z-20">
           <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Workspace</span>
             <span className="text-zinc-700">/</span>
@@ -259,7 +279,7 @@ export function ManageApp() {
         </header>
 
         {/* Routed View Container */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 w-full min-w-0 px-3.5 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-6">
           {currentRoute === 'dashboard' && (
             <DashboardView
               onNavigate={handleNavigate}

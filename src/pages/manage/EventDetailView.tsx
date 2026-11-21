@@ -59,6 +59,13 @@ import {
   downloadWorkbookAsXlsx,
   getExcelExportFilename,
 } from './excelExport';
+import {
+  getEventViewState,
+  saveEventViewState,
+  consumeEventRestoration,
+  restoreScrollAndHighlight,
+  setBoothOrigin,
+} from './scrollRestoration';
 
 interface EventDetailViewProps {
   eventId: string;
@@ -83,9 +90,13 @@ export function EventDetailView({
   const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
   const [isAddBoothOpen, setIsAddBoothOpen] = useState<boolean>(false);
 
+  // Restore previous filters/sorting if returning from Booth Details
+  const initialSavedState = useMemo(() => getEventViewState(eventId), [eventId]);
+
   // Sorting & Filtering for Booths Registered Under This Event
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortDirection, setSortDirection] = useState<SortDirection>(initialSavedState?.sortDirection ?? 'asc');
+  const [searchQuery, setSearchQuery] = useState<string>(initialSavedState?.searchQuery ?? '');
+  const [checklistFilter, setChecklistFilter] = useState<ChecklistFilterType>(initialSavedState?.checklistFilter ?? 'all');
 
   const toggleSortDirection = () => {
     setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -280,7 +291,6 @@ export function EventDetailView({
     }
   };
 
-  const [checklistFilter, setChecklistFilter] = useState<ChecklistFilterType>('all');
   const [loadingPdf, setLoadingPdf] = useState<boolean>(false);
   const [pdfProgressText, setPdfProgressText] = useState<string>('');
   const [loadingExcel, setLoadingExcel] = useState<boolean>(false);
@@ -291,6 +301,38 @@ export function EventDetailView({
   const [confirmStallNumber, setConfirmStallNumber] = useState<string>('');
   const [confirmError, setConfirmError] = useState<string>('');
   const [confirmSubmitting, setConfirmSubmitting] = useState<boolean>(false);
+
+  // Smart Navigation & Scroll Position Preservation
+  const handleOpenBooth = (boothId: string) => {
+    saveEventViewState(eventId, {
+      scrollY: window.scrollY,
+      searchQuery,
+      checklistFilter,
+      sortDirection,
+      lastOpenedBoothId: boothId,
+      needsRestoration: true,
+    });
+    setBoothOrigin({
+      route: `event:${eventId}`,
+      title: event?.name || 'Exhibition Details',
+      timestamp: Date.now(),
+    });
+    onNavigate(`booth:${boothId}`);
+  };
+
+  const restorationAttemptedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!loading && event && !restorationAttemptedRef.current) {
+      const state = consumeEventRestoration(eventId);
+      if (state && state.needsRestoration) {
+        restorationAttemptedRef.current = true;
+        restoreScrollAndHighlight(state.lastOpenedBoothId, state.scrollY, {
+          dataAttr: 'data-booth-id',
+        });
+      }
+    }
+  }, [loading, event, eventId]);
 
   const boothsList = event?.booths || [];
 
@@ -518,8 +560,8 @@ export function EventDetailView({
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 max-w-5xl mx-auto">
-      {/* Navigation & Actions Bar */}
+    <div className="space-y-6 animate-in fade-in duration-200 w-full min-w-0">
+      {/* Navigation & Secondary Actions Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-zinc-800/60">
         <button
           onClick={() => onNavigate('events')}
@@ -529,40 +571,22 @@ export function EventDetailView({
           <span>Back to Exhibitions Directory</span>
         </button>
 
+        {/* Secondary Actions */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={loadingPrint || boothsList.length === 0}
-            onClick={handlePrintAllStalls}
-            className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Print Clean A4 Checklists for All Stalls in this Exhibition (1 Stall per page)"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>{loadingPrint ? 'Preparing...' : 'Print All Stall Checklists'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsFloorplanModalOpen(true)}
-            className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-            <span>View Floor Plan</span>
-          </button>
-
           <button
             type="button"
             onClick={() => setIsFloorplanModalOpen(true)}
             className="px-3.5 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-amber-400 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
             title="View Official Vector Floor Plan"
           >
-            <FileText className="w-3.5 h-3.5" />
+            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
             <span>Floor Plan</span>
           </button>
 
           <button
             onClick={openEditModal}
             className="px-3.5 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Edit Event Details"
           >
             <Edit2 className="w-3.5 h-3.5" />
             <span>Edit Event</span>
@@ -586,23 +610,13 @@ export function EventDetailView({
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
-
-          {/* Prominent + Add Booth button */}
-          <button
-            type="button"
-            onClick={() => setIsAddBoothOpen(true)}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Add Booth</span>
-          </button>
         </div>
       </div>
 
       {/* Event Overview Hero Card */}
-      <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
+      <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-1.5 min-w-0">
             <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">
               Exhibition Locus
             </span>
@@ -611,34 +625,60 @@ export function EventDetailView({
             </h1>
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400 pt-1">
               <span className="flex items-center gap-1.5 text-zinc-300">
-                <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 {event.venue}, {event.city}
               </span>
               <span>•</span>
               <span className="flex items-center gap-1.5 font-mono text-zinc-300">
-                <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 {event.start_date} &rarr; {event.end_date}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="bg-[#121319] border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-center">
-              <span className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider block">
-                Confirmed
-              </span>
-              <div className="text-xl font-black text-amber-400 font-mono">
-                {confirmedCount}
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {/* Stats Badges */}
+            <div className="flex items-center gap-2">
+              <div className="bg-[#121319] border border-white/[0.06] rounded-xl px-4 py-2.5 text-center min-w-[80px]">
+                <span className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider block">
+                  Confirmed
+                </span>
+                <div className="text-xl font-black text-amber-400 font-mono">
+                  {confirmedCount}
+                </div>
+              </div>
+
+              <div className="bg-[#121319] border border-white/[0.06] rounded-xl px-4 py-2.5 text-center min-w-[80px]">
+                <span className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider block">
+                  Discussions
+                </span>
+                <div className="text-xl font-black text-sky-400 font-mono">
+                  {discussionsCount}
+                </div>
               </div>
             </div>
 
-            <div className="bg-[#121319] border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-center">
-              <span className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider block">
-                Discussions
-              </span>
-              <div className="text-xl font-black text-sky-400 font-mono">
-                {discussionsCount}
-              </div>
+            {/* Primary Action Buttons */}
+            <div className="flex items-center gap-2 pl-0 sm:pl-2">
+              <button
+                type="button"
+                disabled={loadingPrint || boothsList.length === 0}
+                onClick={handlePrintAllStalls}
+                className="px-3.5 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Print Clean A4 Checklists for All Stalls in this Exhibition (1 Stall per page)"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{loadingPrint ? 'Preparing...' : 'Print All Checklists'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAddBoothOpen(true)}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Add Booth</span>
+              </button>
             </div>
           </div>
         </div>
@@ -652,9 +692,9 @@ export function EventDetailView({
       </div>
 
       {/* Booths List under this Event */}
-      <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
-        {/* Quick Filter Segmented Chips */}
-        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1 shrink-0 -mx-1 px-1 sm:mx-0 sm:px-0 border-b border-white/[0.06] pb-3.5">
+      <div className="bg-[#15171e] border border-white/[0.07] rounded-2xl p-4 sm:p-6 space-y-4 shadow-sm w-full min-w-0">
+        {/* Row 1: Quick Filter Segmented Chips */}
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-1 shrink-0 -mx-1 px-1 sm:mx-0 sm:px-0 border-b border-white/[0.06] pb-3">
           {CHECKLIST_FILTER_OPTIONS.map((opt) => {
             const count = filterCounts[opt.id];
             const isSelected = checklistFilter === opt.id;
@@ -682,15 +722,16 @@ export function EventDetailView({
           })}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-amber-400" />
-            <h2 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-              Booths Registered Under This Event ({searchQuery || checklistFilter !== 'all' ? `${sortedBooths.length} of ${boothsList.length}` : boothsList.length})
-            </h2>
-          </div>
+        {/* Row 2: Search & Actions Toolbar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-400 shrink-0" />
+              <h2 className="text-xs font-bold text-zinc-100 uppercase tracking-wider whitespace-nowrap">
+                Booths Registered Under This Event ({searchQuery || checklistFilter !== 'all' ? `${sortedBooths.length} of ${boothsList.length}` : boothsList.length})
+              </h2>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
             {boothsList.length > 2 && (
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -699,17 +740,19 @@ export function EventDetailView({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search stalls..."
-                  className="bg-[#121319] border border-white/[0.08] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 w-36 sm:w-48 transition-all"
+                  className="bg-[#121319] border border-white/[0.08] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500/80 w-36 sm:w-52 transition-all"
                 />
               </div>
             )}
+          </div>
 
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             {/* Download PDF Action */}
             <button
               type="button"
               disabled={loadingPdf || matchingStallsForExport.length === 0}
               onClick={handleDownloadPDF}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title={
                 matchingStallsForExport.length > 0
                   ? `Download combined PDF checklist for ${matchingStallsForExport.length} stall(s)`
@@ -729,7 +772,7 @@ export function EventDetailView({
               type="button"
               disabled={loadingExcel || matchingStallsForExport.length === 0}
               onClick={handleExportExcel}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title={
                 matchingStallsForExport.length > 0
                   ? `Export landscape Excel requirements workbook for ${matchingStallsForExport.length} stall(s)`
@@ -744,12 +787,12 @@ export function EventDetailView({
               <span>{loadingExcel ? (excelProgressText || 'Exporting...') : `Export Excel (${matchingStallsForExport.length})`}</span>
             </button>
 
-            {/* Print All / Print Filtered Action */}
+            {/* Print Filtered Action */}
             <button
               type="button"
               disabled={loadingPrint || matchingStallsForExport.length === 0}
               onClick={handlePrintFilteredStalls}
-              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5 cursor-pointer transition-colors px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1.5 cursor-pointer transition-colors px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title={
                 matchingStallsForExport.length > 0
                   ? `Print Clean A4 Checklists for ${matchingStallsForExport.length} stall(s)`
@@ -767,9 +810,9 @@ export function EventDetailView({
             <button
               type="button"
               onClick={() => setIsAddBoothOpen(true)}
-              className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition-colors px-2 py-1.5 rounded-lg hover:bg-white/[0.04]"
+              className="text-xs text-zinc-300 hover:text-white font-medium flex items-center gap-1 cursor-pointer transition-colors px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] whitespace-nowrap"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 text-amber-400" />
               <span>+ Add Booth</span>
             </button>
           </div>
@@ -793,11 +836,11 @@ export function EventDetailView({
         ) : (
           <div className="bg-[#15171e] border border-white/[0.08] rounded-2xl overflow-hidden shadow-sm">
             {/* Desktop Table View */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="hidden sm:block overflow-x-auto w-full">
+              <table className="w-full text-left text-xs min-w-[960px] table-auto">
                 <thead className="bg-[#121319] border-b border-white/[0.08] text-zinc-400 font-medium">
                   <tr>
-                    <th className="py-3.5 px-4" aria-sort={sortDirection === 'asc' ? 'ascending' : 'descending'}>
+                    <th className="py-3.5 px-4 w-[115px] min-w-[105px] shrink-0" aria-sort={sortDirection === 'asc' ? 'ascending' : 'descending'}>
                       <button
                         type="button"
                         onClick={toggleSortDirection}
@@ -812,11 +855,11 @@ export function EventDetailView({
                         )}
                       </button>
                     </th>
-                    <th className="py-3.5 px-4">Company Name</th>
-                    <th className="py-3.5 px-4">Walls</th>
-                    <th className="py-3.5 px-4">Size & Structure</th>
-                    <th className="py-3.5 px-4">Checklist Progress</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
+                    <th className="py-3.5 px-4 min-w-[220px]">Company Name</th>
+                    <th className="py-3.5 px-4 w-[140px] min-w-[130px] shrink-0 whitespace-nowrap">Walls</th>
+                    <th className="py-3.5 px-4 w-[170px] min-w-[160px] shrink-0 whitespace-nowrap">Size &amp; Structure</th>
+                    <th className="py-3.5 px-4 w-[240px] min-w-[220px] shrink-0 whitespace-nowrap">Checklist Progress</th>
+                    <th className="py-3.5 px-4 w-[150px] min-w-[140px] shrink-0 text-right whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.05] text-zinc-300">
@@ -857,10 +900,11 @@ export function EventDetailView({
                       return (
                         <tr
                           key={b.id}
-                          onClick={() => onNavigate(`booth:${b.id}`)}
+                          data-booth-id={b.id}
+                          onClick={() => handleOpenBooth(b.id)}
                           className="group hover:bg-zinc-800/40 odd:bg-transparent even:bg-white/[0.015] cursor-pointer transition-colors"
                         >
-                          <td className="py-3.5 px-4 font-mono">
+                          <td className="py-3.5 px-4 font-mono whitespace-nowrap">
                             {isPendingOrEmpty(b.booth_number) ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-mono text-[11px] font-medium">
                                 Not Assigned
@@ -874,7 +918,7 @@ export function EventDetailView({
 
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate max-w-[200px]" title={b.client_name}>
+                              <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate" title={b.client_name}>
                                 {b.client_name}
                               </span>
                               {b.booking_stage === 'discussion' && (
@@ -885,11 +929,11 @@ export function EventDetailView({
                             </div>
                           </td>
 
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 whitespace-nowrap">
                             <BoothWallIndicator wallConfig={b.wall_configuration} />
                           </td>
 
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-400">
                               <span className="px-2 py-0.5 rounded bg-[#1a1d26] border border-white/[0.08] font-medium text-zinc-300 text-[11px]">
                                 {structure}
@@ -899,7 +943,7 @@ export function EventDetailView({
                             </div>
                           </td>
 
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 whitespace-nowrap">
                             {b.booking_stage === 'discussion' ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 font-mono text-[11px]">
                                 Discussion Only
@@ -950,7 +994,7 @@ export function EventDetailView({
                             )}
                           </td>
 
-                          <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
                               {b.booking_stage === 'discussion' && (
                                 <button
@@ -1044,7 +1088,8 @@ export function EventDetailView({
                   return (
                     <div
                       key={b.id}
-                      onClick={() => onNavigate(`booth:${b.id}`)}
+                      data-booth-id={b.id}
+                      onClick={() => handleOpenBooth(b.id)}
                       className="p-3.5 hover:bg-zinc-800/40 active:bg-zinc-800/60 cursor-pointer transition-colors space-y-2.5"
                     >
                       <div className="flex items-center justify-between gap-2">

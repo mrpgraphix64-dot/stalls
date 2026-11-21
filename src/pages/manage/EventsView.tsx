@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   Calendar,
   Plus,
@@ -22,6 +22,12 @@ import { Modal } from './Modal';
 import { DateRangePicker } from './DateRangePicker';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
+import {
+  getEventsViewState,
+  saveEventsViewState,
+  consumeEventsRestoration,
+  restoreScrollAndHighlight,
+} from './scrollRestoration';
 
 interface EventsViewProps {
   onNavigate: (route: string) => void;
@@ -33,8 +39,37 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
-  const [search, setSearch] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Restore previous filters/sorting if returning from Event Details
+  const initialSavedState = useMemo(() => getEventsViewState(), []);
+  const [search, setSearch] = useState<string>(initialSavedState?.search ?? '');
+  const [statusFilter, setStatusFilter] = useState<string>(initialSavedState?.statusFilter ?? 'all');
+
+  // Smart Navigation & Scroll Position Preservation
+  const handleOpenEvent = (evtId: string) => {
+    saveEventsViewState({
+      scrollY: window.scrollY,
+      search,
+      statusFilter,
+      lastOpenedEventId: evtId,
+      needsRestoration: true,
+    });
+    onNavigate(`event:${evtId}`);
+  };
+
+  const restorationAttemptedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!loading && events.length > 0 && !restorationAttemptedRef.current) {
+      const state = consumeEventsRestoration();
+      if (state && state.needsRestoration) {
+        restorationAttemptedRef.current = true;
+        restoreScrollAndHighlight(state.lastOpenedEventId, state.scrollY, {
+          dataAttr: 'data-event-id',
+        });
+      }
+    }
+  }, [loading, events]);
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState<boolean>(createModalOpen);
@@ -359,7 +394,8 @@ export function EventsView({ onNavigate, createModalOpen = false, onCloseCreateM
           {events.map((evt) => (
             <div
               key={evt.id}
-              onClick={() => onNavigate(`event:${evt.id}`)}
+              data-event-id={evt.id}
+              onClick={() => handleOpenEvent(evt.id)}
               className="group cursor-pointer bg-[#15171e] hover:bg-[#191c25] border border-white/[0.07] hover:border-white/[0.14] rounded-2xl p-5 transition-all shadow-sm flex flex-col justify-between space-y-4"
             >
               <div className="space-y-3">
