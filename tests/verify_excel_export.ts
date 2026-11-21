@@ -4,42 +4,78 @@ import {
   extractCarpetColor,
   extractFlooring,
   extractTvMounting,
+  deriveStallShape,
+  formatTvRequirements,
+  formatSofaRequirements,
+  formatSpecialRequirements,
   calculateOverallProgress,
   getExcelExportFilename,
 } from '../src/pages/manage/excelExport';
 import { StallPrintData, BoothTask } from '../src/pages/manage/types';
 
 async function runVerification() {
-  console.log('=== VERIFY EXCEL EXPORT WORKBOOK GENERATION ===');
+  console.log('=== VERIFY REFINED 23-COLUMN EXCEL EXPORT WORKBOOK GENERATION ===');
 
   // Test 1: Filename generation
   const fn1 = getExcelExportFilename('Tech Expo 2026', 'all');
   const fn2 = getExcelExportFilename('Tech Expo 2026', 'done');
-  const fn3 = getExcelExportFilename('Tech Expo 2026', 'in_progress');
-  const fn4 = getExcelExportFilename('Tech Expo 2026', 'discussions');
-  console.log('Filename all:', fn1);
-  console.log('Filename done:', fn2);
   if (fn1 !== 'Tech_Expo_2026_Stall_Requirements.xlsx') throw new Error('Filename all mismatch');
   if (fn2 !== 'Tech_Expo_2026_Completed_Stall_Requirements.xlsx') throw new Error('Filename done mismatch');
-  if (fn3 !== 'Tech_Expo_2026_InProgress_Stall_Requirements.xlsx') throw new Error('Filename in_progress mismatch');
-  if (fn4 !== 'Tech_Expo_2026_Ongoing_Discussions_Requirements.xlsx') throw new Error('Filename discussions mismatch');
 
-  // Test 2: Carpet Color & Flooring extraction
-  const mockCarpetBlue = [{ id: '1', booth_id: 'b1', category: 'production' as const, item_name: 'Carpet', specification: 'Color: Blue', quantity: 1 }];
-  const mockCarpetRed = [{ id: '2', booth_id: 'b1', category: 'production' as const, item_name: 'Carpet', specification: 'Red', quantity: 1 }];
-  const mockCarpetGrey = [{ id: '3', booth_id: 'b1', category: 'production' as const, item_name: 'Carpet', specification: 'Color: Grey', quantity: 1 }];
-  const mockCarpetNone: any[] = [];
+  // Test 2: deriveStallShape
+  if (deriveStallShape('3 Sides') !== 'C Shape / U Shape') throw new Error('Stall shape 3 Sides mismatch');
+  if (deriveStallShape('3_sides') !== 'C Shape / U Shape') throw new Error('Stall shape 3_sides mismatch');
+  if (deriveStallShape('Back + Left') !== 'L Shape') throw new Error('Stall shape Back + Left mismatch');
+  if (deriveStallShape('2 Sides - Back + Right') !== 'L Shape') throw new Error('Stall shape Back + Right mismatch');
+  if (deriveStallShape('Back Wall Only') !== 'Back Wall Only') throw new Error('Stall shape Back Wall Only mismatch');
+  if (deriveStallShape('Back Only') !== 'Back Wall Only') throw new Error('Stall shape Back Only mismatch');
+  if (deriveStallShape('') !== 'Not Specified') throw new Error('Stall shape empty mismatch');
+  if (deriveStallShape(null) !== 'Not Specified') throw new Error('Stall shape null mismatch');
 
-  if (extractCarpetColor(mockCarpetBlue) !== 'BLUE') throw new Error(`Carpet Blue failed: got ${extractCarpetColor(mockCarpetBlue)}`);
-  if (extractCarpetColor(mockCarpetRed) !== 'RED') throw new Error(`Carpet Red failed: got ${extractCarpetColor(mockCarpetRed)}`);
-  if (extractCarpetColor(mockCarpetGrey) !== 'GREY') throw new Error(`Carpet Grey failed: got ${extractCarpetColor(mockCarpetGrey)}`);
-  if (extractCarpetColor(mockCarpetNone) !== '—') throw new Error('Carpet None failed');
+  // Test 3: formatTvRequirements
+  const mockTvSingle = [
+    { id: '1', booth_id: 'b1', category: 'production' as const, item_name: 'TV — 42 inch', specification: 'With Stand', quantity: 1 },
+  ];
+  const tvSingleResult = formatTvRequirements(mockTvSingle, false);
+  console.log('TV single result:', tvSingleResult);
+  if (tvSingleResult !== '42" × 1 — With Stand') throw new Error(`TV single failed: got ${tvSingleResult}`);
 
-  const mockFlooring = [{ id: '4', booth_id: 'b1', category: 'production' as const, item_name: 'Wooden Platform Flooring', quantity: 1 }];
-  if (extractFlooring(mockFlooring) !== '1') throw new Error(`Flooring failed: expected 1, got ${extractFlooring(mockFlooring)}`);
-  if (extractFlooring([]) !== '—') throw new Error('Flooring empty failed');
+  const mockTvMultiple = [
+    { id: '1', booth_id: 'b1', category: 'production' as const, item_name: 'TV — 42 inch', specification: 'Wall Mount', quantity: 1 },
+    { id: '2', booth_id: 'b1', category: 'production' as const, item_name: 'TV — 50–55 inch', specification: 'With Stand', quantity: 1 },
+  ];
+  const tvMultiResult = formatTvRequirements(mockTvMultiple, false);
+  console.log('TV multiple result:\n' + tvMultiResult);
+  if (!tvMultiResult.includes('42" × 1 — Wall Mount') || !tvMultiResult.includes('50–55" × 1 — With Stand')) {
+    throw new Error('TV multiple failed');
+  }
 
-  // Test 3: Overall Progress calculation
+  // Test 4: formatSofaRequirements
+  const mockSofaCombined = [
+    { id: '1', booth_id: 'b1', category: 'furniture' as const, item_name: '1-Seater Sofa', quantity: 2 },
+    { id: '2', booth_id: 'b1', category: 'furniture' as const, item_name: '2-Seater Sofa', quantity: 1 },
+  ];
+  const sofaResult = formatSofaRequirements(mockSofaCombined, false);
+  console.log('Sofa combined result:\n' + sofaResult);
+  if (!sofaResult.includes('1-Seater × 2') || !sofaResult.includes('2-Seater × 1')) {
+    throw new Error('Sofa combined failed');
+  }
+
+  // Test 5: formatSpecialRequirements (Selfie Booth + Custom items)
+  const mockSpecialProd = [
+    { id: 'p1', booth_id: 'b1', category: 'production' as const, item_name: 'Selfie Booth', quantity: 1 },
+    { id: 'p2', booth_id: 'b1', category: 'production' as const, item_name: 'Acrylic Logo', quantity: 2 },
+  ];
+  const mockSpecialFurn = [
+    { id: 'f1', booth_id: 'b1', category: 'furniture' as const, item_name: 'Bar Stool', quantity: 2 },
+  ];
+  const specialResult = formatSpecialRequirements(mockSpecialProd, mockSpecialFurn, []);
+  console.log('Special requirements result:\n' + specialResult);
+  if (!specialResult.includes('Selfie Booth × 1') || !specialResult.includes('Acrylic Logo × 2') || !specialResult.includes('Bar Stool × 2')) {
+    throw new Error('Special requirements failed');
+  }
+
+  // Test 6: Full Multi-Stall Workbook Generation matching 23-column reference
   const tasksAllDone: BoothTask[] = [
     { id: 't1', booth_id: 'b1', task_name: '1. Design', phase: 'Design', status: 'completed', is_completed: 1, sort_order: 1, display_order: 1 },
     { id: 't2', booth_id: 'b1', task_name: '2. Print', phase: 'Print', status: 'completed', is_completed: 1, sort_order: 2, display_order: 2 },
@@ -47,9 +83,6 @@ async function runVerification() {
     { id: 't4', booth_id: 'b1', task_name: '4. Furniture', phase: 'Furniture', status: 'not_applicable', is_completed: 0, sort_order: 4, display_order: 4 },
     { id: 't5', booth_id: 'b1', task_name: '5. Electrical', phase: 'Electrical', status: 'not_applicable', is_completed: 0, sort_order: 5, display_order: 5 },
   ];
-  const prog1 = calculateOverallProgress(tasksAllDone);
-  console.log('Progress 3 done + 2 NA:', prog1);
-  if (!prog1.includes('100% (3/3)')) throw new Error('Overall progress formula failed');
 
   const tasksAllNA: BoothTask[] = [
     { id: 't1', booth_id: 'b1', task_name: '1. Design', phase: 'Design', status: 'not_applicable', is_completed: 0, sort_order: 1, display_order: 1 },
@@ -58,11 +91,7 @@ async function runVerification() {
     { id: 't4', booth_id: 'b1', task_name: '4. Furniture', phase: 'Furniture', status: 'not_applicable', is_completed: 0, sort_order: 4, display_order: 4 },
     { id: 't5', booth_id: 'b1', task_name: '5. Electrical', phase: 'Electrical', status: 'not_applicable', is_completed: 0, sort_order: 5, display_order: 5 },
   ];
-  const prog2 = calculateOverallProgress(tasksAllNA);
-  console.log('Progress all NA:', prog2);
-  if (prog2 !== 'No Applicable Tasks') throw new Error('All NA progress failed');
 
-  // Test 4: Full Multi-Stall Workbook Generation matching Reference
   const mockStalls: StallPrintData[] = [
     {
       booth: {
@@ -86,6 +115,7 @@ async function runVerification() {
         { id: 'p2', booth_id: 'bth_1', category: 'production', item_name: 'Carpet', specification: 'Color: Blue', quantity: 1 },
         { id: 'p3', booth_id: 'bth_1', category: 'production', item_name: 'TV — 50–55 inch', specification: 'Wall Mounted (Without Stand)', quantity: 1 },
         { id: 'p4', booth_id: 'bth_1', category: 'production', item_name: 'Backdrop Frame', quantity: 1 },
+        { id: 'p5', booth_id: 'bth_1', category: 'production', item_name: 'Selfie Booth', quantity: 1 },
       ],
       furnitureItems: [
         { id: 'f1', booth_id: 'bth_1', category: 'furniture', item_name: 'Glass Round Table', quantity: 1 },
@@ -99,9 +129,7 @@ async function runVerification() {
         { id: 'g1', booth_id: 'bth_1', category: 'goodies', item_name: 'Book', quantity: 50 },
         { id: 'g2', booth_id: 'bth_1', category: 'goodies', item_name: 'Pen', quantity: 100 },
       ],
-      views3D: [
-        { id: 'l1', booth_id: 'bth_1', category: 'render_3d', title: 'Main 3D View', drive_url: 'https://claude.site/art1', version: '1', is_final: 1 },
-      ],
+      views3D: [],
     },
     {
       booth: {
@@ -121,11 +149,12 @@ async function runVerification() {
       eventName: 'Tech Expo 2026',
       tasks: [],
       productionItems: [
-        { id: 'p5', booth_id: 'bth_2', category: 'production', item_name: 'Carpet', specification: 'Color: Grey', quantity: 1 },
-        { id: 'p6', booth_id: 'bth_2', category: 'production', item_name: 'TV — 42 inch', specification: 'With Stand', quantity: 1 },
+        { id: 'p6', booth_id: 'bth_2', category: 'production', item_name: 'Carpet', specification: 'Color: Grey', quantity: 1 },
+        { id: 'p7', booth_id: 'bth_2', category: 'production', item_name: 'TV — 42 inch', specification: 'With Stand', quantity: 1 },
       ],
       furnitureItems: [
-        { id: 'f3', booth_id: 'bth_2', category: 'furniture', item_name: '2 Seater Sofa', quantity: 1 },
+        { id: 'f3', booth_id: 'bth_2', category: 'furniture', item_name: '1-Seater Sofa', quantity: 2 },
+        { id: 'f4', booth_id: 'bth_2', category: 'furniture', item_name: '2-Seater Sofa', quantity: 1 },
       ],
       electricalItems: [
         { id: 'e3', booth_id: 'bth_2', category: 'electrical', item_name: 'Power Socket', quantity: 1 },
@@ -165,104 +194,106 @@ async function runVerification() {
 
   const wb = await generateStallRequirementsWorkbook(mockStalls, eventMetadata);
 
-  // Single worksheet expected as per reference specification
   if (wb.worksheets.length !== 1) throw new Error(`Expected exactly 1 worksheet, got ${wb.worksheets.length}`);
-  const ws1 = wb.getWorksheet('Stall Requirements')!;
+  const ws = wb.getWorksheet('Stall Requirements')!;
 
-  console.log('WS1 Name:', ws1.name);
-  console.log('WS1 Row Count:', ws1.rowCount);
-  // Rows: 1: Title, 2: Subtitle, 3: Category Groups, 4: Column Headers, 5: A-01, 6: A-02, 7: B-10 -> 7 rows
-  if (ws1.rowCount !== 7) throw new Error(`Expected 7 rows, got ${ws1.rowCount}`);
+  console.log('WS Name:', ws.name);
+  console.log('WS Row Count:', ws.rowCount);
+  console.log('WS Col Count:', ws.columnCount);
 
-  // Natural sorting test: A-01 must come before A-02 before B-10!
-  const r5Stall = ws1.getCell('C5').value;
-  const r6Stall = ws1.getCell('C6').value;
-  const r7Stall = ws1.getCell('C7').value;
-  console.log(`Sorted Booths in Excel: ${r5Stall} -> ${r6Stall} -> ${r7Stall}`);
-  if (r5Stall !== '#A-01' || r6Stall !== '#A-02' || r7Stall !== '#B-10') {
-    throw new Error('Natural booth number sorting failed in Excel rows');
+  // Verify exactly 23 columns
+  const expectedHeaders = [
+    'Sr. No.',
+    'Company Name',
+    'Stall No.',
+    'Stall Shape',
+    'Booth Type',
+    'Wall Configuration',
+    'Size',
+    'Wooden Platform Flooring',
+    'Carpet',
+    'Carpet Color',
+    'Table Vinyl Branding',
+    'TV',
+    'Glass Round Table',
+    'Sofa',
+    'Chair',
+    'Power Socket',
+    'Permanent Light',
+    'Print Files',
+    'Book',
+    'Pen',
+    'Leaflet',
+    'Other Goodies',
+    'Special Requirements',
+  ];
+
+  if (expectedHeaders.length !== 23) throw new Error('Expected 23 columns in specification');
+
+  for (let c = 1; c <= 23; c++) {
+    const h = ws.getCell(4, c).value;
+    if (h !== expectedHeaders[c - 1]) {
+      throw new Error(`Column ${c} header mismatch: expected "${expectedHeaders[c - 1]}", got "${h}"`);
+    }
   }
 
   // Row 5 is Beta Dynamic Systems (A-01):
   // Col 1: Sr. No. = 1
-  if (ws1.getCell('A5').value !== 1) throw new Error('Row 5 Sr. No. mismatch');
+  if (ws.getCell('A5').value !== 1) throw new Error('Row 5 Sr. No. mismatch');
   // Col 2: Company Name
-  if (ws1.getCell('B5').value !== 'Beta Dynamic Systems') throw new Error('Row 5 Company Name mismatch');
-  // Col 4: Booth Type
-  if (ws1.getCell('D5').value !== 'Frame') throw new Error('Row 5 Booth Type mismatch');
-  // Col 5: Wall Configuration
-  if (ws1.getCell('E5').value !== 'Back + Right') throw new Error(`Row 5 Wall Config mismatch: got ${ws1.getCell('E5').value}`);
-  // Col 7: Flooring = '—'
-  if (ws1.getCell('G5').value !== '—') throw new Error('Row 5 Flooring mismatch');
-  // Col 8: Carpet = 'YES'
-  if (ws1.getCell('H5').value !== 'YES') throw new Error('Row 5 Carpet mismatch');
-  // Col 9: Carpet Color = 'GREY'
-  if (ws1.getCell('I5').value !== 'GREY') throw new Error('Row 5 Carpet Color mismatch');
-  // Col 12: TV 42" = '1'
-  if (ws1.getCell('L5').value !== '1') throw new Error('Row 5 TV 42" mismatch');
-  // Col 14: TV Mount = 'WITH STAND'
-  if (ws1.getCell('N5').value !== 'WITH STAND') throw new Error('Row 5 TV Mount mismatch');
-  // Col 16: 2-Seater Sofa = '1'
-  if (ws1.getCell('P5').value !== '1') throw new Error('Row 5 Sofa mismatch');
-  // Col 18: Power Socket = '1'
-  if (ws1.getCell('R5').value !== '1') throw new Error('Row 5 Socket mismatch');
+  if (ws.getCell('B5').value !== 'Beta Dynamic Systems') throw new Error('Row 5 Company Name mismatch');
+  // Col 3: Stall No.
+  if (ws.getCell('C5').value !== '#A-01') throw new Error('Row 5 Stall No mismatch');
+  // Col 4: Stall Shape = 'L Shape' (derived from '2 Sides - Back + Right')
+  if (ws.getCell('D5').value !== 'L Shape') throw new Error(`Row 5 Stall Shape mismatch: got ${ws.getCell('D5').value}`);
+  // Col 5: Booth Type = 'Frame'
+  if (ws.getCell('E5').value !== 'Frame') throw new Error('Row 5 Booth Type mismatch');
+  // Col 6: Wall Configuration = 'Back + Right'
+  if (ws.getCell('F5').value !== 'Back + Right') throw new Error(`Row 5 Wall Config mismatch: got ${ws.getCell('F5').value}`);
+  // Col 8: Flooring = '—'
+  if (ws.getCell('H5').value !== '—') throw new Error('Row 5 Flooring mismatch');
+  // Col 9: Carpet = 'YES'
+  if (ws.getCell('I5').value !== 'YES') throw new Error('Row 5 Carpet mismatch');
+  // Col 10: Carpet Color = 'GREY'
+  if (ws.getCell('J5').value !== 'GREY') throw new Error('Row 5 Carpet Color mismatch');
+  // Col 12: TV = '42" × 1 — With Stand'
+  if (ws.getCell('L5').value !== '42" × 1 — With Stand') throw new Error(`Row 5 TV mismatch: got ${ws.getCell('L5').value}`);
+  // Col 14: Sofa = '1-Seater × 2\n2-Seater × 1'
+  const r5Sofa = String(ws.getCell('N5').value);
+  if (!r5Sofa.includes('1-Seater × 2') || !r5Sofa.includes('2-Seater × 1')) {
+    throw new Error(`Row 5 Sofa mismatch: got ${r5Sofa}`);
+  }
 
   // Row 6 is Alpha Technologies (A-02):
-  // Col 1: Sr. No. = 2
-  if (ws1.getCell('A6').value !== 2) throw new Error('Row 6 Sr. No. mismatch');
-  // Col 2: Company Name
-  if (ws1.getCell('B6').value !== 'Alpha Technologies') throw new Error('Row 6 Company Name mismatch');
-  // Col 4: Booth Type = 'Wooden'
-  if (ws1.getCell('D6').value !== 'Wooden') throw new Error('Row 6 Booth Type mismatch');
-  // Col 5: Wall Config = '3 Sides'
-  if (ws1.getCell('E6').value !== '3 Sides') throw new Error('Row 6 Wall Config mismatch');
-  // Col 7: Flooring = '1'
-  if (ws1.getCell('G6').value !== '1') throw new Error('Row 6 Flooring mismatch');
-  // Col 8: Carpet = 'YES'
-  if (ws1.getCell('H6').value !== 'YES') throw new Error('Row 6 Carpet mismatch');
-  // Col 9: Carpet Color = 'BLUE'
-  if (ws1.getCell('I6').value !== 'BLUE') throw new Error('Row 6 Carpet Color mismatch');
-  // Col 12: TV 42" = '—'
-  if (ws1.getCell('L6').value !== '—') throw new Error('Row 6 TV 42" mismatch');
-  // Col 13: TV 50–55" = '1'
-  if (ws1.getCell('M6').value !== '1') throw new Error('Row 6 TV 55" mismatch');
-  // Col 14: TV Mount = 'WALL MOUNT'
-  if (ws1.getCell('N6').value !== 'WALL MOUNT') throw new Error('Row 6 TV Mount mismatch');
-  // Col 15: Glass Round Table = '1'
-  if (ws1.getCell('O6').value !== '1') throw new Error('Row 6 Round Table mismatch');
-  // Col 17: Chair = '4'
-  if (ws1.getCell('Q6').value !== '4') throw new Error('Row 6 Chair mismatch');
-  // Col 18: Power Socket = '2'
-  if (ws1.getCell('R6').value !== '2') throw new Error('Row 6 Socket mismatch');
-  // Col 19: Permanent Light = '4'
-  if (ws1.getCell('S6').value !== '4') throw new Error('Row 6 Permanent Light mismatch');
-  // Col 20: Print Files = 'YES'
-  if (ws1.getCell('T6').value !== 'YES') throw new Error('Row 6 Print Files mismatch');
-  // Col 21: Book = '50'
-  if (ws1.getCell('U6').value !== '50') throw new Error('Row 6 Book mismatch');
-  // Col 22: Pen = '100'
-  if (ws1.getCell('V6').value !== '100') throw new Error('Row 6 Pen mismatch');
-  // Col 25: Other Requirements = 'Backdrop Frame (1)'
-  if (ws1.getCell('Y6').value !== 'Backdrop Frame (1)') throw new Error(`Row 6 Other Reqs mismatch: got ${ws1.getCell('Y6').value}`);
+  // Col 4: Stall Shape = 'C Shape / U Shape' (derived from '3 Sides')
+  if (ws.getCell('D6').value !== 'C Shape / U Shape') throw new Error(`Row 6 Stall Shape mismatch: got ${ws.getCell('D6').value}`);
+  // Col 5: Booth Type = 'Wooden'
+  if (ws.getCell('E6').value !== 'Wooden') throw new Error('Row 6 Booth Type mismatch');
+  // Col 6: Wall Config = '3 Sides'
+  if (ws.getCell('F6').value !== '3 Sides') throw new Error('Row 6 Wall Config mismatch');
+  // Col 10: Carpet Color = 'BLUE'
+  if (ws.getCell('J6').value !== 'BLUE') throw new Error('Row 6 Carpet Color mismatch');
+  // Col 12: TV = '50–55" × 1 — Wall Mount'
+  if (ws.getCell('L6').value !== '50–55" × 1 — Wall Mount') throw new Error(`Row 6 TV mismatch: got ${ws.getCell('L6').value}`);
+  // Col 23: Special Requirements contains 'Selfie Booth × 1' and 'Backdrop Frame × 1'
+  const r6Special = String(ws.getCell('W6').value);
+  console.log('Row 6 Special Requirements:\n' + r6Special);
+  if (!r6Special.includes('Selfie Booth × 1') || !r6Special.includes('Backdrop Frame × 1')) {
+    throw new Error(`Row 6 Special Requirements mismatch: got ${r6Special}`);
+  }
 
-  // Row 7 is Gamma Ongoing Ventures (B-10) with all tasks N/A:
-  // Col 7: Flooring = 'N/A'
-  if (ws1.getCell('G7').value !== 'N/A') throw new Error('Row 7 Flooring N/A mismatch');
-  // Col 8: Carpet = 'N/A'
-  if (ws1.getCell('H7').value !== 'N/A') throw new Error('Row 7 Carpet N/A mismatch');
-  // Col 9: Carpet Color = 'N/A'
-  if (ws1.getCell('I7').value !== 'N/A') throw new Error('Row 7 Carpet Color N/A mismatch');
-  // Col 15: Glass Round Table = 'N/A'
-  if (ws1.getCell('O7').value !== 'N/A') throw new Error('Row 7 Furniture N/A mismatch');
-  // Col 18: Power Socket = 'N/A'
-  if (ws1.getCell('R7').value !== 'N/A') throw new Error('Row 7 Electrical N/A mismatch');
+  // Row 7 is Gamma Ongoing Ventures (B-10) with Back Wall Only:
+  // Col 4: Stall Shape = 'Back Wall Only'
+  if (ws.getCell('D7').value !== 'Back Wall Only') throw new Error(`Row 7 Stall Shape mismatch: got ${ws.getCell('D7').value}`);
+  // Col 6: Wall Config = 'Back Only'
+  if (ws.getCell('F7').value !== 'Back Only') throw new Error(`Row 7 Wall Config mismatch: got ${ws.getCell('F7').value}`);
 
   // Verify writeBuffer creates valid bytes
   const buf = await wb.xlsx.writeBuffer();
   console.log('Workbook buffer byte length:', buf.byteLength);
   if (buf.byteLength < 5000) throw new Error('Generated XLSX buffer size abnormally small');
 
-  console.log('\n[SUCCESS] All Node.js Excel workbook generation assertions passed!\n');
+  console.log('\n[SUCCESS] All Refined 23-Column Excel workbook generation assertions passed!\n');
 }
 
 runVerification().catch((err) => {

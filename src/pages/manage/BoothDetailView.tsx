@@ -2603,7 +2603,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                         <p className="text-xs text-zinc-500">No furniture items assigned yet.</p>
                       )}
 
-                      {/* 1. Quick Add Presets: Glass Round Table, 2 Seater Sofa, Chair */}
+                      {/* 1. Quick Add Presets: Glass Round Table, 1-Seater Sofa, 2-Seater Sofa, Chair */}
                       <div className="space-y-2 pt-3 border-t border-zinc-800/80">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -2612,8 +2612,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           </span>
                           <span className="text-[10px] text-zinc-500">Tap to add Qty 1</span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          {['Glass Round Table', '2 Seater Sofa', 'Chair'].map((preset) => (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {['Glass Round Table', '1-Seater Sofa', '2-Seater Sofa', 'Chair'].map((preset) => (
                             <button
                               key={preset}
                               type="button"

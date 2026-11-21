@@ -38,6 +38,31 @@ export function getExcelExportFilename(eventName: string, filterType?: string): 
 }
 
 /**
+ * Derives the physical STALL SHAPE from Wall Configuration.
+ * 3 Sides -> C Shape / U Shape
+ * Back + Left -> L Shape
+ * Back + Right -> L Shape
+ * Back Wall Only / Back Only -> Back Wall Only
+ * Missing/unspecified -> Not Specified
+ */
+export function deriveStallShape(wallConfig?: string | null): string {
+  if (!wallConfig || typeof wallConfig !== 'string' || !wallConfig.trim()) {
+    return 'Not Specified';
+  }
+  const s = wallConfig.trim().toLowerCase().replace(/_/g, ' ');
+  if (s.includes('3 side')) {
+    return 'C Shape / U Shape';
+  }
+  if (s.includes('left') || s.includes('right') || s.includes('2 side')) {
+    return 'L Shape';
+  }
+  if (s.includes('back wall') || s.includes('back only') || s === 'back') {
+    return 'Back Wall Only';
+  }
+  return 'Not Specified';
+}
+
+/**
  * Formats Wall Configuration cleanly for Master Stall Detail export.
  * 3 Sides / Back + Left / Back + Right / Back Only
  */
@@ -106,6 +131,220 @@ export function extractTvMounting(items: BoothItemRecord[] = []): string {
   if (spec.includes('without stand') || spec.includes('wall')) return 'WALL MOUNT';
   if (spec.includes('with stand') || spec.includes('floor stand') || spec.includes('stand')) return 'WITH STAND';
   return tvItem.specification ? tvItem.specification.toUpperCase() : 'WALL MOUNT';
+}
+
+/**
+ * Formats TV Requirements into a single merged TV column.
+ * Examples:
+ * - 42" × 1 — With Stand
+ * - 55" × 1 — Wall Mount
+ * - 42" × 2 — Wall Mount
+ * Multiple TVs are combined with line breaks.
+ */
+export function formatTvRequirements(productionItems: BoothItemRecord[] = [], isProdNA: boolean = false): string {
+  const tvItems = productionItems.filter((i) => {
+    const name = (i.item_name || '').toLowerCase();
+    const spec = (i.specification || '').toLowerCase();
+    return name.includes('tv') || spec.includes('tv') || name.includes('television');
+  });
+
+  if (tvItems.length === 0) {
+    return isProdNA ? 'N/A' : '—';
+  }
+
+  const lines: string[] = [];
+  for (const item of tvItems) {
+    const name = (item.item_name || '').toLowerCase();
+    const spec = (item.specification || '').toLowerCase();
+
+    // Determine size string
+    let sizeStr = '';
+    if (name.includes('42') || spec.includes('42')) {
+      sizeStr = '42"';
+    } else if (name.includes('50–55') || name.includes('50-55') || spec.includes('50–55') || spec.includes('50-55')) {
+      sizeStr = '50–55"';
+    } else if (name.includes('55') || spec.includes('55')) {
+      sizeStr = '55"';
+    } else if (name.includes('50') || spec.includes('50')) {
+      sizeStr = '50"';
+    } else if (name.includes('65') || spec.includes('65')) {
+      sizeStr = '65"';
+    } else if (name.includes('32') || spec.includes('32')) {
+      sizeStr = '32"';
+    } else {
+      const m = (item.item_name + ' ' + (item.specification || '')).match(/(\d{2})[\s"'-]*(?:inch)?/i);
+      if (m && m[1]) {
+        sizeStr = `${m[1]}"`;
+      } else {
+        sizeStr = 'TV';
+      }
+    }
+
+    const qty = item.quantity && item.quantity > 0 ? item.quantity : 1;
+
+    let mountStr = '';
+    if (spec.includes('without stand') || spec.includes('wall mount') || spec.includes('wall')) {
+      mountStr = 'Wall Mount';
+    } else if (spec.includes('with stand') || spec.includes('floor stand') || spec.includes('stand')) {
+      mountStr = 'With Stand';
+    } else {
+      mountStr = item.specification ? item.specification : 'Wall Mount';
+    }
+
+    lines.push(`${sizeStr} × ${qty} — ${mountStr}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Combines 1-Seater and 2-Seater sofa requirements into a single SOFA column.
+ * Examples:
+ * - 1-Seater × 2
+ * - 2-Seater × 1
+ * If both are present, displays on separate lines within the cell.
+ */
+export function formatSofaRequirements(furnitureItems: BoothItemRecord[] = [], isFurnNA: boolean = false): string {
+  const sofaItems = furnitureItems.filter((i) => {
+    const name = (i.item_name || '').toLowerCase();
+    const spec = (i.specification || '').toLowerCase();
+    return name.includes('sofa') || name.includes('couch') || name.includes('seater');
+  });
+
+  if (sofaItems.length === 0) {
+    return isFurnNA ? 'N/A' : '—';
+  }
+
+  let oneSeaterQty = 0;
+  let twoSeaterQty = 0;
+  const otherSofas: string[] = [];
+
+  for (const item of sofaItems) {
+    const name = (item.item_name || '').toLowerCase();
+    const spec = (item.specification || '').toLowerCase();
+    const combined = `${name} ${spec}`;
+    const qty = item.quantity && item.quantity > 0 ? item.quantity : 1;
+
+    if (combined.includes('1-seater') || combined.includes('1 seater') || combined.includes('single')) {
+      oneSeaterQty += qty;
+    } else if (combined.includes('2-seater') || combined.includes('2 seater') || combined.includes('two seater') || combined.includes('sofa')) {
+      twoSeaterQty += qty;
+    } else {
+      otherSofas.push(`${item.item_name} × ${qty}`);
+    }
+  }
+
+  const lines: string[] = [];
+  if (oneSeaterQty > 0) {
+    lines.push(`1-Seater × ${oneSeaterQty}`);
+  }
+  if (twoSeaterQty > 0) {
+    lines.push(`2-Seater × ${twoSeaterQty}`);
+  }
+  for (const other of otherSofas) {
+    lines.push(other);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Formats SPECIAL REQUIREMENTS column:
+ * - Selfie Booth
+ * - Custom production items
+ * - Custom fabrication / unusual items
+ * - Custom furniture / electrical items not in standard columns
+ */
+export function formatSpecialRequirements(
+  productionItems: BoothItemRecord[] = [],
+  furnitureItems: BoothItemRecord[] = [],
+  electricalItems: BoothItemRecord[] = []
+): string {
+  const specialLines: string[] = [];
+
+  // 1. Selfie Booth
+  const selfieItems = productionItems.filter((i) => (i.item_name || '').toLowerCase().includes('selfie'));
+  for (const s of selfieItems) {
+    const qty = s.quantity && s.quantity > 0 ? s.quantity : 1;
+    specialLines.push(`Selfie Booth × ${qty}`);
+  }
+
+  // 2. Custom Production items (excluding flooring, carpet, table vinyl, tv, selfie)
+  const customProd = productionItems.filter((i) => {
+    const name = (i.item_name || '').toLowerCase();
+    return (
+      !name.includes('floor') &&
+      !name.includes('platform') &&
+      !name.includes('carpet') &&
+      !name.includes('selfie') &&
+      !name.includes('table vinyl') &&
+      !name.includes('vinyl branding') &&
+      !name.includes('counter vinyl') &&
+      !name.includes('reception vinyl') &&
+      !name.includes('table branding') &&
+      !name.includes('vsb') &&
+      !name.includes('octunam') &&
+      !name.includes('tv') &&
+      !name.includes('42') &&
+      !name.includes('50') &&
+      !name.includes('55')
+    );
+  });
+  for (const p of customProd) {
+    const q = p.quantity && p.quantity > 0 ? p.quantity : 1;
+    const s = p.specification ? ` [${p.specification}]` : '';
+    specialLines.push(`${p.item_name} × ${q}${s}`);
+  }
+
+  // 3. Custom Furniture items (excluding glass round table, sofa, chair)
+  const customFurn = furnitureItems.filter((i) => {
+    const name = (i.item_name || '').toLowerCase();
+    return (
+      !name.includes('glass round') &&
+      !name.includes('round table') &&
+      !name.includes('glass table') &&
+      !name.includes('round') &&
+      !name.includes('sofa') &&
+      !name.includes('couch') &&
+      !name.includes('2-seater') &&
+      !name.includes('2 seater') &&
+      !name.includes('1-seater') &&
+      !name.includes('1 seater') &&
+      !name.includes('seater') &&
+      !name.includes('chair')
+    );
+  });
+  for (const f of customFurn) {
+    const q = f.quantity && f.quantity > 0 ? f.quantity : 1;
+    const s = f.specification ? ` [${f.specification}]` : '';
+    specialLines.push(`${f.item_name} × ${q}${s}`);
+  }
+
+  // 4. Custom Electrical items (excluding socket, permanent light)
+  const customElec = electricalItems.filter((i) => {
+    const name = (i.item_name || '').toLowerCase();
+    return (
+      !name.includes('socket') &&
+      !name.includes('power') &&
+      !name.includes('plug') &&
+      !name.includes('15a') &&
+      !name.includes('5a') &&
+      !name.includes('pelmet') &&
+      !name.includes('permanent') &&
+      !name.includes('palmenent') &&
+      !name.includes('spotlight') &&
+      !name.includes('sport light') &&
+      !name.includes('light')
+    );
+  });
+  for (const e of customElec) {
+    const q = e.quantity && e.quantity > 0 ? e.quantity : 1;
+    const s = e.specification ? ` [${e.specification}]` : '';
+    specialLines.push(`${e.item_name} × ${q}${s}`);
+  }
+
+  if (specialLines.length === 0) return '—';
+  return specialLines.join('\n');
 }
 
 /**
@@ -181,7 +420,7 @@ export function calculateOverallProgress(tasks: BoothTask[] = []): string {
 }
 
 /**
- * Builds the Master Stall Detail Excel workbook matching the STALL DETAIL reference.
+ * Builds the Master Stall Detail Excel workbook matching the 23-column reference.
  * One continuous, wide table on a single worksheet: "Stall Requirements".
  * Configured for A3 landscape physical and digital viewing.
  */
@@ -228,8 +467,8 @@ export async function generateStallRequirementsWorkbook(
     views: [{ state: 'frozen', xSplit: 3, ySplit: 4 }], // Freeze Sr.No, Company Name, Stall No + Top 4 Header Rows
   });
 
-  const TOTAL_COLUMNS = 25;
-  const lastColLetter = 'Y'; // Column 25 is Y
+  const TOTAL_COLUMNS = 23;
+  const lastColLetter = 'W'; // Column 23 is W
 
   // -------------------------------------------------------------------------
   // Row 1: Document Header Title Banner
@@ -259,92 +498,90 @@ export async function generateStallRequirementsWorkbook(
   ws.getRow(2).height = 20;
 
   // -------------------------------------------------------------------------
-  // Row 3: Group Category Banners
+  // Row 3: Group Category Banners (Exactly 23 Columns)
   // -------------------------------------------------------------------------
-  // Columns 1-6 (A3:F3) -> BASIC DETAILS
-  ws.mergeCells('A3:F3');
+  // Columns 1-7 (A3:G3) -> BASIC DETAILS
+  ws.mergeCells('A3:G3');
   const gBasic = ws.getCell('A3');
   gBasic.value = 'BASIC DETAILS';
   gBasic.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
   gBasic.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27272A' } };
   gBasic.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  // Columns 7-14 (G3:N3) -> PRODUCTION
-  ws.mergeCells('G3:N3');
-  const gProd = ws.getCell('G3');
+  // Columns 8-12 (H3:L3) -> PRODUCTION REQUIREMENTS
+  ws.mergeCells('H3:L3');
+  const gProd = ws.getCell('H3');
   gProd.value = 'PRODUCTION REQUIREMENTS';
   gProd.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF78350F' } };
   gProd.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }; // Soft Amber
   gProd.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  // Columns 15-17 (O3:Q3) -> FURNITURE
-  ws.mergeCells('O3:Q3');
-  const gFurn = ws.getCell('O3');
+  // Columns 13-15 (M3:O3) -> FURNITURE
+  ws.mergeCells('M3:O3');
+  const gFurn = ws.getCell('M3');
   gFurn.value = 'FURNITURE';
   gFurn.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF064E3B' } };
   gFurn.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Soft Emerald
   gFurn.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  // Columns 18-19 (R3:S3) -> ELECTRICAL
-  ws.mergeCells('R3:S3');
-  const gElec = ws.getCell('R3');
+  // Columns 16-17 (P3:Q3) -> ELECTRICAL
+  ws.mergeCells('P3:Q3');
+  const gElec = ws.getCell('P3');
   gElec.value = 'ELECTRICAL';
   gElec.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF7C2D12' } };
   gElec.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } }; // Soft Orange
   gElec.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  // Columns 20-24 (T3:X3) -> PRINTING & GOODIES
-  ws.mergeCells('T3:X3');
-  const gPrint = ws.getCell('T3');
+  // Columns 18-22 (R3:V3) -> PRINTING & GOODIES
+  ws.mergeCells('R3:V3');
+  const gPrint = ws.getCell('R3');
   gPrint.value = 'PRINTING & GOODIES';
   gPrint.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF581C87' } };
   gPrint.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3E8FF' } }; // Soft Purple
   gPrint.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  // Column 25 (Y3) -> ADDITIONAL REQUIREMENTS
-  const gOther = ws.getCell('Y3');
-  gOther.value = 'ADDITIONAL';
-  gOther.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF1F2937' } };
-  gOther.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Soft Slate
-  gOther.alignment = { vertical: 'middle', horizontal: 'center' };
+  // Column 23 (W3) -> SPECIAL REQUIREMENTS
+  const gSpecial = ws.getCell('W3');
+  gSpecial.value = 'SPECIAL REQUIREMENTS';
+  gSpecial.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF1F2937' } };
+  gSpecial.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Soft Slate
+  gSpecial.alignment = { vertical: 'middle', horizontal: 'center' };
 
   ws.getRow(3).height = 18;
 
   // -------------------------------------------------------------------------
-  // Row 4: Exact 25 Columns in approved reference order
+  // Row 4: Exact 23 Columns in approved reference order
   // -------------------------------------------------------------------------
   const columns = [
-    // Basic Details (1-6)
+    // Basic Details (1-7)
     { header: 'Sr. No.', key: 'sr_no', width: 8 },
     { header: 'Company Name', key: 'company_name', width: 34 },
     { header: 'Stall No.', key: 'stall_no', width: 13 },
+    { header: 'Stall Shape', key: 'stall_shape', width: 18 },
     { header: 'Booth Type', key: 'booth_type', width: 14 },
     { header: 'Wall Configuration', key: 'wall_config', width: 18 },
     { header: 'Size', key: 'stand_size', width: 12 },
-    // Production (7-14)
+    // Production (8-12)
     { header: 'Wooden Platform Flooring', key: 'flooring', width: 15 },
     { header: 'Carpet', key: 'carpet', width: 11 },
     { header: 'Carpet Color', key: 'carpet_color', width: 14 },
-    { header: 'Selfie Booth', key: 'selfie_booth', width: 13 },
     { header: 'Table Vinyl Branding', key: 'table_vinyl', width: 16 },
-    { header: 'TV 42 Inch', key: 'tv_42', width: 13 },
-    { header: 'TV 50–55 Inch', key: 'tv_55', width: 14 },
-    { header: 'TV Mount', key: 'tv_mount', width: 16 },
-    // Furniture (15-17)
+    { header: 'TV', key: 'tv', width: 26 },
+    // Furniture (13-15)
     { header: 'Glass Round Table', key: 'round_table', width: 15 },
-    { header: '2-Seater Sofa', key: 'sofa', width: 14 },
+    { header: 'Sofa', key: 'sofa', width: 18 },
     { header: 'Chair', key: 'chair', width: 11 },
-    // Electrical (18-19)
+    // Electrical (16-17)
     { header: 'Power Socket', key: 'power_socket', width: 13 },
     { header: 'Permanent Light', key: 'permanent_light', width: 15 },
-    // Printing & Goodies (20-24)
+    // Printing & Goodies (18-22)
     { header: 'Print Files', key: 'print_files', width: 12 },
     { header: 'Book', key: 'book', width: 11 },
     { header: 'Pen', key: 'pen', width: 11 },
     { header: 'Leaflet', key: 'leaflet', width: 11 },
-    { header: 'Other Goodies', key: 'other_goodies', width: 20 },
-    // Custom / Additional (25)
-    { header: 'Other Requirements', key: 'other_requirements', width: 26 },
+    { header: 'Other Goodies', key: 'other_goodies', width: 22 },
+    // Special Requirements (23)
+    { header: 'Special Requirements', key: 'special_requirements', width: 30 },
   ];
 
   // Apply column widths
@@ -366,7 +603,7 @@ export async function generateStallRequirementsWorkbook(
     };
   });
 
-  // Enable Excel AutoFilter across all 25 columns on row 4
+  // Enable Excel AutoFilter across all 23 columns on row 4
   ws.autoFilter = {
     from: { row: 4, column: 1 },
     to: { row: 4, column: TOTAL_COLUMNS },
@@ -392,6 +629,7 @@ export async function generateStallRequirementsWorkbook(
     const stallNo = rawStallNum
       ? (rawStallNum.startsWith('#') ? rawStallNum : `#${rawStallNum}`)
       : 'Not Assigned';
+    const stallShape = deriveStallShape(booth.wall_configuration);
     const boothType = getStallTypeLabel(booth.booth_type);
     const wallConfig = formatWallConfigForExcel(booth.wall_configuration);
     const standSize = booth.stand_size || '3 × 3 m';
@@ -422,14 +660,6 @@ export async function generateStallRequirementsWorkbook(
       carpetColorVal = extractCarpetColor(productionItems);
     }
 
-    // Selfie Booth
-    let selfieVal = isProdNA ? 'N/A' : '—';
-    const selfieItem = productionItems.find((i) => (i.item_name || '').toLowerCase().includes('selfie'));
-    if (selfieItem) {
-      const q = selfieItem.quantity;
-      selfieVal = q !== null && q !== undefined && q > 0 ? String(q) : '✓';
-    }
-
     // Table Vinyl Branding (VSB)
     let tableVinylVal = isProdNA ? 'N/A' : '—';
     const tableVinylItem = productionItems.find((i) => {
@@ -451,39 +681,8 @@ export async function generateStallRequirementsWorkbook(
       tableVinylVal = q !== null && q !== undefined && q > 0 ? String(q) : '✓';
     }
 
-    // TV 42 Inch
-    let tv42Val = isProdNA ? 'N/A' : '—';
-    const tv42Item = productionItems.find((i) => {
-      const name = (i.item_name || '').toLowerCase();
-      const spec = (i.specification || '').toLowerCase();
-      return (name.includes('tv') || spec.includes('tv')) && (name.includes('42') || spec.includes('42'));
-    });
-    if (tv42Item) {
-      const q = tv42Item.quantity;
-      tv42Val = q !== null && q !== undefined && q > 0 ? String(q) : '1';
-    }
-
-    // TV 50–55 Inch
-    let tv55Val = isProdNA ? 'N/A' : '—';
-    const tv55Item = productionItems.find((i) => {
-      const name = (i.item_name || '').toLowerCase();
-      const spec = (i.specification || '').toLowerCase();
-      return (
-        (name.includes('tv') || spec.includes('tv')) &&
-        (name.includes('50') || name.includes('55') || spec.includes('50') || spec.includes('55'))
-      );
-    });
-    if (tv55Item) {
-      const q = tv55Item.quantity;
-      tv55Val = q !== null && q !== undefined && q > 0 ? String(q) : '1';
-    }
-
-    // TV Mount
-    let tvMountVal = isProdNA ? 'N/A' : '—';
-    const anyTv = productionItems.find((i) => (i.item_name || '').toLowerCase().includes('tv'));
-    if (anyTv) {
-      tvMountVal = extractTvMounting(productionItems);
-    }
+    // TV (Merged: Size, Quantity & Mount specification)
+    const tvVal = formatTvRequirements(productionItems, isProdNA);
 
     // 3. Furniture
     // Glass Round Table
@@ -502,28 +701,19 @@ export async function generateStallRequirementsWorkbook(
       tableVal = q !== null && q !== undefined && q > 0 ? String(q) : '1';
     }
 
-    // 2-Seater Sofa
-    let sofaVal = isFurnNA ? 'N/A' : '—';
-    const sofaItem = furnitureItems.find((i) => {
-      const name = (i.item_name || '').toLowerCase();
-      return (
-        name.includes('sofa') ||
-        name.includes('couch') ||
-        name.includes('2-seater') ||
-        name.includes('2 seater') ||
-        name.includes('seater')
-      );
-    });
-    if (sofaItem) {
-      const q = sofaItem.quantity;
-      sofaVal = q !== null && q !== undefined && q > 0 ? String(q) : '1';
-    }
+    // Sofa (Combined: 1-Seater and 2-Seater)
+    const sofaVal = formatSofaRequirements(furnitureItems, isFurnNA);
 
     // Chair
     let chairVal = isFurnNA ? 'N/A' : '—';
     const chairItem = furnitureItems.find((i) => {
       const name = (i.item_name || '').toLowerCase();
-      return name.includes('chair') && !name.includes('sofa') && !name.includes('couch');
+      return (
+        name.includes('chair') &&
+        !name.includes('sofa') &&
+        !name.includes('couch') &&
+        !name.includes('seater')
+      );
     });
     if (chairItem) {
       const q = chairItem.quantity;
@@ -642,81 +832,15 @@ export async function generateStallRequirementsWorkbook(
         .join(', ');
     }
 
-    // 6. Custom / Additional Requirements
-    // Unmatched production items (e.g. plants, brochure stand, backdrop frame, racks)
-    const customProd = productionItems.filter((i) => {
-      const name = (i.item_name || '').toLowerCase();
-      return (
-        !name.includes('floor') &&
-        !name.includes('platform') &&
-        !name.includes('carpet') &&
-        !name.includes('selfie') &&
-        !name.includes('table vinyl') &&
-        !name.includes('vinyl branding') &&
-        !name.includes('counter vinyl') &&
-        !name.includes('reception vinyl') &&
-        !name.includes('table branding') &&
-        !name.includes('vsb') &&
-        !name.includes('octunam') &&
-        !name.includes('tv') &&
-        !name.includes('42') &&
-        !name.includes('50') &&
-        !name.includes('55')
-      );
-    });
+    // 6. Special Requirements (Selfie Booth + Custom Production + Custom Furniture + Custom Electrical)
+    const specialReqsVal = formatSpecialRequirements(productionItems, furnitureItems, electricalItems);
 
-    // Unmatched furniture items (e.g. bar stool, counter, pod)
-    const customFurn = furnitureItems.filter((i) => {
-      const name = (i.item_name || '').toLowerCase();
-      return (
-        !name.includes('glass round') &&
-        !name.includes('round table') &&
-        !name.includes('glass table') &&
-        !name.includes('round') &&
-        !name.includes('sofa') &&
-        !name.includes('couch') &&
-        !name.includes('2-seater') &&
-        !name.includes('2 seater') &&
-        !name.includes('seater') &&
-        !name.includes('chair')
-      );
-    });
-
-    // Unmatched electrical items (e.g. 500w halogen, extension board)
-    const customElec = electricalItems.filter((i) => {
-      const name = (i.item_name || '').toLowerCase();
-      return (
-        !name.includes('socket') &&
-        !name.includes('power') &&
-        !name.includes('plug') &&
-        !name.includes('15a') &&
-        !name.includes('5a') &&
-        !name.includes('pelmet') &&
-        !name.includes('permanent') &&
-        !name.includes('palmenent') &&
-        !name.includes('spotlight') &&
-        !name.includes('sport light') &&
-        !name.includes('light')
-      );
-    });
-
-    const allCustom = [...customProd, ...customFurn, ...customElec];
-    let otherReqsVal = '—';
-    if (allCustom.length > 0) {
-      otherReqsVal = allCustom
-        .map((i) => {
-          const q = i.quantity && i.quantity > 0 ? ` (${i.quantity})` : '';
-          const s = i.specification ? ` [${i.specification}]` : '';
-          return `${i.item_name}${q}${s}`;
-        })
-        .join(', ');
-    }
-
-    // Row Data
+    // Row Data (Exactly 23 values)
     const rowValues = [
       srNo,
       companyName,
       stallNo,
+      stallShape,
       boothType,
       wallConfig,
       standSize,
@@ -724,11 +848,8 @@ export async function generateStallRequirementsWorkbook(
       flooringVal,
       carpetVal,
       carpetColorVal,
-      selfieVal,
       tableVinylVal,
-      tv42Val,
-      tv55Val,
-      tvMountVal,
+      tvVal,
       // Furniture
       tableVal,
       sofaVal,
@@ -742,12 +863,20 @@ export async function generateStallRequirementsWorkbook(
       penVal,
       leafletVal,
       otherGoodiesVal,
-      // Additional
-      otherReqsVal,
+      // Special
+      specialReqsVal,
     ];
 
     const dataRow = ws.addRow(rowValues);
-    dataRow.height = 20;
+
+    // Calculate dynamic row height for wrapped multi-line cells
+    const maxLines = Math.max(
+      (tvVal.match(/\n/g) || []).length + 1,
+      (sofaVal.match(/\n/g) || []).length + 1,
+      (specialReqsVal.match(/\n/g) || []).length + 1,
+      1
+    );
+    dataRow.height = maxLines > 1 ? Math.max(20, maxLines * 16) : 20;
 
     const isEven = rowNumber % 2 === 0;
     const baseBg = isEven ? 'FFFBFBFC' : 'FFFFFFFF'; // Subtle alternating row striping
@@ -766,8 +895,12 @@ export async function generateStallRequirementsWorkbook(
         // Company Name: Left-aligned
         cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
         cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF0F172A' } };
-      } else if (colNum === 24 || colNum === 25) {
-        // Other Goodies & Other Requirements: Left-aligned with text wrap
+      } else if (colNum === 12 || colNum === 14) {
+        // TV & Sofa: Centered or Left with wrapText
+        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+        cell.font = { name: 'Segoe UI', size: 8.5, color: { argb: 'FF0F172A' } };
+      } else if (colNum === 22 || colNum === 23) {
+        // Other Goodies & Special Requirements: Left-aligned with text wrap
         cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
         cell.font = { name: 'Segoe UI', size: 8.5, color: { argb: 'FF334155' } };
       } else {
@@ -778,8 +911,8 @@ export async function generateStallRequirementsWorkbook(
       // Default zebra background
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: baseBg } };
 
-      // Highlight Carpet Color (Col 9)
-      if (colNum === 9) {
+      // Highlight Carpet Color (Col 10)
+      if (colNum === 10) {
         const val = String(cell.value || '').trim();
         if (val === 'BLUE') {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }; // Soft Pastel Blue

@@ -164,7 +164,7 @@ echo "\n--- Running Node.js ExcelJS Workbook Verification ---\n";
 $nodeOutput = shell_exec("npx vite-node tests/verify_excel_export.ts");
 echo $nodeOutput;
 
-$nodeSuccess = stripos($nodeOutput, "All Node.js Excel workbook generation assertions passed!") !== false;
+$nodeSuccess = (stripos($nodeOutput, "All Refined 23-Column Excel workbook generation assertions passed!") !== false || stripos($nodeOutput, "All Node.js Excel workbook generation assertions passed!") !== false);
 assert_test($nodeSuccess, "Node.js ExcelJS workbook verification script passed with 100% assertions");
 
 // 9. Cleanup test fixtures
