@@ -26,6 +26,7 @@ import {
   Tv,
   Box,
   MessageSquare,
+  Save,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -156,6 +157,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [printDriveUrl, setPrintDriveUrl] = useState<string>('');
   const [printRemark, setPrintRemark] = useState<string>('');
   const [isSavingPrint, setIsSavingPrint] = useState<boolean>(false);
+  const [isEditingPrintUrl, setIsEditingPrintUrl] = useState<boolean>(false);
+  const [printError, setPrintError] = useState<string>('');
 
   // Goodies & Promotional Printing State (inside Section 2)
   const [goodiesItems, setGoodiesItems] = useState<BoothItemRecord[]>([]);
@@ -163,6 +166,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [goodiesDriveUrl, setGoodiesDriveUrl] = useState<string>('');
   const [goodiesRemark, setGoodiesRemark] = useState<string>('');
   const [isSavingGoodiesArtwork, setIsSavingGoodiesArtwork] = useState<boolean>(false);
+  const [isEditingGoodiesUrl, setIsEditingGoodiesUrl] = useState<boolean>(false);
+  const [goodiesError, setGoodiesError] = useState<string>('');
   const [goodiesNameInput, setGoodiesNameInput] = useState<string>('');
   const [goodiesSpecInput, setGoodiesSpecInput] = useState<string>('');
   const [goodiesQtyStr, setGoodiesQtyStr] = useState<string>('1');
@@ -250,10 +255,14 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setPrintStatus(bth.print_file_status || 'Designs Pending');
       setPrintDriveUrl(bth.print_drive_url || '');
       setPrintRemark(bth.print_remark || '');
+      setIsEditingPrintUrl(false);
+      setPrintError('');
 
       setGoodiesStatus(bth.goodies_status || 'Awaiting Client Artwork');
       setGoodiesDriveUrl(bth.goodies_drive_url || '');
       setGoodiesRemark(bth.goodies_remark || '');
+      setIsEditingGoodiesUrl(false);
+      setGoodiesError('');
       setGoodiesItems(gItems);
 
       setTasks(tskRes.tasks);
@@ -490,29 +499,63 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     }
   };
 
-  const handleSavePrintDetails = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSavePrintLink = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const url = printDriveUrl.trim();
-    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      alert('Please enter a valid URL starting with https:// or http://');
+    if (!url) {
+      setPrintError('Please enter a Google Drive link.');
+      return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      setPrintError('Please enter a valid URL starting with https:// or http://');
       return;
     }
 
+    setPrintError('');
     setIsSavingPrint(true);
     try {
       const updated = await updateBooth(boothId, {
-        print_file_status: printStatus,
-        print_drive_url: url || null,
+        print_drive_url: url,
+      });
+      setBooth(updated);
+      setPrintDriveUrl(updated.print_drive_url || url);
+      setIsEditingPrintUrl(false);
+      showToast('Google Drive link saved successfully.');
+    } catch (err: any) {
+      setPrintError(err.message || 'Failed to save Google Drive link.');
+    } finally {
+      setIsSavingPrint(false);
+    }
+  };
+
+  const handleRemovePrintUrl = async () => {
+    if (!confirm('Remove this Google Drive link?')) return;
+    setIsSavingPrint(true);
+    try {
+      const updated = await updateBooth(boothId, {
+        print_drive_url: null,
+      });
+      setBooth(updated);
+      setPrintDriveUrl('');
+      setIsEditingPrintUrl(false);
+      showToast('Google Drive link removed.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove link.');
+    } finally {
+      setIsSavingPrint(false);
+    }
+  };
+
+  const handleSavePrintRemark = async () => {
+    try {
+      const updated = await updateBooth(boothId, {
         print_remark: printRemark.trim() || null,
       });
       setBooth(updated);
-      setPrintDriveUrl(updated.print_drive_url || '');
       setPrintRemark(updated.print_remark || '');
-      showToast('Print files details saved.');
+      showToast('Print remark saved.');
     } catch (err: any) {
-      alert(err.message || 'Failed to save print details.');
-    } finally {
-      setIsSavingPrint(false);
+      alert(err.message || 'Failed to save print remark.');
     }
   };
 
@@ -531,26 +574,60 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const handleSaveGoodiesArtwork = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const url = goodiesDriveUrl.trim();
-    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      alert('Please enter a valid URL starting with https:// or http://');
+    if (!url) {
+      setGoodiesError('Please enter an artwork Google Drive link.');
+      return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      setGoodiesError('Please enter a valid URL starting with https:// or http://');
       return;
     }
 
+    setGoodiesError('');
     setIsSavingGoodiesArtwork(true);
     try {
       const updated = await updateBooth(boothId, {
-        goodies_status: goodiesStatus,
-        goodies_drive_url: url || null,
+        goodies_drive_url: url,
+      });
+      setBooth(updated);
+      setGoodiesDriveUrl(updated.goodies_drive_url || url);
+      setIsEditingGoodiesUrl(false);
+      showToast('Client Artwork link saved.');
+    } catch (err: any) {
+      setGoodiesError(err.message || 'Failed to save artwork details.');
+    } finally {
+      setIsSavingGoodiesArtwork(false);
+    }
+  };
+
+  const handleRemoveGoodiesUrl = async () => {
+    if (!confirm('Remove this Client Artwork Drive link?')) return;
+    setIsSavingGoodiesArtwork(true);
+    try {
+      const updated = await updateBooth(boothId, {
+        goodies_drive_url: null,
+      });
+      setBooth(updated);
+      setGoodiesDriveUrl('');
+      setIsEditingGoodiesUrl(false);
+      showToast('Client artwork link removed.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove artwork link.');
+    } finally {
+      setIsSavingGoodiesArtwork(false);
+    }
+  };
+
+  const handleSaveGoodiesRemark = async () => {
+    try {
+      const updated = await updateBooth(boothId, {
         goodies_remark: goodiesRemark.trim() || null,
       });
       setBooth(updated);
-      setGoodiesDriveUrl(updated.goodies_drive_url || '');
       setGoodiesRemark(updated.goodies_remark || '');
-      showToast('Client Artwork details saved.');
+      showToast('Artwork remark saved.');
     } catch (err: any) {
-      alert(err.message || 'Failed to save artwork details.');
-    } finally {
-      setIsSavingGoodiesArtwork(false);
+      alert(err.message || 'Failed to save artwork remark.');
     }
   };
 
@@ -1239,6 +1316,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           Pending
                         </span>
                       )}
+                      {sec.key === 'print' && (booth?.print_drive_url || printDriveUrl) && (
+                        <a
+                          href={booth?.print_drive_url || printDriveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Open Google Drive folder in new tab"
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors cursor-pointer"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Open Drive</span>
+                        </a>
+                      )}
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">{sec.desc}</p>
                   </div>
@@ -1642,8 +1732,118 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                   {/* SECTION 2: SIMPLIFIED PRINT FILES & GOODIES */}
                   {sec.key === 'print' && (
                     <div className="space-y-6">
-                      <form onSubmit={handleSavePrintDetails} className="space-y-4">
-                        {/* 1. Print File Status (3 options) */}
+                      <div className="space-y-4">
+                        {/* 1. Google Drive Link Card or Input */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">
+                            Print Files (Google Drive Folder)
+                          </label>
+
+                          {(booth?.print_drive_url || printDriveUrl) && !isEditingPrintUrl ? (
+                            <div className="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-400">
+                                  <ExternalLink className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-zinc-200">Google Drive Folder</span>
+                                    <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                      Saved
+                                    </span>
+                                  </div>
+                                  <a
+                                    href={booth?.print_drive_url || printDriveUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-amber-400 hover:underline truncate block max-w-sm sm:max-w-md md:max-w-lg font-mono mt-0.5"
+                                    title={booth?.print_drive_url || printDriveUrl}
+                                  >
+                                    {booth?.print_drive_url || printDriveUrl}
+                                  </a>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                <a
+                                  href={booth?.print_drive_url || printDriveUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="min-h-[34px] px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 transition-colors"
+                                >
+                                  <span>Open Drive</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsEditingPrintUrl(true);
+                                    setPrintDriveUrl(booth?.print_drive_url || printDriveUrl);
+                                    setPrintError('');
+                                  }}
+                                  className="min-h-[34px] px-2.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] rounded-lg font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Edit Drive URL"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleRemovePrintUrl}
+                                  disabled={isSavingPrint}
+                                  className="min-h-[34px] px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Remove Drive URL"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Remove</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                  type="url"
+                                  value={printDriveUrl}
+                                  onChange={(e) => {
+                                    setPrintDriveUrl(e.target.value);
+                                    if (printError) setPrintError('');
+                                  }}
+                                  placeholder="https://drive.google.com/drive/folders/..."
+                                  className={`flex-1 min-h-[42px] bg-zinc-900 border rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none ${
+                                    printError ? 'border-red-500 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500'
+                                  }`}
+                                />
+                                <div className="flex items-center gap-2">
+                                  {isEditingPrintUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsEditingPrintUrl(false);
+                                        setPrintDriveUrl(booth?.print_drive_url || '');
+                                        setPrintError('');
+                                      }}
+                                      className="min-h-[42px] px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-semibold cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={handleSavePrintLink}
+                                    disabled={isSavingPrint}
+                                    className="min-h-[42px] px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-sm"
+                                  >
+                                    <Save className="w-3.5 h-3.5" />
+                                    <span>{isSavingPrint ? 'Saving...' : isEditingPrintUrl ? 'Update Link' : 'Save Link'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                              {printError && <p className="text-xs text-red-400">{printError}</p>}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. Print File Status (3 options) */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-zinc-200">
                             Print File Status
@@ -1678,71 +1878,30 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           </div>
                         </div>
 
-                        {/* 2. Single Google Drive Folder / File Link */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-semibold text-zinc-200">
-                              Google Drive Folder / File Link
-                            </label>
-                            {printDriveUrl && (
-                              <a
-                                href={printDriveUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline font-medium"
-                              >
-                                <span>Open Drive</span>
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            )}
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <input
-                              type="url"
-                              value={printDriveUrl}
-                              onChange={(e) => setPrintDriveUrl(e.target.value)}
-                              placeholder="https://drive.google.com/drive/folders/..."
-                              className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                            />
-                            {printDriveUrl && (
-                              <a
-                                href={printDriveUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="min-h-[42px] px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl font-semibold text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors"
-                              >
-                                <span>Open Drive</span>
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-
                         {/* 3. Optional Remark */}
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-zinc-200">
                             Remark (Optional)
                           </label>
-                          <input
-                            type="text"
-                            value={printRemark}
-                            onChange={(e) => setPrintRemark(e.target.value)}
-                            placeholder="e.g. Waiting for side wall artwork / high-res logo"
-                            className="w-full min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                          />
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={printRemark}
+                              onChange={(e) => setPrintRemark(e.target.value)}
+                              onBlur={handleSavePrintRemark}
+                              placeholder="e.g. Waiting for side wall artwork / high-res logo"
+                              className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleSavePrintRemark}
+                              className="min-h-[42px] px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl font-semibold text-xs shrink-0 cursor-pointer transition-colors"
+                            >
+                              Save Remark
+                            </button>
+                          </div>
                         </div>
-
-                        {/* Save Button */}
-                        <div className="flex justify-end pt-1">
-                          <button
-                            type="submit"
-                            disabled={isSavingPrint}
-                            className="w-full sm:w-auto min-h-[42px] px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
-                          >
-                            {isSavingPrint ? 'Saving...' : 'Save Print Details'}
-                          </button>
-                        </div>
-                      </form>
+                      </div>
 
                       {/* SUBSECTION: GOODIES & PROMOTIONAL PRINTING */}
                       <div className="pt-5 border-t border-zinc-800/90 space-y-4">
@@ -1944,42 +2103,112 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
                             {/* Client Artwork Google Drive Link */}
                             <div className="space-y-1.5">
-                              <div className="flex items-center justify-between">
-                                <label className="text-[11px] font-semibold text-zinc-300">
-                                  Client Artwork Google Drive Link
-                                </label>
-                                {goodiesDriveUrl && (
-                                  <a
-                                    href={goodiesDriveUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline font-medium"
-                                  >
-                                    <span>Open Artwork</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                )}
-                              </div>
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <input
-                                  type="url"
-                                  value={goodiesDriveUrl}
-                                  onChange={(e) => setGoodiesDriveUrl(e.target.value)}
-                                  placeholder="https://drive.google.com/drive/folders/..."
-                                  className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                                />
-                                {goodiesDriveUrl && (
-                                  <a
-                                    href={goodiesDriveUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="min-h-[42px] px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl font-semibold text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors"
-                                  >
-                                    <span>Open Artwork</span>
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </a>
-                                )}
-                              </div>
+                              <label className="text-[11px] font-semibold text-zinc-300">
+                                Client Artwork Google Drive Link
+                              </label>
+
+                              {(booth?.goodies_drive_url || goodiesDriveUrl) && !isEditingGoodiesUrl ? (
+                                <div className="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-400">
+                                      <ExternalLink className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-semibold text-zinc-200">Client Artwork Drive</span>
+                                        <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                          Saved
+                                        </span>
+                                      </div>
+                                      <a
+                                        href={booth?.goodies_drive_url || goodiesDriveUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-amber-400 hover:underline truncate block max-w-sm sm:max-w-md md:max-w-lg font-mono mt-0.5"
+                                        title={booth?.goodies_drive_url || goodiesDriveUrl}
+                                      >
+                                        {booth?.goodies_drive_url || goodiesDriveUrl}
+                                      </a>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                    <a
+                                      href={booth?.goodies_drive_url || goodiesDriveUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="min-h-[34px] px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 transition-colors"
+                                    >
+                                      <span>Open Artwork</span>
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsEditingGoodiesUrl(true);
+                                        setGoodiesDriveUrl(booth?.goodies_drive_url || goodiesDriveUrl);
+                                        setGoodiesError('');
+                                      }}
+                                      className="min-h-[34px] px-2.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] rounded-lg font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                      title="Edit Artwork URL"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      <span>Edit</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleRemoveGoodiesUrl}
+                                      disabled={isSavingGoodiesArtwork}
+                                      className="min-h-[34px] px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                      title="Remove Artwork URL"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>Remove</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                      type="url"
+                                      value={goodiesDriveUrl}
+                                      onChange={(e) => {
+                                        setGoodiesDriveUrl(e.target.value);
+                                        if (goodiesError) setGoodiesError('');
+                                      }}
+                                      placeholder="https://drive.google.com/drive/folders/..."
+                                      className={`flex-1 min-h-[42px] bg-zinc-900 border rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none ${
+                                        goodiesError ? 'border-red-500 focus:border-red-500' : 'border-zinc-800 focus:border-amber-500'
+                                      }`}
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      {isEditingGoodiesUrl && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setIsEditingGoodiesUrl(false);
+                                            setGoodiesDriveUrl(booth?.goodies_drive_url || '');
+                                            setGoodiesError('');
+                                          }}
+                                          className="min-h-[42px] px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-semibold cursor-pointer"
+                                        >
+                                          Cancel
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={handleSaveGoodiesArtwork}
+                                        disabled={isSavingGoodiesArtwork}
+                                        className="min-h-[42px] px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-sm"
+                                      >
+                                        <Save className="w-3.5 h-3.5" />
+                                        <span>{isSavingGoodiesArtwork ? 'Saving...' : isEditingGoodiesUrl ? 'Update Link' : 'Save Link'}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {goodiesError && <p className="text-xs text-red-400">{goodiesError}</p>}
+                                </div>
+                              )}
                             </div>
 
                             {/* Artwork Remark */}
@@ -1987,25 +2216,23 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                               <label className="text-[11px] font-semibold text-zinc-300">
                                 Artwork Remark (Optional)
                               </label>
-                              <input
-                                type="text"
-                                value={goodiesRemark}
-                                onChange={(e) => setGoodiesRemark(e.target.value)}
-                                placeholder="e.g. Waiting for high-res logo for pen clip / A5 artwork verified"
-                                className="w-full min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                              />
-                            </div>
-
-                            {/* Save Artwork Button */}
-                            <div className="flex justify-end pt-1">
-                              <button
-                                type="button"
-                                disabled={isSavingGoodiesArtwork}
-                                onClick={() => handleSaveGoodiesArtwork()}
-                                className="w-full sm:w-auto min-h-[40px] px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 hover:border-zinc-600 font-semibold rounded-xl text-xs transition-all cursor-pointer"
-                              >
-                                {isSavingGoodiesArtwork ? 'Saving...' : 'Save Artwork Details'}
-                              </button>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                  type="text"
+                                  value={goodiesRemark}
+                                  onChange={(e) => setGoodiesRemark(e.target.value)}
+                                  onBlur={handleSaveGoodiesRemark}
+                                  placeholder="e.g. Waiting for high-res logo for pen clip / A5 artwork verified"
+                                  className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleSaveGoodiesRemark}
+                                  className="min-h-[42px] px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl font-semibold text-xs shrink-0 cursor-pointer transition-colors"
+                                >
+                                  Save Remark
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )}

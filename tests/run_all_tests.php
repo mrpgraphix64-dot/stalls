@@ -21,6 +21,7 @@ $files = [
     __DIR__ . '/test_checklist_filters_and_bulk_pdf.php',
     __DIR__ . '/test_pdf_links_and_qr.php',
     __DIR__ . '/test_excel_requirements_export.php',
+    __DIR__ . '/test_print_links_persistence.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {

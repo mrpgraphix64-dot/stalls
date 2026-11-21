@@ -56,6 +56,27 @@ if ($method === 'GET') {
             reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
         }
 
+        // Self-healing fallback: If print_drive_url is empty on booths, check booth_links records
+        if (empty($booth['print_drive_url'])) {
+            $linkCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1");
+            $linkCheck->execute([':b_id' => $id]);
+            $foundUrl = $linkCheck->fetchColumn();
+            if ($foundUrl) {
+                $booth['print_drive_url'] = $foundUrl;
+                $pdo->prepare("UPDATE booths SET print_drive_url = :url WHERE id = :id")->execute([':url' => $foundUrl, ':id' => $id]);
+            }
+        }
+
+        if (empty($booth['goodies_drive_url'])) {
+            $goodiesCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category = 'goodies' AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1");
+            $goodiesCheck->execute([':b_id' => $id]);
+            $foundGoodiesUrl = $goodiesCheck->fetchColumn();
+            if ($foundGoodiesUrl) {
+                $booth['goodies_drive_url'] = $foundGoodiesUrl;
+                $pdo->prepare("UPDATE booths SET goodies_drive_url = :url WHERE id = :id")->execute([':url' => $foundGoodiesUrl, ':id' => $id]);
+            }
+        }
+
         reworkzone_json_response([
             'success' => true,
             'booth'   => $booth
@@ -618,6 +639,39 @@ if ($method === 'POST') {
             ':id'                    => $id,
         ]);
 
+        // Two-way synchronization: Keep booth_links synchronized with booths.print_drive_url and goodies_drive_url
+        if (!empty($printDriveUrl)) {
+            $existingLinkStmt = $pdo->prepare("SELECT id FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork') LIMIT 1");
+            $existingLinkStmt->execute([':b_id' => $id]);
+            $existingLinkId = $existingLinkStmt->fetchColumn();
+            if ($existingLinkId) {
+                $pdo->prepare("UPDATE booth_links SET drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
+                    ->execute([':url' => $printDriveUrl, ':id' => $existingLinkId]);
+            } else {
+                $pdo->prepare("INSERT INTO booth_links (id, booth_id, category, title, drive_url, created_at, updated_at) VALUES (:id, :b_id, 'print_ready', 'Print Ready Artwork', :url, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
+                    ->execute([':id' => 'lnk_pr_' . bin2hex(random_bytes(6)), ':b_id' => $id, ':url' => $printDriveUrl]);
+            }
+        } else if (array_key_exists('print_drive_url', $body) && empty($printDriveUrl)) {
+            $pdo->prepare("DELETE FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork')")
+                ->execute([':b_id' => $id]);
+        }
+
+        if (!empty($goodiesDriveUrl)) {
+            $gLinkStmt = $pdo->prepare("SELECT id FROM booth_links WHERE booth_id = :b_id AND category = 'goodies' LIMIT 1");
+            $gLinkStmt->execute([':b_id' => $id]);
+            $gId = $gLinkStmt->fetchColumn();
+            if ($gId) {
+                $pdo->prepare("UPDATE booth_links SET drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
+                    ->execute([':url' => $goodiesDriveUrl, ':id' => $gId]);
+            } else {
+                $pdo->prepare("INSERT INTO booth_links (id, booth_id, category, title, drive_url, created_at, updated_at) VALUES (:id, :b_id, 'goodies', 'Goodies Artwork', :url, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
+                    ->execute([':id' => 'lnk_gd_' . bin2hex(random_bytes(6)), ':b_id' => $id, ':url' => $goodiesDriveUrl]);
+            }
+        } else if (array_key_exists('goodies_drive_url', $body) && empty($goodiesDriveUrl)) {
+            $pdo->prepare("DELETE FROM booth_links WHERE booth_id = :b_id AND category = 'goodies'")
+                ->execute([':b_id' => $id]);
+        }
+
         // Auto-seed default 6 checklist tasks if this booth is confirmed and has no tasks
         if ($bookingStage === 'confirmed') {
             $taskCheck = $pdo->prepare("SELECT COUNT(*) FROM booth_tasks WHERE booth_id = :id");
@@ -660,6 +714,27 @@ if ($method === 'POST') {
         $getStmt = $pdo->prepare("SELECT * FROM booths WHERE id = :id");
         $getStmt->execute([':id' => $id]);
         $updated = $getStmt->fetch();
+
+        // Self-healing fallback: If print_drive_url is empty on booths, check booth_links records
+        if (!empty($updated) && empty($updated['print_drive_url'])) {
+            $linkCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1");
+            $linkCheck->execute([':b_id' => $id]);
+            $foundUrl = $linkCheck->fetchColumn();
+            if ($foundUrl) {
+                $updated['print_drive_url'] = $foundUrl;
+                $pdo->prepare("UPDATE booths SET print_drive_url = :url WHERE id = :id")->execute([':url' => $foundUrl, ':id' => $id]);
+            }
+        }
+
+        if (!empty($updated) && empty($updated['goodies_drive_url'])) {
+            $goodiesCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category = 'goodies' AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1");
+            $goodiesCheck->execute([':b_id' => $id]);
+            $foundGoodiesUrl = $goodiesCheck->fetchColumn();
+            if ($foundGoodiesUrl) {
+                $updated['goodies_drive_url'] = $foundGoodiesUrl;
+                $pdo->prepare("UPDATE booths SET goodies_drive_url = :url WHERE id = :id")->execute([':url' => $foundGoodiesUrl, ':id' => $id]);
+            }
+        }
 
         reworkzone_json_response([
             'success' => true,

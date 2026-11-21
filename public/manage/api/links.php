@@ -157,6 +157,15 @@ if ($method === 'POST') {
             ':desc'     => "Added Drive link '{$title}' ({$version}) under category '{$category}' for booth '{$booth['booth_number']}'."
         ]);
 
+        // Two-way sync to booths table
+        if (in_array($category, ['print_ready', 'working_artwork'])) {
+            $pdo->prepare("UPDATE booths SET print_drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :bid")
+                ->execute([':url' => $driveUrl, ':bid' => $boothId]);
+        } else if ($category === 'goodies') {
+            $pdo->prepare("UPDATE booths SET goodies_drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :bid")
+                ->execute([':url' => $driveUrl, ':bid' => $boothId]);
+        }
+
         $getStmt = $pdo->prepare("SELECT * FROM booth_links WHERE id = :id");
         $getStmt->execute([':id' => $id]);
         $created = $getStmt->fetch();
@@ -247,6 +256,15 @@ if ($method === 'POST') {
             ':booth_id' => $existing['booth_id'],
             ':desc'     => "Updated Drive link '{$title}' ({$version})." . ($driveUrl !== $existing['drive_url'] ? ' Drive URL changed: approval status reset to draft.' : '')
         ]);
+
+        // Two-way sync to booths table
+        if (in_array($category, ['print_ready', 'working_artwork'])) {
+            $pdo->prepare("UPDATE booths SET print_drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :bid")
+                ->execute([':url' => $driveUrl, ':bid' => $existing['booth_id']]);
+        } else if ($category === 'goodies') {
+            $pdo->prepare("UPDATE booths SET goodies_drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :bid")
+                ->execute([':url' => $driveUrl, ':bid' => $existing['booth_id']]);
+        }
 
         $getStmt = $pdo->prepare("SELECT * FROM booth_links WHERE id = :id");
         $getStmt->execute([':id' => $id]);
@@ -383,6 +401,21 @@ if ($method === 'POST') {
             ':booth_id' => $existing['booth_id'],
             ':desc'     => "Removed Drive link '{$existing['title']}' ({$existing['version']})."
         ]);
+
+        // Two-way sync to booths table
+        if (in_array($existing['category'], ['print_ready', 'working_artwork'])) {
+            $fallbackCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :bid AND id != :id AND category IN ('print_ready', 'working_artwork') ORDER BY created_at DESC LIMIT 1");
+            $fallbackCheck->execute([':bid' => $existing['booth_id'], ':id' => $id]);
+            $fallback = $fallbackCheck->fetchColumn();
+            $pdo->prepare("UPDATE booths SET print_drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :bid")
+                ->execute([':url' => $fallback ? $fallback : null, ':bid' => $existing['booth_id']]);
+        } else if ($existing['category'] === 'goodies') {
+            $fallbackCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :bid AND id != :id AND category = 'goodies' ORDER BY created_at DESC LIMIT 1");
+            $fallbackCheck->execute([':bid' => $existing['booth_id'], ':id' => $id]);
+            $fallback = $fallbackCheck->fetchColumn();
+            $pdo->prepare("UPDATE booths SET goodies_drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :bid")
+                ->execute([':url' => $fallback ? $fallback : null, ':bid' => $existing['booth_id']]);
+        }
 
         reworkzone_json_response([
             'success' => true,
