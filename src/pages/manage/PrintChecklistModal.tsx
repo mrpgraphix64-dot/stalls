@@ -146,7 +146,7 @@ export function PrintChecklistModal({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 10mm;
+            margin: 8mm 10mm;
           }
           *, *::before, *::after {
             box-sizing: border-box !important;
@@ -194,6 +194,15 @@ export function PrintChecklistModal({
             min-height: auto !important;
             box-shadow: none !important;
             border: none !important;
+          }
+          table {
+            table-layout: fixed !important;
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .break-inside-avoid {
             page-break-inside: avoid !important;

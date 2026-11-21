@@ -221,6 +221,13 @@ function reworkzone_verify_csrf() {
 }
 
 /**
+ * Enforce CSRF token verification (alias to support both require and verify naming)
+ */
+function reworkzone_require_csrf() {
+    return reworkzone_verify_csrf();
+}
+
+/**
  * Record an audit trail action to activity_logs
  */
 function reworkzone_log_activity(PDO $pdo, ?string $boothId, string $actionType, string $description, string $actorLabel = 'Master Admin') {

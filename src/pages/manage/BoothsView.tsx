@@ -91,6 +91,12 @@ export function BoothsView({
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [successToast, setSuccessToast] = useState<string>('');
+
+  const showToast = (msg: string) => {
+    setSuccessToast(msg);
+    setTimeout(() => setSuccessToast(''), 3000);
+  };
 
   // Restore previous filters/sorting if returning from Booth Details
   const initialSavedState = useMemo(() => getBoothsViewState(), []);
@@ -485,6 +491,14 @@ export function BoothsView({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 w-full min-w-0 pb-12">
+      {/* Toast Notification */}
+      {successToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-amber-500 text-zinc-950 px-4 py-2.5 rounded-xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom duration-200">
+          <Check className="w-4 h-4" />
+          <span>{successToast}</span>
+        </div>
+      )}
+
       {/* Top Banner & Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-zinc-800/60">
         <div>
@@ -1456,15 +1470,21 @@ export function BoothsView({
         itemSubtext={`${deletingBooth?.event_name || 'Exhibition'} • ${deletingBooth?.stand_size || ''}`}
         onConfirmDelete={async () => {
           if (deletingBooth) {
+            const bNum = deletingBooth.booth_number || 'Stall';
             await deleteBooth(deletingBooth.id);
             setDeletingBooth(null);
+            setBooths((prev) => prev.filter((b) => b.id !== deletingBooth.id));
+            showToast(`Stall #${bNum} deleted permanently.`);
             await loadData();
           }
         }}
         onArchiveInstead={async () => {
           if (deletingBooth) {
+            const bNum = deletingBooth.booth_number || 'Stall';
             await archiveBooth(deletingBooth.id);
             setDeletingBooth(null);
+            setBooths((prev) => prev.filter((b) => b.id !== deletingBooth.id));
+            showToast(`Stall #${bNum} archived.`);
             await loadData();
           }
         }}

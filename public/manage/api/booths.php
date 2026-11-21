@@ -926,8 +926,8 @@ if ($method === 'POST') {
             $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id = :id");
             $delTsk->execute([':id' => $id]);
 
-            $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id = :id");
-            $delAct->execute([':id' => $id]);
+            $updAct = $pdo->prepare("UPDATE activity_logs SET booth_id = NULL WHERE booth_id = :id");
+            $updAct->execute([':id' => $id]);
 
             $delBth = $pdo->prepare("DELETE FROM booths WHERE id = :id");
             $delBth->execute([':id' => $id]);
@@ -965,7 +965,7 @@ if ($method === 'POST') {
 // 3. DELETE: Permanent Stall Deletion by ID
 // =========================================================================
 if ($method === 'DELETE') {
-    reworkzone_require_csrf();
+    reworkzone_verify_csrf();
     $id = trim($_GET['id'] ?? '');
     if (empty($id)) {
         $raw = file_get_contents('php://input');
@@ -999,8 +999,8 @@ if ($method === 'DELETE') {
         $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id = :id");
         $delTsk->execute([':id' => $id]);
 
-        $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id = :id");
-        $delAct->execute([':id' => $id]);
+        $updAct = $pdo->prepare("UPDATE activity_logs SET booth_id = NULL WHERE booth_id = :id");
+        $updAct->execute([':id' => $id]);
 
         $delBth = $pdo->prepare("DELETE FROM booths WHERE id = :id");
         $delBth->execute([':id' => $id]);

@@ -464,8 +464,8 @@ if ($method === 'POST') {
                 $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id IN ($placeholders)");
                 $delTsk->execute($boothIds);
 
-                $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id IN ($placeholders)");
-                $delAct->execute($boothIds);
+                $updAct = $pdo->prepare("UPDATE activity_logs SET booth_id = NULL WHERE booth_id IN ($placeholders)");
+                $updAct->execute($boothIds);
 
                 $delBth = $pdo->prepare("DELETE FROM booths WHERE id IN ($placeholders)");
                 $delBth->execute($boothIds);
@@ -507,7 +507,7 @@ if ($method === 'POST') {
 // 3. DELETE: Delete single event by ID
 // =========================================================================
 if ($method === 'DELETE') {
-    reworkzone_require_csrf();
+    reworkzone_verify_csrf();
     $id = trim($_GET['id'] ?? '');
     if (empty($id)) {
         $raw = file_get_contents('php://input');
@@ -549,8 +549,8 @@ if ($method === 'DELETE') {
             $delTsk = $pdo->prepare("DELETE FROM booth_tasks WHERE booth_id IN ($placeholders)");
             $delTsk->execute($boothIds);
 
-            $delAct = $pdo->prepare("DELETE FROM activity_logs WHERE booth_id IN ($placeholders)");
-            $delAct->execute($boothIds);
+            $updAct = $pdo->prepare("UPDATE activity_logs SET booth_id = NULL WHERE booth_id IN ($placeholders)");
+            $updAct->execute($boothIds);
 
             $delBth = $pdo->prepare("DELETE FROM booths WHERE id IN ($placeholders)");
             $delBth->execute($boothIds);
