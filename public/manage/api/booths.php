@@ -42,6 +42,24 @@ if ($method === 'GET') {
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total,
+                (SELECT CASE 
+                    WHEN status IN ('not_applicable', 'na') THEN 'na' 
+                    WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
+                    ELSE 'pending' 
+                 END 
+                 FROM booth_tasks 
+                 WHERE booth_id = b.id AND (LOWER(phase) LIKE '%print%' OR LOWER(task_name) LIKE '%print%') 
+                 LIMIT 1
+                ) AS print_status,
+                (SELECT CASE 
+                    WHEN status IN ('not_applicable', 'na') THEN 'na' 
+                    WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
+                    ELSE 'pending' 
+                 END 
+                 FROM booth_tasks 
+                 WHERE booth_id = b.id AND (LOWER(phase) LIKE '%production%' OR LOWER(task_name) LIKE '%production%') 
+                 LIMIT 1
+                ) AS prod_status,
                 (SELECT COUNT(*) FROM booth_items WHERE booth_id = b.id) AS item_count,
                 (SELECT COUNT(*) FROM booth_expenses WHERE booth_id = b.id) AS expense_count
             FROM booths b
@@ -100,7 +118,25 @@ if ($method === 'GET') {
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
                 (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total,
+                (SELECT CASE 
+                    WHEN status IN ('not_applicable', 'na') THEN 'na' 
+                    WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
+                    ELSE 'pending' 
+                 END 
+                 FROM booth_tasks 
+                 WHERE booth_id = b.id AND (LOWER(phase) LIKE '%print%' OR LOWER(task_name) LIKE '%print%') 
+                 LIMIT 1
+                ) AS print_status,
+                (SELECT CASE 
+                    WHEN status IN ('not_applicable', 'na') THEN 'na' 
+                    WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
+                    ELSE 'pending' 
+                 END 
+                 FROM booth_tasks 
+                 WHERE booth_id = b.id AND (LOWER(phase) LIKE '%production%' OR LOWER(task_name) LIKE '%production%') 
+                 LIMIT 1
+                ) AS prod_status
             FROM booths b
             LEFT JOIN events e ON b.event_id = e.id
             WHERE b.status != 'archived'
@@ -198,7 +234,25 @@ if ($method === 'GET') {
             (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
             (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
             (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total,
+            (SELECT CASE 
+                WHEN status IN ('not_applicable', 'na') THEN 'na' 
+                WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
+                ELSE 'pending' 
+             END 
+             FROM booth_tasks 
+             WHERE booth_id = b.id AND (LOWER(phase) LIKE '%print%' OR LOWER(task_name) LIKE '%print%') 
+             LIMIT 1
+            ) AS print_status,
+            (SELECT CASE 
+                WHEN status IN ('not_applicable', 'na') THEN 'na' 
+                WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
+                ELSE 'pending' 
+             END 
+             FROM booth_tasks 
+             WHERE booth_id = b.id AND (LOWER(phase) LIKE '%production%' OR LOWER(task_name) LIKE '%production%') 
+             LIMIT 1
+            ) AS prod_status
         FROM booths b
         LEFT JOIN events e ON b.event_id = e.id
         WHERE 1=1

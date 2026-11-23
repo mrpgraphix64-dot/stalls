@@ -61,6 +61,47 @@ export function getExportFilename(
 }
 
 /**
+ * Generates standardized client stall details filename.
+ * Example: Tech_Expo_2026_A7_Emblit_Stall_Details.pdf
+ */
+export function getClientStallDetailsFilename(
+  eventName?: string | null,
+  boothNumber?: string | null,
+  clientName?: string | null
+): string {
+  const cleanEvent = (eventName || 'Exhibition')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '') || 'Exhibition';
+
+  const rawBooth = (boothNumber || '').trim();
+  const cleanBooth =
+    rawBooth && !['tbd', 'tba', 'pending', 'not assigned', 'not allocated', '—', '-', 'none', 'n/a'].includes(rawBooth.toLowerCase())
+      ? rawBooth.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+      : 'Proposed';
+
+  const cleanClient = (clientName || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '') || 'Stall';
+
+  return `${cleanEvent}_${cleanBooth}_${cleanClient}_Stall_Details.pdf`;
+}
+
+/**
+ * Client Stall Details single/multi-page A4 PDF export with embedded hyperlinks.
+ */
+export async function exportClientStallDetailsToPdf(
+  element: HTMLElement,
+  filename: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<void> {
+  return exportElementsToPdf([element], filename, onProgress);
+}
+
+/**
  * Client-side multi-page A4 PDF export.
  * Each stall starts on a brand-new page with comfortable 8mm margins.
  * Long checklists that exceed a single page seamlessly continue onto subsequent pages.

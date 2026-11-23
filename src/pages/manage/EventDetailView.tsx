@@ -47,6 +47,7 @@ import { SortDirection, sortBoothsByNumber, isPendingOrEmpty } from './boothSort
 import { PrintChecklistModal } from './PrintChecklistModal';
 import { EditBoothModal } from './EditBoothModal';
 import { BoothWallIndicator } from './BoothWallIndicator';
+import { BoothWorkStatusBadges } from './BoothWorkStatusBadges';
 import { StallChecklistSheet } from './StallChecklistSheet';
 import {
   CHECKLIST_FILTER_OPTIONS,
@@ -873,7 +874,7 @@ export function EventDetailView({
                         )}
                       </button>
                     </th>
-                    <th className="py-3.5 px-4 min-w-[220px]">Company Name</th>
+                    <th className="py-3.5 px-4 min-w-[280px]">Company Name</th>
                     <th className="py-3.5 px-4 w-[140px] min-w-[130px] shrink-0 whitespace-nowrap">Walls</th>
                     <th className="py-3.5 px-4 w-[170px] min-w-[160px] shrink-0 whitespace-nowrap">Size &amp; Structure</th>
                     <th className="py-3.5 px-4 w-[240px] min-w-[220px] shrink-0 whitespace-nowrap">Checklist Progress</th>
@@ -934,15 +935,17 @@ export function EventDetailView({
                             )}
                           </td>
 
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate" title={b.client_name}>
+                          <td className="py-3.5 px-4 min-w-[280px]">
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                              <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate max-w-[220px] lg:max-w-[280px]" title={b.client_name}>
                                 {b.client_name}
                               </span>
-                              {b.booking_stage === 'discussion' && (
+                              {b.booking_stage === 'discussion' ? (
                                 <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                                   Discussion
                                 </span>
+                              ) : (
+                                <BoothWorkStatusBadges booth={b} />
                               )}
                             </div>
                           </td>
@@ -1124,10 +1127,12 @@ export function EventDetailView({
                           <span className="font-semibold text-zinc-100 text-sm truncate">
                             {b.client_name}
                           </span>
-                          {b.booking_stage === 'discussion' && (
+                          {b.booking_stage === 'discussion' ? (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                               Discussion
                             </span>
+                          ) : (
+                            <BoothWorkStatusBadges booth={b} />
                           )}
                         </div>
                         <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />

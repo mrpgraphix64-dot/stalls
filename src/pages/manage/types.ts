@@ -77,6 +77,8 @@ export interface BoothItem {
   tasks_completed?: number;
   tasks_na?: number;
   tasks_total?: number;
+  print_status?: 'done' | 'pending' | 'na' | string | null;
+  prod_status?: 'done' | 'pending' | 'na' | string | null;
 }
 
 export interface ExhibitorItem {

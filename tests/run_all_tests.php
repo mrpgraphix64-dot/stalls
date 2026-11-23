@@ -23,6 +23,7 @@ $files = [
     __DIR__ . '/test_excel_requirements_export.php',
     __DIR__ . '/test_print_links_persistence.php',
     __DIR__ . '/test_permanent_stall_deletion.php',
+    __DIR__ . '/test_quick_work_status.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {

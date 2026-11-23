@@ -27,6 +27,7 @@ import {
   Box,
   MessageSquare,
   Save,
+  Share2,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -52,6 +53,7 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { getBoothOrigin } from './scrollRestoration';
 import { FloorplanViewerModal } from './FloorplanViewerModal';
 import { PrintChecklistModal } from './PrintChecklistModal';
+import { ShareStallModal } from './ShareStallModal';
 import { EditBoothModal } from './EditBoothModal';
 import { isPendingOrEmpty } from './boothSort';
 
@@ -217,6 +219,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState<boolean>(false);
   const [isFloorplanModalOpen, setIsFloorplanModalOpen] = useState<boolean>(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [editBoothNumber, setEditBoothNumber] = useState<string>('');
   const [editCompanyName, setEditCompanyName] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
@@ -1032,7 +1035,17 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
           );
         })()}
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            className="px-2.5 sm:px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer shrink-0"
+            title="Share Client Stall Details PDF"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Share Stall Details</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsPrintModalOpen(true)}
@@ -3272,6 +3285,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
             views3D,
           },
         ]}
+      />
+
+      {/* Client Stall Details Share Modal */}
+      <ShareStallModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        booth={booth}
+        eventName={booth.event_name || 'Exhibition'}
+        views3D={views3D}
+        productionItems={prodItems}
+        furnitureItems={furnItems}
+        electricalItems={elecItems}
+        goodiesItems={goodiesItems}
       />
     </div>
   );
