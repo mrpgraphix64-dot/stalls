@@ -51,7 +51,7 @@ try {
             SUM(CASE WHEN t.status = 'not_applicable' THEN 1 ELSE 0 END) as na_tasks
         FROM booth_tasks t
         INNER JOIN booths b ON t.booth_id = b.id
-        WHERE b.status != 'archived' AND LOWER(t.task_name) NOT LIKE '%install%'
+        WHERE b.status != 'archived' AND LOWER(t.task_name) NOT LIKE '%install%' AND LOWER(t.task_name) != 'design' AND LOWER(t.task_name) != 'design approved'
         GROUP BY t.booth_id
     ");
     $progressMap = [];
@@ -105,7 +105,7 @@ try {
           AND (t.status IS NULL OR t.status != 'not_applicable')
           AND b.status != 'archived'
           AND (b.booking_stage = 'confirmed' OR b.booking_stage IS NULL OR b.booking_stage = '')
-          AND LOWER(t.task_name) NOT LIKE '%install%'
+          AND LOWER(t.task_name) NOT LIKE '%install%' AND LOWER(t.task_name) != 'design' AND LOWER(t.task_name) != 'design approved'
     ")->fetchColumn();
 
     // 7. Recent booths / All active managed stalls for operations table

@@ -24,6 +24,7 @@ $files = [
     __DIR__ . '/test_print_links_persistence.php',
     __DIR__ . '/test_permanent_stall_deletion.php',
     __DIR__ . '/test_quick_work_status.php',
+    __DIR__ . '/test_merge_design_into_print_files.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {

@@ -172,21 +172,21 @@ try {
     // ---------------------------------------------------------
     // TEST 3: Checklist & Tasks Management
     // ---------------------------------------------------------
-    echo "Test 3: 5-Step Default Checklist Auto-Seeding & Task Actions\n";
+    echo "Test 3: 4-Step Default Checklist Auto-Seeding & Task Actions\n";
     $tasksRes = http_step5('GET', "{$baseUrl}/manage/api/tasks.php?booth_id={$bthId}", null, $cookies);
     assert_step5("GET /manage/api/tasks.php returns 200 OK", $tasksRes['code'] === 200);
-    assert_step5("Initial task list auto-seeded exactly 5 default tasks", ($tasksRes['body']['total'] ?? 0) === 5);
+    assert_step5("Initial task list auto-seeded exactly 4 default tasks", ($tasksRes['body']['total'] ?? 0) === 4);
     assert_step5("Initial completed count is 0", ($tasksRes['body']['completed'] ?? 0) === 0);
     assert_step5("Initial progress percentage is 0.0%", ($tasksRes['body']['percentage'] ?? -1) == 0);
 
     $tasks = $tasksRes['body']['tasks'] ?? [];
     $firstTask = $tasks[0] ?? [];
     $firstTaskId = $firstTask['id'] ?? '';
-    assert_step5("Task 1 name is 'Design'", ($firstTask['task_name'] ?? '') === 'Design');
+    assert_step5("Task 1 name is 'Print Files & Design'", ($firstTask['task_name'] ?? '') === 'Print Files & Design');
 
     // Idempotency check: repeated GET must NOT create duplicate tasks
     $tasksRes2 = http_step5('GET', "{$baseUrl}/manage/api/tasks.php?booth_id={$bthId}", null, $cookies);
-    assert_step5("Repeated GET is idempotent; task count remains 5", ($tasksRes2['body']['total'] ?? 0) === 5);
+    assert_step5("Repeated GET is idempotent; task count remains 4", ($tasksRes2['body']['total'] ?? 0) === 4);
 
     // Toggle completion without CSRF
     $unauthToggle = http_step5('POST', "{$baseUrl}/manage/api/tasks.php?action=toggle", ['id' => $firstTaskId], $cookies);
@@ -198,7 +198,7 @@ try {
     assert_step5("Task 1 marked completed (is_completed = 1)", ($toggleRes['body']['task']['is_completed'] ?? 0) === 1);
     assert_step5("Task completion timestamp recorded", !empty($toggleRes['body']['task']['completed_at']));
     assert_step5("Total completed tasks equals 1", ($toggleRes['body']['completed'] ?? 0) === 1);
-    assert_step5("Progress percentage recalculated to 20.0%", round($toggleRes['body']['percentage'] ?? 0, 1) == 20.0);
+    assert_step5("Progress percentage recalculated to 25.0%", round($toggleRes['body']['percentage'] ?? 0, 1) == 25.0);
 
     // Create Custom Task
     $createTaskRes = http_step5('POST', "{$baseUrl}/manage/api/tasks.php?action=create", [
@@ -212,7 +212,7 @@ try {
 
     // Check refreshed total
     $tasksRes3 = http_step5('GET', "{$baseUrl}/manage/api/tasks.php?booth_id={$bthId}", null, $cookies);
-    assert_step5("Total tasks increased to 6", ($tasksRes3['body']['total'] ?? 0) === 6);
+    assert_step5("Total tasks increased to 5", ($tasksRes3['body']['total'] ?? 0) === 5);
 
     // Update Custom Task
     $updateTaskRes = http_step5('POST', "{$baseUrl}/manage/api/tasks.php?action=update", [
@@ -228,7 +228,7 @@ try {
     assert_step5("Delete custom task returns 200 OK", $delTaskRes['code'] === 200);
 
     $tasksRes4 = http_step5('GET', "{$baseUrl}/manage/api/tasks.php?booth_id={$bthId}", null, $cookies);
-    assert_step5("Total tasks reverted to 5 after deletion", ($tasksRes4['body']['total'] ?? 0) === 5);
+    assert_step5("Total tasks reverted to 4 after deletion", ($tasksRes4['body']['total'] ?? 0) === 4);
 
     echo "\n";
 

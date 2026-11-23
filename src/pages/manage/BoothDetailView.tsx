@@ -127,7 +127,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   // Expandable sections state
   const [expanded, setExpanded] = useState<{ [key: string]: boolean }>({
-    design: true,
     print: true,
     production: true,
     furniture: true,
@@ -286,13 +285,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       // Pending -> Expanded; Completed or N/A -> Collapsed
       if (initialAccordionBoothIdRef.current !== boothId) {
         initialAccordionBoothIdRef.current = boothId;
-        const sectionKeys = ['design', 'print', 'production', 'furniture', 'electrical'];
+        const sectionKeys = ['print', 'production', 'furniture', 'electrical'];
         const autoExpanded: { [key: string]: boolean } = {};
         sectionKeys.forEach((secKey) => {
           const key = secKey.toLowerCase();
           const task = (tskRes.tasks || []).find((t) => {
             const name = t.task_name.toLowerCase();
-            if (key === 'design') return name.includes('design');
             if (key === 'print') return name.includes('print');
             if (key === 'production') return name.includes('production') || name.includes('structure');
             if (key === 'furniture') return name.includes('furniture');
@@ -331,7 +329,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     const key = sectionKey.toLowerCase();
     return tasks.find((t) => {
       const name = t.task_name.toLowerCase();
-      if (key === 'design') return name.includes('design');
       if (key === 'print') return name.includes('print');
       if (key === 'production') return name.includes('production') || name.includes('structure');
       if (key === 'furniture') return name.includes('furniture');
@@ -999,13 +996,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     );
   }
 
-  // Calculate 5-card completion status
+  // Calculate 4-card completion status
   const sectionsList = [
-    { key: 'design', label: '1. Design', icon: Palette, desc: 'Design responsibility assignment' },
-    { key: 'print', label: '2. Print Files', icon: Printer, desc: 'Print readiness status and Google Drive link' },
-    { key: 'production', label: '3. Production', icon: Hammer, desc: 'Flooring, selfie booth, branding and TV setups' },
-    { key: 'furniture', label: '4. Furniture', icon: Armchair, desc: 'Tables, sofas and chairs' },
-    { key: 'electrical', label: '5. Electrical', icon: Zap, desc: 'Power sockets and pelmet lights' },
+    { key: 'print', label: '1. Print Files & Design', icon: Printer, desc: 'Design responsibility, 3D views, print readiness and Drive links' },
+    { key: 'production', label: '2. Production', icon: Hammer, desc: 'Flooring, selfie booth, branding and TV setups' },
+    { key: 'furniture', label: '3. Furniture', icon: Armchair, desc: 'Tables, sofas and chairs' },
+    { key: 'electrical', label: '4. Electrical', icon: Zap, desc: 'Power sockets and pelmet lights' },
   ];
 
   return (
@@ -1393,363 +1389,342 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
               {/* Card Expanded Content */}
               {isExp && (
                 <div className="p-4 sm:p-5 border-t border-zinc-800 bg-zinc-950/40 space-y-4 animate-in fade-in duration-150">
-                  {/* SECTION 1: SIMPLIFIED DESIGN RESPONSIBILITY */}
-                  {sec.key === 'design' && (
-                    <div className="space-y-3.5">
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-zinc-200">
-                          Design Responsibility
-                        </label>
-                        <p className="text-[11px] text-zinc-400">
-                          Select who is responsible for creating and finalizing the 3D booth design
-                        </p>
-                      </div>
-
-                      {/* Segmented 2-option selector */}
-                      <div className="grid grid-cols-2 gap-2 sm:gap-3 max-w-md">
-                        <button
-                          type="button"
-                          onClick={() => handleSetDesignResponsibility('Client Side')}
-                          disabled={isSavingDesign}
-                          className={`min-h-[46px] p-3 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
-                            designResp === 'Client Side'
-                              ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold shadow-sm'
-                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${designResp === 'Client Side' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
-                            <span>Client Side</span>
+                  {/* SECTION 1: PRINT FILES & DESIGN (Merged Design Responsibility + 3D Views + Print Files + Goodies) */}
+                  {sec.key === 'print' && (
+                    <div className="space-y-6">
+                      <div className="space-y-5">
+                        {/* 1. Design Responsibility */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-zinc-200">
+                              Design Responsibility
+                            </label>
+                            {isSavingDesign && (
+                              <span className="text-[10px] text-amber-400 font-mono animate-pulse">
+                                Saving...
+                              </span>
+                            )}
                           </div>
-                          {designResp === 'Client Side' && <Check className="w-4 h-4 text-amber-400" />}
-                        </button>
+                          <div className="grid grid-cols-2 gap-2 sm:gap-3 max-w-md">
+                            <button
+                              type="button"
+                              onClick={() => handleSetDesignResponsibility('Client Side')}
+                              disabled={isSavingDesign}
+                              className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                                designResp === 'Client Side'
+                                  ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold shadow-sm'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${designResp === 'Client Side' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
+                                <span>Client Side</span>
+                              </div>
+                              {designResp === 'Client Side' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={() => handleSetDesignResponsibility('Our Side')}
-                          disabled={isSavingDesign}
-                          className={`min-h-[46px] p-3 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
-                            designResp === 'Our Side'
-                              ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold shadow-sm'
-                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${designResp === 'Our Side' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
-                            <span>Our Side</span>
+                            <button
+                              type="button"
+                              onClick={() => handleSetDesignResponsibility('Our Side')}
+                              disabled={isSavingDesign}
+                              className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                                designResp === 'Our Side'
+                                  ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold shadow-sm'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${designResp === 'Our Side' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
+                                <span>Our Side</span>
+                              </div>
+                              {designResp === 'Our Side' && <Check className="w-3.5 h-3.5 text-amber-400" />}
+                            </button>
                           </div>
-                          {designResp === 'Our Side' && <Check className="w-4 h-4 text-amber-400" />}
-                        </button>
-                      </div>
-
-                      <div className="text-[11px] text-zinc-400 bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3 max-w-md flex items-start gap-2">
-                        <Palette className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                        <div>
-                          {designResp === 'Client Side' ? (
-                            <span>Client will prepare and deliver the 3D render concept and branding drawings.</span>
-                          ) : (
-                            <span>Reworkzone fabrication team is responsible for preparing the 3D design and visual concepts.</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 3D View of Stall Area */}
-                      <div className="pt-4 border-t border-zinc-800/80 space-y-3.5">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
-                              <Box className="w-3.5 h-3.5 text-amber-400" />
-                              <span>3D View of Stall</span>
-                            </h4>
-                            <p className="text-[11px] text-zinc-400">
-                              Store and display 3D reference views, design URLs & client renders for this stall.
-                            </p>
-                          </div>
-                          {views3D.length > 0 && (
-                            <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
-                              {views3D.length} {views3D.length === 1 ? 'view' : 'views'}
-                            </span>
-                          )}
                         </div>
 
-                        {/* Saved 3D Views List (Clean stacked cards) */}
-                        {views3D.length > 0 ? (
-                          <div className="space-y-2.5">
-                            {views3D.map((view) => {
-                              const isEditing = editingViewId === view.id;
-                              const isImageUrl = /\.(png|jpe?g|webp|svg|gif)(\?.*)?$/i.test(view.drive_url);
+                        {/* 2. 3D Stall Views */}
+                        <div className="pt-4 border-t border-zinc-800/80 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                                <Box className="w-3.5 h-3.5 text-amber-400" />
+                                <span>3D Stall Views</span>
+                              </h4>
+                              {views3D.length > 0 && (
+                                <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded font-mono">
+                                  {views3D.length}
+                                </span>
+                              )}
+                            </div>
+                            {!showAdd3DForm && (
+                              <button
+                                type="button"
+                                onClick={() => setShowAdd3DForm(true)}
+                                className="text-xs text-amber-400 hover:text-amber-300 font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add View</span>
+                              </button>
+                            )}
+                          </div>
 
-                              if (isEditing) {
-                                return (
-                                  <div
-                                    key={view.id}
-                                    className="p-3.5 rounded-xl bg-zinc-900 border border-amber-500/50 space-y-3 animate-in fade-in duration-100"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
-                                        Edit 3D View
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={handleCancelEdit3DView}
-                                        className="text-zinc-400 hover:text-zinc-200 text-xs p-1"
-                                      >
-                                        <X className="w-4 h-4" />
-                                      </button>
-                                    </div>
+                          {/* Saved 3D Views as simple rows: Front View — Open | Edit | Remove */}
+                          {views3D.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {views3D.map((view) => {
+                                const isEditing = editingViewId === view.id;
 
-                                    <div className="space-y-2">
-                                      <div>
-                                        <label className="text-[11px] text-zinc-400 block mb-1">View Title</label>
-                                        <input
-                                          type="text"
-                                          value={editTitle3D}
-                                          onChange={(e) => setEditTitle3D(e.target.value)}
-                                          placeholder="e.g. Front View, Perspective View"
-                                          className="w-full min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
-                                        />
+                                if (isEditing) {
+                                  return (
+                                    <div
+                                      key={view.id}
+                                      className="p-3 rounded-xl bg-zinc-900 border border-amber-500/50 space-y-2.5 animate-in fade-in duration-100"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                                          Edit 3D View
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={handleCancelEdit3DView}
+                                          className="text-zinc-400 hover:text-zinc-200 text-xs p-1"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div>
+                                          <label className="text-[10px] text-zinc-400 block mb-0.5">View Title</label>
+                                          <input
+                                            type="text"
+                                            value={editTitle3D}
+                                            onChange={(e) => setEditTitle3D(e.target.value)}
+                                            placeholder="e.g. Front View"
+                                            className="w-full min-h-[36px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] text-zinc-400 block mb-0.5">3D View Link / URL</label>
+                                          <input
+                                            type="url"
+                                            value={editUrl3D}
+                                            onChange={(e) => setEditUrl3D(e.target.value)}
+                                            placeholder="https://..."
+                                            className="w-full min-h-[36px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                                          />
+                                        </div>
                                       </div>
 
                                       <div>
-                                        <label className="text-[11px] text-zinc-400 block mb-1">3D View Link / URL</label>
-                                        <input
-                                          type="url"
-                                          value={editUrl3D}
-                                          onChange={(e) => setEditUrl3D(e.target.value)}
-                                          placeholder="https://..."
-                                          className="w-full min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <label className="text-[11px] text-zinc-400 block mb-1">Note / Remark (Optional)</label>
+                                        <label className="text-[10px] text-zinc-400 block mb-0.5">Note / Remark (Optional)</label>
                                         <input
                                           type="text"
                                           value={editNote3D}
                                           onChange={(e) => setEditNote3D(e.target.value)}
-                                          placeholder="e.g. Client-approved version, Latest update"
-                                          className="w-full min-h-[38px] bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
+                                          placeholder="e.g. Client-approved version"
+                                          className="w-full min-h-[36px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
                                         />
                                       </div>
-                                    </div>
 
-                                    <div className="flex items-center justify-end gap-2 pt-1">
+                                      <div className="flex items-center justify-end gap-2 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={handleCancelEdit3DView}
+                                          className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={isUpdating3D}
+                                          onClick={() => handleSaveEdit3DView(view.id)}
+                                          className="min-h-[34px] px-3.5 py-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                        >
+                                          {isUpdating3D ? 'Saving...' : 'Save Changes'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div
+                                    key={view.id}
+                                    className="flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors gap-2"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="font-semibold text-zinc-200 text-xs truncate" title={view.title}>
+                                        {view.title}
+                                      </span>
+                                      {view.notes && (
+                                        <span className="text-[10px] text-amber-300/90 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium truncate max-w-[120px] sm:max-w-xs">
+                                          {view.notes}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs font-semibold shrink-0">
+                                      <a
+                                        href={view.drive_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1"
+                                        title="Open 3D View in new tab"
+                                      >
+                                        <span>Open</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                      <span className="text-zinc-600">|</span>
                                       <button
                                         type="button"
-                                        onClick={handleCancelEdit3DView}
-                                        className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                                        onClick={() => handleStartEdit3DView(view)}
+                                        className="text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                                        title="Edit View"
                                       >
-                                        Cancel
+                                        Edit
                                       </button>
+                                      <span className="text-zinc-600">|</span>
                                       <button
                                         type="button"
-                                        disabled={isUpdating3D}
-                                        onClick={() => handleSaveEdit3DView(view.id)}
-                                        className="min-h-[36px] px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                        onClick={() => handleDelete3DView(view)}
+                                        className="text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                        title="Remove View"
                                       >
-                                        {isUpdating3D ? 'Saving...' : 'Save Changes'}
+                                        Remove
                                       </button>
                                     </div>
                                   </div>
                                 );
-                              }
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-zinc-500 italic">No 3D views added yet.</p>
+                          )}
 
-                              return (
-                                <div
-                                  key={view.id}
-                                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 transition-colors gap-3"
+                          {/* Inline Add 3D View Form */}
+                          {showAdd3DForm && (
+                            <form onSubmit={handleAdd3DView} className="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-2.5 animate-in fade-in duration-150">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Add 3D View</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAdd3DForm(false)}
+                                  className="text-zinc-500 hover:text-zinc-300 text-xs p-1"
                                 >
-                                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                                    {/* Preview Thumbnail or 3D Placeholder */}
-                                    <div className="w-14 h-14 rounded-lg bg-zinc-950 border border-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
-                                      {isImageUrl ? (
-                                        <img
-                                          src={view.drive_url}
-                                          alt={view.title}
-                                          className="w-full h-full object-cover"
-                                          onError={(e) => {
-                                            (e.currentTarget as HTMLElement).style.display = 'none';
-                                          }}
-                                        />
-                                      ) : (
-                                        <div className="flex flex-col items-center justify-center text-amber-400/80">
-                                          <Box className="w-5 h-5" />
-                                          <span className="text-[9px] font-mono mt-0.5 text-zinc-500">3D</span>
-                                        </div>
-                                      )}
-                                    </div>
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
 
-                                    {/* Info: Title, Note, URL */}
-                                    <div className="flex-1 min-w-0 space-y-1">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="font-semibold text-zinc-200 text-xs truncate">
-                                          {view.title}
-                                        </span>
-                                        {view.notes && (
-                                          <span className="text-[11px] text-amber-300/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 font-medium">
-                                            {view.notes}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-[11px] text-zinc-400 font-mono truncate max-w-sm">
-                                        {view.drive_url}
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  {/* Actions: Open View, Edit, Delete */}
-                                  <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60">
-                                    <a
-                                      href={view.drive_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="min-h-[36px] px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
-                                      title="Open 3D View in New Tab"
-                                    >
-                                      <span>Open View</span>
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </a>
-
+                              <div className="space-y-1.5">
+                                <div className="flex flex-wrap gap-1.5 mb-1">
+                                  {['Front View', 'Perspective View', 'Option 1', 'Top View', 'Final 3D View'].map((preset) => (
                                     <button
+                                      key={preset}
                                       type="button"
-                                      onClick={() => handleStartEdit3DView(view)}
-                                      className="min-h-[36px] min-w-[36px] flex items-center justify-center p-2 text-zinc-400 hover:text-amber-400 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-                                      title="Edit 3D View"
+                                      onClick={() => setTitle3D(preset)}
+                                      className={`px-2 py-0.5 rounded-md text-[10px] border transition-colors cursor-pointer ${
+                                        title3D === preset
+                                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
+                                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                      }`}
                                     >
-                                      <Edit2 className="w-3.5 h-3.5" />
+                                      {preset}
                                     </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDelete3DView(view)}
-                                      className="min-h-[36px] min-w-[36px] flex items-center justify-center p-2 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-                                      title="Delete 3D View"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                  ))}
                                 </div>
+                                <input
+                                  type="text"
+                                  value={title3D}
+                                  onChange={(e) => setTitle3D(e.target.value)}
+                                  placeholder="View Title (e.g. Front View)"
+                                  className="w-full min-h-[36px] bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                  required
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <input
+                                  type="url"
+                                  value={url3D}
+                                  onChange={(e) => setUrl3D(e.target.value)}
+                                  placeholder="3D View Link / URL (https://...)"
+                                  className="w-full min-h-[36px] bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                  required
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <input
+                                  type="text"
+                                  value={note3D}
+                                  onChange={(e) => setNote3D(e.target.value)}
+                                  placeholder="Note / Remark (Optional)"
+                                  className="w-full min-h-[36px] bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAdd3DForm(false)}
+                                  className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 font-medium"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  disabled={isSaving3D}
+                                  className="min-h-[34px] px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-lg text-xs transition-all cursor-pointer shadow-sm"
+                                >
+                                  {isSaving3D ? 'Saving...' : 'Save 3D View'}
+                                </button>
+                              </div>
+                            </form>
+                          )}
+                        </div>
+
+                        {/* 3. Print File Readiness */}
+                        <div className="pt-4 border-t border-zinc-800/80 space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">
+                            Print File Readiness
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {[
+                              { value: 'Designs Pending', color: 'zinc' },
+                              { value: 'Partially Received', color: 'amber' },
+                              { value: 'All Files Ready', color: 'emerald' },
+                            ].map((opt) => {
+                              const isSelected = printStatus === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => handleSetPrintStatus(opt.value)}
+                                  className={`min-h-[40px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
+                                    isSelected
+                                      ? opt.color === 'emerald'
+                                        ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 font-bold'
+                                        : opt.color === 'amber'
+                                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold'
+                                        : 'bg-white/[0.08] border-zinc-600 text-zinc-100 font-bold'
+                                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  <span>{opt.value}</span>
+                                  {isSelected && <Check className="w-3.5 h-3.5" />}
+                                </button>
                               );
                             })}
                           </div>
-                        ) : (
-                          <p className="text-xs text-zinc-500 italic">No 3D stall views added yet.</p>
-                        )}
+                        </div>
 
-                        {/* + Add 3D View Button / Inline Form */}
-                        {!showAdd3DForm ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowAdd3DForm(true)}
-                            className="min-h-[40px] px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Add 3D View of Stall</span>
-                          </button>
-                        ) : (
-                          <form onSubmit={handleAdd3DView} className="p-3.5 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-3 animate-in fade-in duration-150">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Add 3D View of Stall</span>
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setShowAdd3DForm(false)}
-                                className="text-zinc-500 hover:text-zinc-300 text-xs p-1"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-
-                            {/* Title with fast preset pills */}
-                            <div className="space-y-1.5">
-                              <div className="flex items-center justify-between">
-                                <label className="text-[11px] font-semibold text-zinc-300">View Title</label>
-                                <span className="text-[10px] text-zinc-500">Quick suggestions:</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                {['Front View', 'Perspective View', 'Option 1', 'Top View', 'Final 3D View'].map((preset) => (
-                                  <button
-                                    key={preset}
-                                    type="button"
-                                    onClick={() => setTitle3D(preset)}
-                                    className={`px-2 py-0.5 rounded-md text-[11px] border transition-colors cursor-pointer ${
-                                      title3D === preset
-                                        ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
-                                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                                    }`}
-                                  >
-                                    {preset}
-                                  </button>
-                                ))}
-                              </div>
-                              <input
-                                type="text"
-                                value={title3D}
-                                onChange={(e) => setTitle3D(e.target.value)}
-                                placeholder="e.g. Front View, Perspective View"
-                                className="w-full min-h-[40px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                                required
-                              />
-                            </div>
-
-                            {/* 3D View Link / URL */}
-                            <div className="space-y-1">
-                              <label className="text-[11px] font-semibold text-zinc-300">3D View Link / URL</label>
-                              <input
-                                type="url"
-                                value={url3D}
-                                onChange={(e) => setUrl3D(e.target.value)}
-                                placeholder="https://drive.google.com/... or hosted preview URL"
-                                className="w-full min-h-[40px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                                required
-                              />
-                            </div>
-
-                            {/* Note / Remark (Optional) */}
-                            <div className="space-y-1">
-                              <label className="text-[11px] font-semibold text-zinc-300">Note / Remark (Optional)</label>
-                              <input
-                                type="text"
-                                value={note3D}
-                                onChange={(e) => setNote3D(e.target.value)}
-                                placeholder="e.g. Client-approved version, Latest update, Need size correction"
-                                className="w-full min-h-[40px] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                              />
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex items-center justify-end gap-2 pt-1">
-                              <button
-                                type="button"
-                                onClick={() => setShowAdd3DForm(false)}
-                                className="px-3.5 py-2 text-xs text-zinc-400 hover:text-zinc-200 font-medium"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                disabled={isSaving3D}
-                                className="min-h-[38px] px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
-                              >
-                                {isSaving3D ? 'Saving...' : 'Save 3D View'}
-                              </button>
-                            </div>
-                          </form>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SECTION 2: SIMPLIFIED PRINT FILES & GOODIES */}
-                  {sec.key === 'print' && (
-                    <div className="space-y-6">
-                      <div className="space-y-4">
-                        {/* 1. Google Drive Link Card or Input */}
-                        <div className="space-y-1.5">
+                        {/* 4. Main Google Drive Print Files Link */}
+                        <div className="pt-4 border-t border-zinc-800/80 space-y-1.5">
                           <label className="text-xs font-semibold text-zinc-200">
-                            Print Files (Google Drive Folder)
+                            Main Google Drive Print Files Link
                           </label>
 
                           {(booth?.print_drive_url || printDriveUrl) && !isEditingPrintUrl ? (
@@ -1761,7 +1736,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-zinc-200">Google Drive Folder</span>
-                                    <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                    <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
                                       Saved
                                     </span>
                                   </div>
@@ -1856,45 +1831,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           )}
                         </div>
 
-                        {/* 2. Print File Status (3 options) */}
-                        <div className="space-y-1.5">
+                        {/* 5. Optional Print Remark */}
+                        <div className="pt-4 border-t border-zinc-800/80 space-y-1.5">
                           <label className="text-xs font-semibold text-zinc-200">
-                            Print File Status
-                          </label>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            {[
-                              { value: 'Designs Pending', color: 'zinc' },
-                              { value: 'Partially Received', color: 'amber' },
-                              { value: 'All Files Ready', color: 'emerald' },
-                            ].map((opt) => {
-                              const isSelected = printStatus === opt.value;
-                              return (
-                                <button
-                                  key={opt.value}
-                                  type="button"
-                                  onClick={() => handleSetPrintStatus(opt.value)}
-                                  className={`min-h-[44px] p-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
-                                    isSelected
-                                      ? opt.color === 'emerald'
-                                        ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 font-bold'
-                                        : opt.color === 'amber'
-                                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-bold'
-                                        : 'bg-white/[0.08] border-zinc-600 text-zinc-100 font-bold'
-                                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                                  }`}
-                                >
-                                  <span>{opt.value}</span>
-                                  {isSelected && <Check className="w-3.5 h-3.5" />}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* 3. Optional Remark */}
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-200">
-                            Remark (Optional)
+                            Print Remark (Optional)
                           </label>
                           <div className="flex flex-col sm:flex-row gap-2">
                             <input
@@ -1903,12 +1843,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                               onChange={(e) => setPrintRemark(e.target.value)}
                               onBlur={handleSavePrintRemark}
                               placeholder="e.g. Waiting for side wall artwork / high-res logo"
-                              className="flex-1 min-h-[42px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                              className="flex-1 min-h-[40px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                             />
                             <button
                               type="button"
                               onClick={handleSavePrintRemark}
-                              className="min-h-[42px] px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl font-semibold text-xs shrink-0 cursor-pointer transition-colors"
+                              className="min-h-[40px] px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl font-semibold text-xs shrink-0 cursor-pointer transition-colors"
                             >
                               Save Remark
                             </button>

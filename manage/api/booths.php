@@ -38,10 +38,10 @@ if ($method === 'GET') {
                 e.status AS event_status,
                 e.floor_plan_url AS event_floor_plan_url,
                 (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND status = 'not_applicable') AS tasks_na,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved') AS tasks_total,
                 (SELECT CASE 
                     WHEN status IN ('not_applicable', 'na') THEN 'na' 
                     WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
@@ -115,10 +115,10 @@ if ($method === 'GET') {
                 e.setup_date AS event_setup_date,
                 e.floor_plan_url AS event_floor_plan_url,
                 (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
-                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND status = 'not_applicable') AS tasks_na,
+                (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved') AS tasks_total,
                 (SELECT CASE 
                     WHEN status IN ('not_applicable', 'na') THEN 'na' 
                     WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
@@ -181,7 +181,7 @@ if ($method === 'GET') {
                 $itemsByBooth[$itm['booth_id']][] = $itm;
             }
 
-            $taskStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE booth_id IN ($placeholders) AND LOWER(task_name) NOT LIKE '%install%' ORDER BY sort_order, display_order");
+            $taskStmt = $pdo->prepare("SELECT * FROM booth_tasks WHERE booth_id IN ($placeholders) AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' ORDER BY sort_order, display_order");
             $taskStmt->execute($boothIds);
             while ($tsk = $taskStmt->fetch()) {
                 $tasksByBooth[$tsk['booth_id']][] = $tsk;
@@ -231,10 +231,10 @@ if ($method === 'GET') {
             e.setup_date AS event_setup_date,
             e.floor_plan_url AS event_floor_plan_url,
             (SELECT COUNT(*) FROM booth_links WHERE booth_id = b.id) AS link_count,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND status = 'not_applicable') AS tasks_na,
-            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%') AS tasks_total,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND (status IS NULL OR status != 'not_applicable')) AS task_count,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND is_completed = 1 AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND (status IS NULL OR status != 'not_applicable')) AS tasks_completed,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved' AND status = 'not_applicable') AS tasks_na,
+            (SELECT COUNT(*) FROM booth_tasks WHERE booth_id = b.id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved') AS tasks_total,
             (SELECT CASE 
                 WHEN status IN ('not_applicable', 'na') THEN 'na' 
                 WHEN is_completed = 1 OR status = 'completed' THEN 'done' 
@@ -487,8 +487,7 @@ if ($method === 'POST') {
         // Auto-seed default 5 checklist tasks ONLY for confirmed booths
         if ($bookingStage === 'confirmed') {
             $defaultTasks = [
-                'Design',
-                'Print Files',
+                'Print Files & Design',
                 'Production',
                 'Furniture',
                 'Electrical',
@@ -860,8 +859,7 @@ if ($method === 'POST') {
         $taskCheck->execute([':id' => $id]);
         if ((int)$taskCheck->fetchColumn() === 0) {
             $defaultTasks = [
-                'Design',
-                'Print Files',
+                'Print Files & Design',
                 'Production',
                 'Furniture',
                 'Electrical',

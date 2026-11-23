@@ -16,10 +16,9 @@ $pdo = reworkzone_get_db();
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
-// Core 5 Checklist Tasks (Simple Everyday Operations)
+// Core 4 Checklist Tasks (Simple Everyday Operations)
 $defaultTasks = [
-    'Design',
-    'Print Files',
+    'Print Files & Design',
     'Production',
     'Furniture',
     'Electrical',
@@ -87,7 +86,7 @@ if ($method === 'GET') {
     $stmt = $pdo->prepare("
         SELECT id, booth_id, phase, task_name, assigned_to, completed_by, is_completed, status, completed_at, due_date, notes, sort_order, display_order, created_at, updated_at
         FROM booth_tasks
-        WHERE booth_id = :booth_id AND LOWER(task_name) NOT LIKE '%install%'
+        WHERE booth_id = :booth_id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved'
         ORDER BY sort_order ASC, created_at ASC
     ");
     $stmt->execute([':booth_id' => $boothId]);
@@ -189,7 +188,7 @@ if ($method === 'POST') {
         $refreshed = $freshStmt->fetch();
 
         // Calculate refreshed stats for the booth (applicable only, excluding legacy installation)
-        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id AND LOWER(task_name) NOT LIKE '%install%'");
+        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved'");
         $allTasksStmt->execute([':b_id' => $task['booth_id']]);
         $bTasks = $allTasksStmt->fetchAll();
 
@@ -273,7 +272,7 @@ if ($method === 'POST') {
         $refreshed = $freshStmt->fetch();
 
         // Calculate refreshed stats for the booth (excluding legacy installation)
-        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id AND LOWER(task_name) NOT LIKE '%install%'");
+        $allTasksStmt = $pdo->prepare("SELECT is_completed, status FROM booth_tasks WHERE booth_id = :b_id AND LOWER(task_name) NOT LIKE '%install%' AND LOWER(task_name) != 'design' AND LOWER(task_name) != 'design approved'");
         $allTasksStmt->execute([':b_id' => $task['booth_id']]);
         $bTasks = $allTasksStmt->fetchAll();
 

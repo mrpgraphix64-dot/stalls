@@ -176,7 +176,7 @@ try {
     $checkBare = req('GET', "{$baseUrl}/manage/api/booths.php?id={$bareId}", null, $cookies);
     assert_test("Bare stall returns 404 after deletion", $checkBare['code'] === 404);
 
-    // Test 7: Delete a stall with ALL 5 checklist tasks
+    // Test 7: Delete a stall with ALL 4 checklist tasks
     $taskBoothRes = req('POST', "{$baseUrl}/manage/api/booths.php?action=create", [
         'event_id'      => $eventId,
         'booth_number'  => 'TSK-01',
@@ -187,9 +187,9 @@ try {
     ], $cookies, $csrf);
     $taskBoothId = $taskBoothRes['body']['booth']['id'] ?? '';
     $tasksBefore = (int)$pdo->query("SELECT count(*) FROM booth_tasks WHERE booth_id = '{$taskBoothId}'")->fetchColumn();
-    assert_test("Stall initialized with 5 tasks", $tasksBefore === 5);
+    assert_test("Stall initialized with 4 tasks", $tasksBefore === 4);
     $delTaskBooth = req('DELETE', "{$baseUrl}/manage/api/booths.php?id={$taskBoothId}", null, $cookies, $csrf);
-    assert_test("Delete stall with 5 tasks returns 200 OK", $delTaskBooth['code'] === 200 && ($delTaskBooth['body']['success'] ?? false) === true);
+    assert_test("Delete stall with 4 tasks returns 200 OK", $delTaskBooth['code'] === 200 && ($delTaskBooth['body']['success'] ?? false) === true);
     $tasksAfter = (int)$pdo->query("SELECT count(*) FROM booth_tasks WHERE booth_id = '{$taskBoothId}'")->fetchColumn();
     assert_test("Associated tasks cleanly deleted (count: 0)", $tasksAfter === 0);
 

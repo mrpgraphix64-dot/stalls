@@ -372,22 +372,22 @@ export function StallChecklistSheet({
         </div>
       </div>
 
-      {/* 3. FIVE CHECKLIST SECTIONS (Standardized Structure & Table Layout) */}
+      {/* 3. FOUR CHECKLIST SECTIONS (Standardized Structure & Table Layout) */}
       <div className="space-y-2">
-        {/* SECTION 1: DESIGN (Compact Two-Row Format) */}
+        {/* SECTION 1: PRINT FILES & DESIGN */}
         <div className="border-b border-zinc-200 pb-1.5">
           <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
             <div className="flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
               <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                1. Design
+                1. Print Files & Design
               </h2>
               <span className="text-zinc-400 font-normal mx-0.5">—</span>
-              {renderStatusBadge(designStatus)}
+              {renderStatusBadge(printStatus)}
             </div>
             <div className="flex items-center gap-1 text-[9px] text-zinc-500">
               <span className="w-3 h-3 border border-zinc-400 rounded-sm inline-block shrink-0" />
-              <span>Verified for fabrication</span>
+              <span>Design & print verified</span>
             </div>
           </div>
 
@@ -439,36 +439,9 @@ export function StallChecklistSheet({
                   <span className="text-zinc-400 italic text-[11px]">Not Added</span>
                 )}
               </div>
-            </div>
 
-            {booth.notes && (
-              <div className="text-[10px] text-zinc-600 italic">
-                <span className="text-zinc-500 not-italic font-medium">Remarks: </span>
-                {booth.notes}
-              </div>
-            )}
-          </div>
-        </div>
+              <span className="text-zinc-300 hidden sm:inline">|</span>
 
-        {/* SECTION 2: PRINT FILES & GOODIES */}
-        <div className="border-b border-zinc-200 pb-1.5">
-          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
-              <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                2. Print Files & Goodies
-              </h2>
-              <span className="text-zinc-400 font-normal mx-0.5">—</span>
-              {renderStatusBadge(printStatus)}
-            </div>
-            <div className="flex items-center gap-1 text-[9px] text-zinc-500">
-              <span className="w-3 h-3 border border-zinc-400 rounded-sm inline-block shrink-0" />
-              <span>Print verified & checked</span>
-            </div>
-          </div>
-
-          <div className="text-[11px] text-zinc-800 space-y-0.5">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
               <div>
                 <span className="text-zinc-500 font-semibold">Print Status: </span>
                 <span className="font-bold text-zinc-950">{booth.print_file_status || 'Designs Pending'}</span>
@@ -527,9 +500,15 @@ export function StallChecklistSheet({
               )}
             </div>
 
-            {/* Print and Goodies Remarks */}
-            {(booth.print_remark || booth.goodies_remark) && (
+            {/* Remarks */}
+            {(booth.notes || booth.print_remark || booth.goodies_remark) && (
               <div className="text-[10px] text-zinc-600 italic flex flex-wrap gap-x-3 gap-y-0.5">
+                {booth.notes && (
+                  <div>
+                    <span className="text-zinc-500 not-italic font-medium">Remarks: </span>
+                    {booth.notes}
+                  </div>
+                )}
                 {booth.print_remark && (
                   <div>
                     <span className="text-zinc-500 not-italic font-medium">Print Remark: </span>
@@ -581,13 +560,13 @@ export function StallChecklistSheet({
           </div>
         </div>
 
-        {/* SECTION 3: PRODUCTION REQUIREMENTS */}
+        {/* SECTION 2: PRODUCTION REQUIREMENTS */}
         <div className="border-b border-zinc-200 pb-1.5">
           <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
             <div className="flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
               <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                3. Production Requirements
+                2. Production Requirements
               </h2>
               <span className="text-zinc-400 font-normal mx-0.5">—</span>
               {renderStatusBadge(prodStatus)}
@@ -635,13 +614,13 @@ export function StallChecklistSheet({
           )}
         </div>
 
-        {/* SECTION 4: FURNITURE */}
+        {/* SECTION 3: FURNITURE */}
         <div className="border-b border-zinc-200 pb-1.5">
           <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
             <div className="flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
               <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                4. Furniture
+                3. Furniture
               </h2>
               <span className="text-zinc-400 font-normal mx-0.5">—</span>
               {renderStatusBadge(furnStatus)}
@@ -688,13 +667,13 @@ export function StallChecklistSheet({
           )}
         </div>
 
-        {/* SECTION 5: ELECTRICAL */}
+        {/* SECTION 4: ELECTRICAL */}
         <div className="border-b border-zinc-200 pb-1.5">
           <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
             <div className="flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
               <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                5. Electrical
+                4. Electrical
               </h2>
               <span className="text-zinc-400 font-normal mx-0.5">—</span>
               {renderStatusBadge(elecStatus)}
