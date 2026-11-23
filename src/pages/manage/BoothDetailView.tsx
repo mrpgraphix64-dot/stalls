@@ -25,11 +25,13 @@ import {
   FileText,
   Tv,
   Box,
+  Folder,
   MessageSquare,
   Save,
   Share2,
   Upload,
   Image as ImageIcon,
+  Eye,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -161,6 +163,43 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [editIsFinal3D, setEditIsFinal3D] = useState<boolean>(false);
   const [editNote3D, setEditNote3D] = useState<string>('');
   const [isUpdating3D, setIsUpdating3D] = useState<boolean>(false);
+  const [is3DMenuOpen, setIs3DMenuOpen] = useState<boolean>(false);
+  const [previewModalImg, setPreviewModalImg] = useState<{ url: string; title: string } | null>(null);
+
+  // Fast resolution for 3D Stall Views & Print Files quick shortcuts
+  const valid3DViews = useMemo(() => {
+    return (views3D || []).filter(
+      (v) =>
+        (v.drive_url && (v.drive_url.trim().startsWith('https://') || v.drive_url.trim().startsWith('http://'))) ||
+        (v.preview_image_url && v.preview_image_url.trim().length > 0)
+    );
+  }, [views3D]);
+
+  const primary3DView = useMemo(() => {
+    if (valid3DViews.length === 0) return null;
+    return valid3DViews.find((v) => v.is_final === 1) || valid3DViews[0];
+  }, [valid3DViews]);
+
+  const primary3DTarget = useMemo(() => {
+    if (!primary3DView) return null;
+    const drive = (primary3DView.drive_url || '').trim();
+    if (drive.startsWith('https://') || drive.startsWith('http://')) {
+      return drive;
+    }
+    const img = (primary3DView.preview_image_url || '').trim();
+    if (img.startsWith('/') || img.startsWith('https://') || img.startsWith('http://')) {
+      return img;
+    }
+    return null;
+  }, [primary3DView]);
+
+  const validPrintFilesUrl = useMemo(() => {
+    const url = booth?.print_drive_url?.trim();
+    if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+      return url;
+    }
+    return null;
+  }, [booth?.print_drive_url]);
 
   // Section 2: Print Files State
   const [printStatus, setPrintStatus] = useState<string>('Designs Pending');
@@ -450,12 +489,17 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     const title = title3D.trim();
     const url = url3D.trim();
     const note = note3D.trim();
+    const previewImg = previewImg3D.trim();
 
     if (!title) {
       alert('Please enter a 3D view title (e.g. Front View, Perspective View).');
       return;
     }
-    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    if (!url && !previewImg) {
+      alert('Please add a 3D image or a 3D view link.');
+      return;
+    }
+    if (url && (!url.startsWith('http://') && !url.startsWith('https://'))) {
       alert('Please enter a valid web URL starting with https:// or http://');
       return;
     }
@@ -466,8 +510,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         booth_id: boothId,
         category: 'render_3d',
         title,
-        drive_url: url,
-        preview_image_url: previewImg3D.trim() || undefined,
+        drive_url: url || '',
+        preview_image_url: previewImg || undefined,
         is_final: isFinal3D ? 1 : 0,
         notes: note || undefined,
       });
@@ -492,7 +536,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const handleStartEdit3DView = (view: BoothLink) => {
     setEditingViewId(view.id);
     setEditTitle3D(view.title);
-    setEditUrl3D(view.drive_url);
+    setEditUrl3D(view.drive_url || '');
     setEditPreviewImg3D(view.preview_image_url || '');
     setEditIsFinal3D(view.is_final === 1);
     setEditNote3D(view.notes || '');
@@ -506,12 +550,17 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     const title = editTitle3D.trim();
     const url = editUrl3D.trim();
     const note = editNote3D.trim();
+    const previewImg = editPreviewImg3D.trim();
 
     if (!title) {
       alert('Please enter a title.');
       return;
     }
-    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    if (!url && !previewImg) {
+      alert('Please add a 3D image or a 3D view link.');
+      return;
+    }
+    if (url && (!url.startsWith('http://') && !url.startsWith('https://'))) {
       alert('Please enter a valid web URL starting with https:// or http://');
       return;
     }
@@ -521,8 +570,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       const updated = await updateLink(id, {
         category: 'render_3d',
         title,
-        drive_url: url,
-        preview_image_url: editPreviewImg3D.trim() || (null as any),
+        drive_url: url || '',
+        preview_image_url: previewImg || (null as any),
         is_final: editIsFinal3D ? 1 : 0,
         notes: note || undefined,
       });
@@ -1098,6 +1147,131 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         })()}
 
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          {/* 1. View 3D Quick Action */}
+          {primary3DTarget ? (
+            valid3DViews.length > 1 ? (
+              <div className="relative inline-flex items-center rounded-xl shadow-sm shrink-0">
+                <a
+                  href={primary3DTarget}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 sm:px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 text-xs font-semibold rounded-l-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                  title={
+                    primary3DView?.drive_url
+                      ? `Open 3D Stall View: ${primary3DView.title || 'Primary View'}`
+                      : `View 3D Stall Image: ${primary3DView?.title || 'Primary Image'}`
+                  }
+                >
+                  <Box className="w-3.5 h-3.5 text-sky-400" />
+                  <span>{primary3DView?.drive_url ? 'View 3D' : 'View 3D Image'}</span>
+                  <ExternalLink className="w-3 h-3 opacity-60" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setIs3DMenuOpen(!is3DMenuOpen)}
+                  className="px-1.5 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border-y border-r border-sky-500/30 text-sky-400 text-xs rounded-r-xl transition-all flex items-center cursor-pointer"
+                  title={`All 3D Views (${valid3DViews.length})`}
+                  aria-expanded={is3DMenuOpen}
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {is3DMenuOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 w-64 bg-[#161822] border border-white/[0.1] rounded-xl shadow-xl py-1 text-xs">
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-white/[0.06]">
+                      Saved 3D Views ({valid3DViews.length})
+                    </div>
+                    {valid3DViews.map((v) => {
+                      const target = (v.drive_url && (v.drive_url.startsWith('https://') || v.drive_url.startsWith('http://')))
+                        ? v.drive_url
+                        : v.preview_image_url;
+                      const isImg = !v.drive_url?.trim() && Boolean(v.preview_image_url?.trim());
+                      return (
+                        <a
+                          key={v.id}
+                          href={target || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setIs3DMenuOpen(false)}
+                          className="flex items-center justify-between px-3 py-2 text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {isImg ? (
+                              <ImageIcon className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                            ) : (
+                              <Box className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                            )}
+                            <span className="truncate">{v.title || '3D View'}</span>
+                          </div>
+                          <div className="flex items-center gap-1 ml-2 shrink-0">
+                            {isImg && (
+                              <span className="text-[9px] text-sky-400 bg-sky-500/10 px-1 py-0.2 rounded font-mono">
+                                Image
+                              </span>
+                            )}
+                            {v.is_final === 1 && (
+                              <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded font-mono">
+                                Final
+                              </span>
+                            )}
+                            <ExternalLink className="w-3 h-3 text-zinc-500" />
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <a
+                href={primary3DTarget}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 sm:px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                title={
+                  primary3DView?.drive_url
+                    ? `Open 3D Stall View: ${primary3DView.title || '3D View'}`
+                    : `View 3D Stall Image: ${primary3DView?.title || '3D Image'}`
+                }
+              >
+                <Box className="w-3.5 h-3.5 text-sky-400" />
+                <span>{primary3DView?.drive_url ? 'View 3D' : 'View 3D Image'}</span>
+                <ExternalLink className="w-3 h-3 opacity-60" />
+              </a>
+            )
+          ) : (
+            <span
+              className="px-2.5 sm:px-3 py-1.5 bg-white/[0.02] border border-white/[0.06] text-zinc-500 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-not-allowed select-none opacity-60 shrink-0"
+              title="No 3D Stall View or image saved for this booth yet"
+            >
+              <Box className="w-3.5 h-3.5 text-zinc-600" />
+              <span>View 3D</span>
+            </span>
+          )}
+
+          {/* 2. Print Files Google Drive Quick Action */}
+          {validPrintFilesUrl ? (
+            <a
+              href={validPrintFilesUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 sm:px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+              title="Open Google Drive Print Files Folder"
+            >
+              <Folder className="w-3.5 h-3.5 text-amber-400" />
+              <span>Print Files</span>
+              <ExternalLink className="w-3 h-3 opacity-60" />
+            </a>
+          ) : (
+            <span
+              className="px-2.5 sm:px-3 py-1.5 bg-white/[0.02] border border-white/[0.06] text-zinc-500 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-not-allowed select-none opacity-60 shrink-0"
+              title="No Google Drive Print Files folder saved for this booth yet"
+            >
+              <Folder className="w-3.5 h-3.5 text-zinc-600" />
+              <span>Print Files</span>
+            </span>
+          )}
+
+          {/* 3. Share Stall Details */}
           <button
             type="button"
             onClick={() => setIsShareModalOpen(true)}
@@ -1571,12 +1745,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                           />
                                         </div>
                                         <div>
-                                          <label className="text-[10px] text-zinc-400 block mb-0.5 font-medium">3D View Link / URL</label>
+                                          <label className="text-[10px] text-zinc-400 block mb-0.5 font-medium">3D View Link / URL (Optional if image added)</label>
                                           <input
                                             type="url"
                                             value={editUrl3D}
                                             onChange={(e) => setEditUrl3D(e.target.value)}
-                                            placeholder="https://..."
+                                            placeholder="https://... (Optional)"
                                             className="w-full min-h-[36px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
                                           />
                                         </div>
@@ -1666,15 +1840,27 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                   );
                                 }
 
+                                const hasImg = Boolean(view.preview_image_url && view.preview_image_url.trim());
+                                const hasUrl = Boolean(view.drive_url && view.drive_url.trim());
+
                                 return (
                                   <div
                                     key={view.id}
                                     className="flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors gap-2"
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
-                                      {view.preview_image_url && (
-                                        <div className="w-8 h-8 rounded border border-zinc-700 bg-black/40 overflow-hidden shrink-0">
-                                          <img src={view.preview_image_url} alt={view.title} className="w-full h-full object-cover" />
+                                      {hasImg ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setPreviewModalImg({ url: view.preview_image_url!, title: view.title })}
+                                          className="w-8 h-8 rounded border border-zinc-700 bg-black/40 overflow-hidden shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                                          title="Click to view full image"
+                                        >
+                                          <img src={view.preview_image_url || undefined} alt={view.title} className="w-full h-full object-cover" />
+                                        </button>
+                                      ) : (
+                                        <div className="w-8 h-8 rounded border border-zinc-800 bg-zinc-950 flex items-center justify-center shrink-0 text-amber-400/80">
+                                          <Box className="w-4 h-4" />
                                         </div>
                                       )}
                                       <span className="font-semibold text-zinc-200 text-xs truncate" title={view.title}>
@@ -1692,16 +1878,32 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                       )}
                                     </div>
                                     <div className="flex items-center gap-2 text-xs font-semibold shrink-0">
-                                      <a
-                                        href={view.drive_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1"
-                                        title="Open 3D View in new tab"
-                                      >
-                                        <span>Open</span>
-                                        <ExternalLink className="w-3 h-3" />
-                                      </a>
+                                      {hasImg && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setPreviewModalImg({ url: view.preview_image_url!, title: view.title })}
+                                          className="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                          title="View full-size 3D image"
+                                        >
+                                          <Eye className="w-3 h-3" />
+                                          <span>View Image</span>
+                                        </button>
+                                      )}
+                                      {hasImg && hasUrl && (
+                                        <span className="text-zinc-600">|</span>
+                                      )}
+                                      {hasUrl && (
+                                        <a
+                                          href={view.drive_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1"
+                                          title="Open 3D View in new tab"
+                                        >
+                                          <span>Open 3D View</span>
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      )}
                                       <span className="text-zinc-600">|</span>
                                       <button
                                         type="button"
@@ -1778,9 +1980,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                   type="url"
                                   value={url3D}
                                   onChange={(e) => setUrl3D(e.target.value)}
-                                  placeholder="3D View Link / URL (https://...)"
+                                  placeholder="3D View Link / URL (Optional if image uploaded)"
                                   className="w-full min-h-[36px] bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
-                                  required
                                 />
                               </div>
 
@@ -3417,6 +3618,53 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         electricalItems={elecItems}
         goodiesItems={goodiesItems}
       />
+
+      {/* 3D Image Full-size Preview Lightbox Modal */}
+      {previewModalImg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setPreviewModalImg(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-950/80">
+              <div className="flex items-center gap-2 min-w-0">
+                <ImageIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-sm font-semibold text-zinc-100 truncate">
+                  {previewModalImg.title || '3D Design Preview'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewModalImg.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 text-xs text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                >
+                  <span>Open Full Tab</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalImg(null)}
+                  className="p-1 text-zinc-400 hover:text-zinc-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-2 sm:p-4 overflow-auto flex items-center justify-center bg-black/60 max-h-[calc(90vh-60px)]">
+              <img
+                src={previewModalImg.url}
+                alt={previewModalImg.title || '3D Preview'}
+                className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

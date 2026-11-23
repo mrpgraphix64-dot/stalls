@@ -52,6 +52,7 @@ export interface BoothItem {
   design_responsibility?: 'Client Side' | 'Our Side' | string;
   print_file_status?: 'Designs Pending' | 'Partially Received' | 'All Files Ready' | string;
   print_drive_url?: string | null;
+  primary_3d_url?: string | null;
   print_remark?: string | null;
   goodies_status?: 'Awaiting Client Artwork' | 'Artwork Received' | 'Ready for Printing' | string;
   goodies_drive_url?: string | null;

@@ -26,6 +26,8 @@ $files = [
     __DIR__ . '/test_quick_work_status.php',
     __DIR__ . '/test_merge_design_into_print_files.php',
     __DIR__ . '/test_3d_preview_images_and_pdf.php',
+    __DIR__ . '/test_3d_and_print_quick_links.php',
+    __DIR__ . '/test_3d_image_without_url.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {

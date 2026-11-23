@@ -68,7 +68,22 @@ if ($method === 'GET') {
                  FROM booth_tasks 
                  WHERE booth_id = b.id AND (LOWER(phase) LIKE '%production%' OR LOWER(task_name) LIKE '%production%') 
                  LIMIT 1
-                ) AS prod_status
+                ) AS prod_status,
+                (SELECT 
+                    CASE 
+                        WHEN drive_url IS NOT NULL AND drive_url != '' THEN drive_url 
+                        WHEN preview_image_url IS NOT NULL AND preview_image_url != '' THEN preview_image_url 
+                        ELSE NULL 
+                    END 
+                 FROM booth_links 
+                 WHERE booth_id = b.id AND category = 'render_3d' 
+                   AND ((drive_url IS NOT NULL AND drive_url != '') OR (preview_image_url IS NOT NULL AND preview_image_url != '')) 
+                 ORDER BY is_final DESC, created_at ASC LIMIT 1) AS primary_3d_url,
+                (SELECT preview_image_url FROM booth_links WHERE booth_id = b.id AND category = 'render_3d' AND preview_image_url IS NOT NULL AND preview_image_url != '' ORDER BY is_final DESC, created_at ASC LIMIT 1) AS primary_3d_preview_url,
+                COALESCE(
+                    NULLIF(b.print_drive_url, ''),
+                    (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1)
+                ) AS print_drive_url
             FROM booths b
             WHERE b.event_id = :event_id AND b.status != 'archived'
             ORDER BY b.booth_number ASC, b.created_at DESC

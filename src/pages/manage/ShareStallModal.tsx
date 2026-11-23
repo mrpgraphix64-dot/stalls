@@ -53,7 +53,11 @@ export function ShareStallModal({
 
   // Included 3D Links (default: all checked)
   const [included3DLinkIds, setIncluded3DLinkIds] = useState<Set<string>>(() => {
-    return new Set(views3D.filter((v) => v.drive_url && v.drive_url.trim()).map((v) => v.id));
+    return new Set(
+      views3D
+        .filter((v) => (v.drive_url && v.drive_url.trim()) || (v.preview_image_url && v.preview_image_url.trim()))
+        .map((v) => v.id)
+    );
   });
 
   // Included Items (default: all checked)
@@ -87,7 +91,11 @@ export function ShareStallModal({
   useEffect(() => {
     if (isOpen) {
       setIncluded3DLinkIds(
-        new Set(views3D.filter((v) => v.drive_url && v.drive_url.trim()).map((v) => v.id))
+        new Set(
+          views3D
+            .filter((v) => (v.drive_url && v.drive_url.trim()) || (v.preview_image_url && v.preview_image_url.trim()))
+            .map((v) => v.id)
+        )
       );
       const ids = new Set<string>();
       productionItems.forEach((i) => ids.add(i.id));
@@ -443,20 +451,36 @@ export function ShareStallModal({
                               onChange={() => toggle3DLink(v.id)}
                               className="rounded border-zinc-700 bg-zinc-800 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                             />
+                            {v.preview_image_url && (
+                              <img src={v.preview_image_url} alt="" className="w-5 h-5 rounded object-cover border border-zinc-700 shrink-0" />
+                            )}
                             <span className="text-xs font-medium text-zinc-300 truncate">
                               {v.title || 'Interactive 3D View'}
                             </span>
                           </div>
-                          <a
-                            href={v.drive_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-zinc-500 hover:text-amber-400 p-1"
-                            title="Preview link"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                          {v.drive_url && (v.drive_url.startsWith('http://') || v.drive_url.startsWith('https://')) ? (
+                            <a
+                              href={v.drive_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-zinc-500 hover:text-amber-400 p-1"
+                              title="Preview link"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : v.preview_image_url ? (
+                            <a
+                              href={v.preview_image_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-zinc-500 hover:text-amber-400 p-1"
+                              title="Preview image"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : null}
                         </label>
                       );
                     })}

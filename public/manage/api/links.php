@@ -189,8 +189,31 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Link title is required.'], 400);
         }
 
-        if (empty($driveUrl) || !filter_var($driveUrl, FILTER_VALIDATE_URL)) {
-            reworkzone_json_response(['success' => false, 'error' => 'A valid Google Drive URL is required.'], 400);
+        // For render_3d: allow Image Only, Link Only, or Image + Link.
+        // Reject only when BOTH image and URL are missing.
+        if ($category === 'render_3d') {
+            if (empty($driveUrl) && empty($previewImageUrl)) {
+                reworkzone_json_response(['success' => false, 'error' => 'Please add a 3D image or a 3D view link.'], 400);
+            }
+            if (!empty($driveUrl) && !filter_var($driveUrl, FILTER_VALIDATE_URL)) {
+                reworkzone_json_response(['success' => false, 'error' => 'Please enter a valid 3D view URL.'], 400);
+            }
+        } else {
+            if (empty($driveUrl) || !filter_var($driveUrl, FILTER_VALIDATE_URL)) {
+                reworkzone_json_response(['success' => false, 'error' => 'A valid Google Drive URL is required.'], 400);
+            }
+        }
+
+        // Security check on preview_image_url
+        if (!empty($previewImageUrl)) {
+            if (strpos($previewImageUrl, '..') !== false) {
+                reworkzone_json_response(['success' => false, 'error' => 'Invalid preview image path.'], 400);
+            }
+            $isSafeInternal = strpos($previewImageUrl, '/uploads/3d_previews/') === 0;
+            $isValidHttp = filter_var($previewImageUrl, FILTER_VALIDATE_URL) && (strpos($previewImageUrl, 'http://') === 0 || strpos($previewImageUrl, 'https://') === 0);
+            if (!$isSafeInternal && !$isValidHttp) {
+                reworkzone_json_response(['success' => false, 'error' => 'Preview image must be a valid uploaded file path or HTTPS URL.'], 400);
+            }
         }
 
         if (!in_array($category, $validCategories, true)) {
@@ -294,8 +317,31 @@ if ($method === 'POST') {
             reworkzone_json_response(['success' => false, 'error' => 'Link title is required.'], 400);
         }
 
-        if (empty($driveUrl) || !filter_var($driveUrl, FILTER_VALIDATE_URL)) {
-            reworkzone_json_response(['success' => false, 'error' => 'A valid Google Drive URL is required.'], 400);
+        // For render_3d: allow Image Only, Link Only, or Image + Link.
+        // Reject only when BOTH image and URL are missing.
+        if ($category === 'render_3d') {
+            if (empty($driveUrl) && empty($previewImageUrl)) {
+                reworkzone_json_response(['success' => false, 'error' => 'Please add a 3D image or a 3D view link.'], 400);
+            }
+            if (!empty($driveUrl) && !filter_var($driveUrl, FILTER_VALIDATE_URL)) {
+                reworkzone_json_response(['success' => false, 'error' => 'Please enter a valid 3D view URL.'], 400);
+            }
+        } else {
+            if (empty($driveUrl) || !filter_var($driveUrl, FILTER_VALIDATE_URL)) {
+                reworkzone_json_response(['success' => false, 'error' => 'A valid Google Drive URL is required.'], 400);
+            }
+        }
+
+        // Security check on preview_image_url
+        if (!empty($previewImageUrl)) {
+            if (strpos($previewImageUrl, '..') !== false) {
+                reworkzone_json_response(['success' => false, 'error' => 'Invalid preview image path.'], 400);
+            }
+            $isSafeInternal = strpos($previewImageUrl, '/uploads/3d_previews/') === 0;
+            $isValidHttp = filter_var($previewImageUrl, FILTER_VALIDATE_URL) && (strpos($previewImageUrl, 'http://') === 0 || strpos($previewImageUrl, 'https://') === 0);
+            if (!$isSafeInternal && !$isValidHttp) {
+                reworkzone_json_response(['success' => false, 'error' => 'Preview image must be a valid uploaded file path or HTTPS URL.'], 400);
+            }
         }
 
         if (!in_array($category, $validCategories, true)) {

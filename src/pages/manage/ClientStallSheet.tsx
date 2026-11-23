@@ -62,7 +62,9 @@ export function ClientStallSheet({
 
   // Filter 3D views based on review modal selection
   const active3DViews = views3D.filter((v) => {
-    if (!v.drive_url || !v.drive_url.trim()) return false;
+    const hasUrl = Boolean(v.drive_url && v.drive_url.trim());
+    const hasImg = Boolean(v.preview_image_url && v.preview_image_url.trim());
+    if (!hasUrl && !hasImg) return false;
     if (included3DLinkIds) return included3DLinkIds.has(v.id);
     return true;
   });
@@ -271,13 +273,14 @@ export function ClientStallSheet({
               </h2>
             </div>
             <span className="text-[10px] text-zinc-500 font-medium">
-              Clickable 3D Interactive Link
+              3D Spatial Reference &amp; Walkthrough
             </span>
           </div>
 
           <div className="space-y-2">
             {active3DViews.map((v, idx) => {
               const url = (v.drive_url || '').trim();
+              const hasUrl = url.startsWith('http://') || url.startsWith('https://');
               const title = v.title?.trim() || `Interactive 3D View ${idx + 1}`;
               return (
                 <div
@@ -298,16 +301,22 @@ export function ClientStallSheet({
                     </div>
                   </div>
 
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="client-pdf-link inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 text-xs font-bold rounded-md shadow-xs transition-colors shrink-0"
-                    title={`Open ${title}`}
-                  >
-                    <span>View 3D Design</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  {hasUrl ? (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="client-pdf-link inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 text-xs font-bold rounded-md shadow-xs transition-colors shrink-0"
+                      title={`Open ${title}`}
+                    >
+                      <span>View 3D Design</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  ) : (
+                    <span className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 bg-zinc-100 text-zinc-700 text-xs font-semibold rounded-md border border-zinc-200 shrink-0">
+                      <span>Design Image Attached</span>
+                    </span>
+                  )}
                 </div>
               );
             })}

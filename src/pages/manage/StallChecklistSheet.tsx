@@ -220,7 +220,8 @@ export function StallChecklistSheet({
   // 3D Views processing
   const valid3DViews = (views3D || []).filter((v) => {
     const u = (v.drive_url || (v as any).url || '').trim();
-    return u.startsWith('http://') || u.startsWith('https://');
+    const img = (v.preview_image_url || '').trim();
+    return u.startsWith('http://') || u.startsWith('https://') || img.length > 0;
   });
 
   const getValidImageUrl = (url?: string | null): string | null => {
@@ -271,12 +272,14 @@ export function StallChecklistSheet({
   const mainFolderUrl = (booth.main_drive_folder_url || '').trim();
   const hasMainFolder = mainFolderUrl.startsWith('http://') || mainFolderUrl.startsWith('https://');
   const single3DUrl =
-    valid3DViews.length > 0
-      ? (valid3DViews[0].drive_url || (valid3DViews[0] as any).url).trim()
+    primary3DView && primary3DView.drive_url && (primary3DView.drive_url.startsWith('http://') || primary3DView.drive_url.startsWith('https://'))
+      ? primary3DView.drive_url.trim()
+      : valid3DViews.length > 0 && valid3DViews[0].drive_url && (valid3DViews[0].drive_url.startsWith('http://') || valid3DViews[0].drive_url.startsWith('https://'))
+      ? valid3DViews[0].drive_url.trim()
       : hasMainFolder
       ? mainFolderUrl
       : '';
-  const has3D = Boolean(single3DUrl);
+  const has3D = Boolean(single3DUrl || primaryPreviewImg || valid3DViews.length > 0);
 
   // Print & Goodies Links processing
   const printUrl = (booth.print_drive_url || '').trim();
@@ -452,35 +455,48 @@ export function StallChecklistSheet({
                   <span className="inline-flex items-center gap-1.5 flex-wrap">
                     {valid3DViews.map((v, idx) => {
                       const vUrl = (v.drive_url || (v as any).url || '').trim();
+                      const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
                       const vTitle = v.title?.trim() || `View ${idx + 1}`;
                       return (
                         <React.Fragment key={v.id || idx}>
                           {idx > 0 && <span className="text-zinc-300">/</span>}
-                          <a
-                            href={vUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
-                            title={`Open ${vTitle}`}
-                          >
-                            {vTitle}
-                          </a>
+                          {hasVUrl ? (
+                            <a
+                              href={vUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                              title={`Open ${vTitle}`}
+                            >
+                              {vTitle}
+                            </a>
+                          ) : (
+                            <span className="text-zinc-950 font-bold text-[11px]">
+                              {vTitle} (Image Attached)
+                            </span>
+                          )}
                         </React.Fragment>
                       );
                     })}
                   </span>
                 ) : has3D ? (
-                  <a
-                    href={single3DUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
-                    title="Open 3D Design in new tab"
-                  >
-                    {valid3DViews.length === 1 && valid3DViews[0].title && valid3DViews[0].title.toLowerCase() !== 'view 3d design'
-                      ? valid3DViews[0].title
-                      : 'View 3D Design'}
-                  </a>
+                  single3DUrl ? (
+                    <a
+                      href={single3DUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                      title="Open 3D Design in new tab"
+                    >
+                      {valid3DViews.length === 1 && valid3DViews[0].title && valid3DViews[0].title.toLowerCase() !== 'view 3d design'
+                        ? valid3DViews[0].title
+                        : 'View 3D Design'}
+                    </a>
+                  ) : (
+                    <span className="text-zinc-950 font-bold text-[11px]">
+                      {valid3DViews[0]?.title || '3D Design'} (Image Attached)
+                    </span>
+                  )
                 ) : (
                   <span className="text-zinc-400 italic text-[11px]">Not Added</span>
                 )}
@@ -621,7 +637,7 @@ export function StallChecklistSheet({
                     3D Stall Design Preview:{' '}
                     <strong className="text-zinc-950 font-bold">{primary3DView?.title || '3D View'}</strong>
                   </span>
-                  {primary3DView && (primary3DView.drive_url || (primary3DView as any).url) && (
+                  {primary3DView && (primary3DView.drive_url || (primary3DView as any).url)?.trim() && (
                     <span className="ml-2">
                       (
                       <a

@@ -940,13 +940,12 @@ export function EventDetailView({
                               <span className="font-semibold text-zinc-100 text-sm group-hover:text-amber-300 transition-colors block truncate max-w-[220px] lg:max-w-[280px]" title={b.client_name}>
                                 {b.client_name}
                               </span>
-                              {b.booking_stage === 'discussion' ? (
+                              {b.booking_stage === 'discussion' && (
                                 <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                                   Discussion
                                 </span>
-                              ) : (
-                                <BoothWorkStatusBadges booth={b} />
                               )}
+                              <BoothWorkStatusBadges booth={b} />
                             </div>
                           </td>
 
@@ -1127,13 +1126,12 @@ export function EventDetailView({
                           <span className="font-semibold text-zinc-100 text-sm truncate">
                             {b.client_name}
                           </span>
-                          {b.booking_stage === 'discussion' ? (
+                          {b.booking_stage === 'discussion' && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                               Discussion
                             </span>
-                          ) : (
-                            <BoothWorkStatusBadges booth={b} />
                           )}
+                          <BoothWorkStatusBadges booth={b} />
                         </div>
                         <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
                       </div>

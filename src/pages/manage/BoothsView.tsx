@@ -1096,7 +1096,12 @@ export function BoothsView({
                       className="group hover:bg-zinc-800/40 odd:bg-transparent even:bg-white/[0.015] cursor-pointer transition-colors"
                     >
                       <td className="py-3.5 px-4 font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">
-                        {b.client_name}
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <span className="truncate max-w-[220px]" title={b.client_name}>
+                            {b.client_name}
+                          </span>
+                          <BoothWorkStatusBadges booth={b} />
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4 text-zinc-300">
@@ -1225,6 +1230,7 @@ export function BoothsView({
                       <span className="font-semibold text-zinc-100 text-sm truncate">
                         {b.client_name}
                       </span>
+                      <BoothWorkStatusBadges booth={b} />
                     </div>
                     <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
                   </div>
