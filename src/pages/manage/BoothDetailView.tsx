@@ -28,6 +28,8 @@ import {
   MessageSquare,
   Save,
   Share2,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -46,6 +48,7 @@ import {
   createLink,
   updateLink,
   deleteLink,
+  uploadPreviewImage,
 } from './api';
 import { BoothItem, BoothTask, BoothItemRecord, StallType, BoothLink } from './types';
 import { Modal } from './Modal';
@@ -145,11 +148,17 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [showAdd3DForm, setShowAdd3DForm] = useState<boolean>(false);
   const [title3D, setTitle3D] = useState<string>('');
   const [url3D, setUrl3D] = useState<string>('');
+  const [previewImg3D, setPreviewImg3D] = useState<string>('');
+  const [isUploading3DImg, setIsUploading3DImg] = useState<boolean>(false);
+  const [isFinal3D, setIsFinal3D] = useState<boolean>(false);
   const [note3D, setNote3D] = useState<string>('');
   const [isSaving3D, setIsSaving3D] = useState<boolean>(false);
   const [editingViewId, setEditingViewId] = useState<string | null>(null);
   const [editTitle3D, setEditTitle3D] = useState<string>('');
   const [editUrl3D, setEditUrl3D] = useState<string>('');
+  const [editPreviewImg3D, setEditPreviewImg3D] = useState<string>('');
+  const [isEditingUploading3DImg, setIsEditingUploading3DImg] = useState<boolean>(false);
+  const [editIsFinal3D, setEditIsFinal3D] = useState<boolean>(false);
   const [editNote3D, setEditNote3D] = useState<string>('');
   const [isUpdating3D, setIsUpdating3D] = useState<boolean>(false);
 
@@ -396,6 +405,46 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   };
 
   // 1B. 3D View of Stall Handlers
+  const handleUpload3DImage = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image file size must be less than 10MB.');
+      return;
+    }
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      alert('Please upload a JPG, PNG, or WebP image.');
+      return;
+    }
+
+    if (isEditMode) {
+      setIsEditingUploading3DImg(true);
+    } else {
+      setIsUploading3DImg(true);
+    }
+
+    try {
+      const res = await uploadPreviewImage(file);
+      if (isEditMode) {
+        setEditPreviewImg3D(res.preview_image_url);
+      } else {
+        setPreviewImg3D(res.preview_image_url);
+      }
+      showToast('3D preview image uploaded successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload preview image.');
+    } finally {
+      if (isEditMode) {
+        setIsEditingUploading3DImg(false);
+      } else {
+        setIsUploading3DImg(false);
+      }
+      e.target.value = '';
+    }
+  };
+
   const handleAdd3DView = async (e: React.FormEvent) => {
     e.preventDefault();
     const title = title3D.trim();
@@ -418,12 +467,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         category: 'render_3d',
         title,
         drive_url: url,
+        preview_image_url: previewImg3D.trim() || undefined,
+        is_final: isFinal3D ? 1 : 0,
         notes: note || undefined,
       });
-      setViews3D((prev) => [created, ...prev]);
+      setViews3D((prev) => [
+        created,
+        ...(isFinal3D ? prev.map((v) => ({ ...v, is_final: 0 })) : prev),
+      ]);
       setTitle3D('');
       setUrl3D('');
       setNote3D('');
+      setPreviewImg3D('');
+      setIsFinal3D(false);
       setShowAdd3DForm(false);
       showToast(`Added 3D View: ${title}`);
     } catch (err: any) {
@@ -437,6 +493,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setEditingViewId(view.id);
     setEditTitle3D(view.title);
     setEditUrl3D(view.drive_url);
+    setEditPreviewImg3D(view.preview_image_url || '');
+    setEditIsFinal3D(view.is_final === 1);
     setEditNote3D(view.notes || '');
   };
 
@@ -464,9 +522,17 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         category: 'render_3d',
         title,
         drive_url: url,
+        preview_image_url: editPreviewImg3D.trim() || (null as any),
+        is_final: editIsFinal3D ? 1 : 0,
         notes: note || undefined,
       });
-      setViews3D((prev) => prev.map((v) => (v.id === id ? updated : v)));
+      setViews3D((prev) =>
+        prev.map((v) => {
+          if (v.id === id) return updated;
+          if (editIsFinal3D) return { ...v, is_final: 0 };
+          return v;
+        })
+      );
       setEditingViewId(null);
       showToast(`Updated 3D View: ${title}`);
     } catch (err: any) {
@@ -1495,7 +1561,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         <div>
-                                          <label className="text-[10px] text-zinc-400 block mb-0.5">View Title</label>
+                                          <label className="text-[10px] text-zinc-400 block mb-0.5 font-medium">View Title</label>
                                           <input
                                             type="text"
                                             value={editTitle3D}
@@ -1505,7 +1571,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                           />
                                         </div>
                                         <div>
-                                          <label className="text-[10px] text-zinc-400 block mb-0.5">3D View Link / URL</label>
+                                          <label className="text-[10px] text-zinc-400 block mb-0.5 font-medium">3D View Link / URL</label>
                                           <input
                                             type="url"
                                             value={editUrl3D}
@@ -1516,8 +1582,48 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                         </div>
                                       </div>
 
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between">
+                                          <label className="text-[10px] text-zinc-400 block font-medium">3D Preview Image (Optional)</label>
+                                          {editPreviewImg3D && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setEditPreviewImg3D('')}
+                                              className="text-[10px] text-red-400 hover:text-red-300 cursor-pointer"
+                                            >
+                                              Remove Image
+                                            </button>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {editPreviewImg3D ? (
+                                            <div className="relative w-12 h-9 rounded bg-black/40 border border-amber-500/40 overflow-hidden shrink-0">
+                                              <img src={editPreviewImg3D} alt="Preview" className="w-full h-full object-cover" />
+                                            </div>
+                                          ) : null}
+                                          <label className="min-h-[34px] px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5 transition-colors shrink-0">
+                                            <Upload className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>{isEditingUploading3DImg ? 'Uploading...' : editPreviewImg3D ? 'Change Image' : 'Upload Image (JPG/PNG/WebP)'}</span>
+                                            <input
+                                              type="file"
+                                              accept="image/jpeg,image/png,image/webp"
+                                              onChange={(e) => handleUpload3DImage(e, true)}
+                                              disabled={isEditingUploading3DImg}
+                                              className="hidden"
+                                            />
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={editPreviewImg3D}
+                                            onChange={(e) => setEditPreviewImg3D(e.target.value)}
+                                            placeholder="Or paste direct image URL (https://...)"
+                                            className="flex-1 min-h-[34px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                                          />
+                                        </div>
+                                      </div>
+
                                       <div>
-                                        <label className="text-[10px] text-zinc-400 block mb-0.5">Note / Remark (Optional)</label>
+                                        <label className="text-[10px] text-zinc-400 block mb-0.5 font-medium">Note / Remark (Optional)</label>
                                         <input
                                           type="text"
                                           value={editNote3D}
@@ -1527,22 +1633,34 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                         />
                                       </div>
 
-                                      <div className="flex items-center justify-end gap-2 pt-1">
-                                        <button
-                                          type="button"
-                                          onClick={handleCancelEdit3DView}
-                                          className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
-                                        >
-                                          Cancel
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={isUpdating3D}
-                                          onClick={() => handleSaveEdit3DView(view.id)}
-                                          className="min-h-[34px] px-3.5 py-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                                        >
-                                          {isUpdating3D ? 'Saving...' : 'Save Changes'}
-                                        </button>
+                                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                        <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
+                                          <input
+                                            type="checkbox"
+                                            checked={editIsFinal3D}
+                                            onChange={(e) => setEditIsFinal3D(e.target.checked)}
+                                            className="rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-0 cursor-pointer"
+                                          />
+                                          <span className="font-medium text-[11px]">Designate as Primary / Final 3D View (used for PDF preview)</span>
+                                        </label>
+
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={handleCancelEdit3DView}
+                                            className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={isUpdating3D || isEditingUploading3DImg}
+                                            onClick={() => handleSaveEdit3DView(view.id)}
+                                            className="min-h-[34px] px-3.5 py-1 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                          >
+                                            {isUpdating3D ? 'Saving...' : 'Save Changes'}
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                   );
@@ -1554,9 +1672,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                     className="flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors gap-2"
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
+                                      {view.preview_image_url && (
+                                        <div className="w-8 h-8 rounded border border-zinc-700 bg-black/40 overflow-hidden shrink-0">
+                                          <img src={view.preview_image_url} alt={view.title} className="w-full h-full object-cover" />
+                                        </div>
+                                      )}
                                       <span className="font-semibold text-zinc-200 text-xs truncate" title={view.title}>
                                         {view.title}
                                       </span>
+                                      {view.is_final === 1 && (
+                                        <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 shrink-0">
+                                          Final
+                                        </span>
+                                      )}
                                       {view.notes && (
                                         <span className="text-[10px] text-amber-300/90 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium truncate max-w-[120px] sm:max-w-xs">
                                           {view.notes}
@@ -1657,6 +1785,46 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                               </div>
 
                               <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-[10px] text-zinc-400 font-semibold block">3D Preview Image (Optional)</label>
+                                  {previewImg3D && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewImg3D('')}
+                                      className="text-[10px] text-red-400 hover:text-red-300 cursor-pointer"
+                                    >
+                                      Remove Image
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {previewImg3D ? (
+                                    <div className="relative w-12 h-9 rounded bg-black/40 border border-amber-500/40 overflow-hidden shrink-0">
+                                      <img src={previewImg3D} alt="Preview" className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : null}
+                                  <label className="min-h-[34px] px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5 transition-colors shrink-0">
+                                    <Upload className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>{isUploading3DImg ? 'Uploading...' : previewImg3D ? 'Change Image' : 'Upload Image (JPG/PNG/WebP)'}</span>
+                                    <input
+                                      type="file"
+                                      accept="image/jpeg,image/png,image/webp"
+                                      onChange={(e) => handleUpload3DImage(e, false)}
+                                      disabled={isUploading3DImg}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={previewImg3D}
+                                    onChange={(e) => setPreviewImg3D(e.target.value)}
+                                    placeholder="Or paste direct image URL (https://...)"
+                                    className="flex-1 min-h-[34px] bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
                                 <input
                                   type="text"
                                   value={note3D}
@@ -1665,6 +1833,16 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                   className="w-full min-h-[36px] bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                                 />
                               </div>
+
+                              <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none py-0.5">
+                                <input
+                                  type="checkbox"
+                                  checked={isFinal3D}
+                                  onChange={(e) => setIsFinal3D(e.target.checked)}
+                                  className="rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-0 cursor-pointer"
+                                />
+                                <span className="font-medium text-[11px]">Designate as Primary / Final 3D View (used for PDF preview)</span>
+                              </label>
 
                               <div className="flex items-center justify-end gap-2 pt-1">
                                 <button
@@ -1676,7 +1854,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                 </button>
                                 <button
                                   type="submit"
-                                  disabled={isSaving3D}
+                                  disabled={isSaving3D || isUploading3DImg}
                                   className="min-h-[34px] px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-lg text-xs transition-all cursor-pointer shadow-sm"
                                 >
                                   {isSaving3D ? 'Saving...' : 'Save 3D View'}

@@ -141,9 +141,26 @@ export async function exportElementsToPdf(
     }
 
     const el = validElements[i];
+
+    // Ensure all preview and logo images in this stall sheet are loaded prior to canvas rendering
+    const images = Array.from(el.querySelectorAll<HTMLImageElement>('img'));
+    if (images.length > 0) {
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, 2500); // 2.5s fallback so bulk PDF export never stalls
+            img.onload = () => { clearTimeout(timer); resolve(); };
+            img.onerror = () => { clearTimeout(timer); resolve(); };
+          });
+        })
+      );
+    }
+
     const canvas = await html2canvas(el, {
       scale: 2,
       useCORS: true,
+      allowTaint: false,
       logging: false,
       backgroundColor: '#ffffff',
       windowWidth: 794,

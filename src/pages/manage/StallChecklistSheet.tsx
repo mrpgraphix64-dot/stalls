@@ -222,6 +222,52 @@ export function StallChecklistSheet({
     const u = (v.drive_url || (v as any).url || '').trim();
     return u.startsWith('http://') || u.startsWith('https://');
   });
+
+  const getValidImageUrl = (url?: string | null): string | null => {
+    if (!url) return null;
+    const clean = url.trim();
+    if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('/uploads/')) {
+      return null;
+    }
+    const lower = clean.toLowerCase();
+    if (
+      lower.includes('claude.site') ||
+      lower.includes('drive.google.com') ||
+      lower.includes('figma.com') ||
+      lower.includes('sketchfab.com')
+    ) {
+      return null;
+    }
+    if (clean.startsWith('/uploads/') || lower.match(/\.(jpeg|jpg|png|webp|gif)(\?.*)?$/i)) {
+      return clean;
+    }
+    return null;
+  };
+
+  const viewsWithImage = valid3DViews.map((v) => {
+    const explicitImg = (v.preview_image_url || '').trim();
+    const directImg = getValidImageUrl(v.drive_url);
+    const resolvedImg =
+      explicitImg &&
+      (explicitImg.startsWith('/') || explicitImg.startsWith('http://') || explicitImg.startsWith('https://'))
+        ? explicitImg
+        : directImg;
+    return {
+      view: v,
+      image: resolvedImg || null,
+      isFinal: v.is_final === 1,
+    };
+  });
+
+  const primaryItem =
+    viewsWithImage.find((v) => v.isFinal && v.image) ||
+    viewsWithImage.find((v) => v.image) ||
+    viewsWithImage.find((v) => v.isFinal) ||
+    viewsWithImage[0];
+
+  const primary3DView = primaryItem ? primaryItem.view : valid3DViews[0] || null;
+  const primaryPreviewImg = primaryItem ? primaryItem.image : null;
+
   const mainFolderUrl = (booth.main_drive_folder_url || '').trim();
   const hasMainFolder = mainFolderUrl.startsWith('http://') || mainFolderUrl.startsWith('https://');
   const single3DUrl =
@@ -555,6 +601,42 @@ export function StallChecklistSheet({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* 3D Stall Design Preview Image (when available for this stall) */}
+            {primaryPreviewImg && (
+              <div className="mt-2 p-2 bg-zinc-50 border border-zinc-200 rounded-lg break-inside-avoid print:break-inside-avoid">
+                <div className="flex justify-center items-center overflow-hidden">
+                  <img
+                    src={primaryPreviewImg}
+                    alt={`3D Design Preview — ${primary3DView?.title || 'Stall View'}`}
+                    className="max-w-[580px] max-h-[200px] w-auto h-auto object-contain rounded"
+                    crossOrigin="anonymous"
+                    loading="eager"
+                  />
+                </div>
+                <div className="text-center mt-1 text-[9.5px] text-zinc-600 font-medium">
+                  <span>
+                    3D Stall Design Preview:{' '}
+                    <strong className="text-zinc-950 font-bold">{primary3DView?.title || '3D View'}</strong>
+                  </span>
+                  {primary3DView && (primary3DView.drive_url || (primary3DView as any).url) && (
+                    <span className="ml-2">
+                      (
+                      <a
+                        href={(primary3DView.drive_url || (primary3DView as any).url).trim()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline font-bold"
+                        title="Open Interactive 3D Model"
+                      >
+                        Open Interactive 3D Model
+                      </a>
+                      )
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>

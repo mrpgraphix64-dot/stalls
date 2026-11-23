@@ -155,6 +155,7 @@ export interface BoothLink {
   category: LinkCategory;
   title: string;
   drive_url: string;
+  preview_image_url?: string | null;
   version: string;
   is_final: number; // 0: Draft, 1: Approved
   approved_at?: string | null;

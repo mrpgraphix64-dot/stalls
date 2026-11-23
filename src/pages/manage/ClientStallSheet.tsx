@@ -284,11 +284,18 @@ export function ClientStallSheet({
                   key={v.id || idx}
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-white border border-zinc-200 rounded-lg shadow-xs"
                 >
-                  <div className="min-w-0 pr-2">
-                    <div className="text-xs font-bold text-zinc-900 truncate">{title}</div>
-                    {v.notes && (
-                      <div className="text-[10.5px] text-zinc-500 truncate">{v.notes}</div>
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    {v.preview_image_url && (
+                      <div className="w-14 h-10 rounded border border-zinc-200 bg-zinc-50 overflow-hidden shrink-0">
+                        <img src={v.preview_image_url} alt={title} className="w-full h-full object-cover" crossOrigin="anonymous" />
+                      </div>
                     )}
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-zinc-900 truncate">{title}</div>
+                      {v.notes && (
+                        <div className="text-[10.5px] text-zinc-500 truncate">{v.notes}</div>
+                      )}
+                    </div>
                   </div>
 
                   <a

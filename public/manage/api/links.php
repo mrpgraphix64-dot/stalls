@@ -81,15 +81,95 @@ if ($method === 'POST') {
     $validCategories = ['render_3d', 'working_artwork', 'print_ready', 'photo', 'production', 'other'];
 
     // ---------------------------------------------------------------------
+    // 2-UPLOAD. UPLOAD 3D PREVIEW IMAGE
+    // ---------------------------------------------------------------------
+    if ($action === 'upload_preview') {
+        $file = $_FILES['preview_image'] ?? ($_FILES['image'] ?? ($_FILES['file'] ?? null));
+        if (!$file || !isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
+            $errorCode = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+            $msg = 'No file uploaded or upload error occurred.';
+            if ($errorCode === UPLOAD_ERR_INI_SIZE || $errorCode === UPLOAD_ERR_FORM_SIZE) {
+                $msg = 'File size exceeds server upload limit (max 10MB).';
+            }
+            reworkzone_json_response(['success' => false, 'error' => $msg], 400);
+        }
+
+        // Validate max 10MB
+        if ($file['size'] > 10 * 1024 * 1024) {
+            reworkzone_json_response(['success' => false, 'error' => 'File size exceeds maximum allowed size of 10MB.'], 400);
+        }
+
+        // Validate MIME type
+        $allowedMimes = [
+            'image/jpeg' => '.jpg',
+            'image/jpg'  => '.jpg',
+            'image/png'  => '.png',
+            'image/webp' => '.webp',
+        ];
+
+        $mime = null;
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo) {
+                $mime = finfo_file($finfo, $file['tmp_name']);
+                finfo_close($finfo);
+            }
+        }
+        if (!$mime && function_exists('getimagesize')) {
+            $imgInfo = @getimagesize($file['tmp_name']);
+            if ($imgInfo && !empty($imgInfo['mime'])) {
+                $mime = $imgInfo['mime'];
+            }
+        }
+
+        if (!$mime || !isset($allowedMimes[$mime])) {
+            reworkzone_json_response(['success' => false, 'error' => 'Invalid image format. Allowed formats: JPG, PNG, WebP.'], 400);
+        }
+
+        $ext = $allowedMimes[$mime];
+        $safeName = 'stall_3d_' . bin2hex(random_bytes(8)) . $ext;
+
+        $rootDir = dirname(__DIR__, 2);
+        $uploadDir = $rootDir . '/uploads/3d_previews';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0755, true);
+        }
+
+        $destPath = $uploadDir . '/' . $safeName;
+        if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+            reworkzone_json_response(['success' => false, 'error' => 'Failed to save uploaded image.'], 500);
+        }
+
+        // Sync to public/uploads/3d_previews if public directory exists
+        $publicUploadDir = $rootDir . '/public/uploads/3d_previews';
+        if (is_dir($rootDir . '/public')) {
+            if (!is_dir($publicUploadDir)) {
+                @mkdir($publicUploadDir, 0755, true);
+            }
+            @copy($destPath, $publicUploadDir . '/' . $safeName);
+        }
+
+        $webUrl = '/uploads/3d_previews/' . $safeName;
+
+        reworkzone_json_response([
+            'success'           => true,
+            'preview_image_url' => $webUrl,
+            'filename'          => $safeName
+        ]);
+    }
+
+    // ---------------------------------------------------------------------
     // 2A. CREATE LINK
     // ---------------------------------------------------------------------
     if ($action === 'create') {
-        $boothId  = trim($body['booth_id'] ?? '');
-        $category = trim($body['category'] ?? 'other');
-        $title    = trim($body['title'] ?? '');
-        $driveUrl = trim($body['drive_url'] ?? '');
-        $version  = trim($body['version'] ?? 'v1.0');
-        $notes    = trim($body['notes'] ?? '');
+        $boothId         = trim($body['booth_id'] ?? '');
+        $category        = trim($body['category'] ?? 'other');
+        $title           = trim($body['title'] ?? '');
+        $driveUrl        = trim($body['drive_url'] ?? '');
+        $previewImageUrl = trim($body['preview_image_url'] ?? '');
+        $version         = trim($body['version'] ?? 'v1.0');
+        $notes           = trim($body['notes'] ?? '');
+        $isFinal         = !empty($body['is_final']) ? 1 : 0;
 
         // Validation
         if (empty($boothId)) {
@@ -123,27 +203,36 @@ if ($method === 'POST') {
 
         $id = 'lnk_' . bin2hex(random_bytes(6));
         $now = date('Y-m-d H:i:s');
+        $approvedAt = $isFinal === 1 ? $now : null;
 
-        // New links ALWAYS default to Draft (is_final = 0, approved_at = NULL)
+        // If this 3D view is marked final, ensure prior 3D views for this booth are marked draft
+        if ($isFinal === 1 && $category === 'render_3d') {
+            $pdo->prepare("UPDATE booth_links SET is_final = 0 WHERE booth_id = :bid AND category = 'render_3d'")
+                ->execute([':bid' => $boothId]);
+        }
+
         $stmt = $pdo->prepare("
             INSERT INTO booth_links (
-                id, booth_id, category, title, drive_url, version,
+                id, booth_id, category, title, drive_url, preview_image_url, version,
                 is_final, approved_at, notes, created_at, updated_at
             ) VALUES (
-                :id, :booth_id, :category, :title, :drive_url, :version,
-                0, NULL, :notes, :created_at, :updated_at
+                :id, :booth_id, :category, :title, :drive_url, :preview_image_url, :version,
+                :is_final, :approved_at, :notes, :created_at, :updated_at
             )
         ");
         $stmt->execute([
-            ':id'         => $id,
-            ':booth_id'   => $boothId,
-            ':category'   => $category,
-            ':title'      => $title,
-            ':drive_url'  => $driveUrl,
-            ':version'    => $version,
-            ':notes'      => $notes,
-            ':created_at' => $now,
-            ':updated_at' => $now,
+            ':id'                => $id,
+            ':booth_id'          => $boothId,
+            ':category'          => $category,
+            ':title'             => $title,
+            ':drive_url'         => $driveUrl,
+            ':preview_image_url' => $previewImageUrl !== '' ? $previewImageUrl : null,
+            ':version'           => $version,
+            ':is_final'          => $isFinal,
+            ':approved_at'       => $approvedAt,
+            ':notes'             => $notes,
+            ':created_at'        => $now,
+            ':updated_at'        => $now,
         ]);
 
         // Audit Log
@@ -213,13 +302,28 @@ if ($method === 'POST') {
             $category = $existing['category'];
         }
 
-        $isFinal    = (int)$existing['is_final'];
+        $isFinal    = array_key_exists('is_final', $body) ? (!empty($body['is_final']) ? 1 : 0) : (int)$existing['is_final'];
         $approvedAt = $existing['approved_at'];
+        if ($isFinal === 1 && empty($approvedAt)) {
+            $approvedAt = date('Y-m-d H:i:s');
+        } elseif ($isFinal === 0) {
+            $approvedAt = null;
+        }
 
         // APPROVAL SAFETY RULE: If the Drive URL changed, automatically reset approval!
         if ($driveUrl !== $existing['drive_url']) {
             $isFinal = 0;
             $approvedAt = null;
+        }
+
+        $previewImageUrl = array_key_exists('preview_image_url', $body)
+            ? (trim($body['preview_image_url'] ?? '') !== '' ? trim($body['preview_image_url']) : null)
+            : $existing['preview_image_url'];
+
+        // If this 3D view is marked final, ensure other 3D views for this booth are marked draft
+        if ($isFinal === 1 && $category === 'render_3d') {
+            $pdo->prepare("UPDATE booth_links SET is_final = 0 WHERE booth_id = :bid AND category = 'render_3d' AND id != :id")
+                ->execute([':bid' => $existing['booth_id'], ':id' => $id]);
         }
 
         $now = date('Y-m-d H:i:s');
@@ -228,6 +332,7 @@ if ($method === 'POST') {
             SET category = :category,
                 title = :title,
                 drive_url = :drive_url,
+                preview_image_url = :preview_image_url,
                 version = :version,
                 is_final = :is_final,
                 approved_at = :approved_at,
@@ -236,15 +341,16 @@ if ($method === 'POST') {
             WHERE id = :id
         ");
         $stmt->execute([
-            ':category'    => $category,
-            ':title'       => $title,
-            ':drive_url'   => $driveUrl,
-            ':version'     => $version,
-            ':is_final'    => $isFinal,
-            ':approved_at' => $approvedAt,
-            ':notes'       => $notes,
-            ':updated_at'  => $now,
-            ':id'          => $id,
+            ':category'          => $category,
+            ':title'             => $title,
+            ':drive_url'         => $driveUrl,
+            ':preview_image_url' => $previewImageUrl,
+            ':version'           => $version,
+            ':is_final'          => $isFinal,
+            ':approved_at'       => $approvedAt,
+            ':notes'             => $notes,
+            ':updated_at'        => $now,
+            ':id'                => $id,
         ]);
 
         $log = $pdo->prepare("
@@ -391,6 +497,18 @@ if ($method === 'POST') {
 
         $stmt = $pdo->prepare("DELETE FROM booth_links WHERE id = :id");
         $stmt->execute([':id' => $id]);
+
+        // Cleanup uploaded preview image if stored locally
+        if (!empty($existing['preview_image_url']) && strpos($existing['preview_image_url'], '/uploads/3d_previews/') === 0) {
+            $rootDir = dirname(__DIR__, 2);
+            $filePath = $rootDir . $existing['preview_image_url'];
+            if (is_file($filePath)) {
+                @unlink($filePath);
+            }
+            if (is_file($rootDir . '/public' . $existing['preview_image_url'])) {
+                @unlink($rootDir . '/public' . $existing['preview_image_url']);
+            }
+        }
 
         $log = $pdo->prepare("
             INSERT INTO activity_logs (id, booth_id, action_type, actor_label, description)

@@ -293,6 +293,32 @@ export async function deleteLink(id: string): Promise<void> {
   });
 }
 
+export async function uploadPreviewImage(file: File): Promise<{ preview_image_url: string; filename: string }> {
+  const formData = new FormData();
+  formData.append('preview_image', file);
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+  if (cachedCsrfToken) {
+    headers['X-CSRF-Token'] = cachedCsrfToken;
+  }
+
+  const response = await fetch('/manage/api/links.php?action=upload_preview', {
+    method: 'POST',
+    headers,
+    body: formData,
+    credentials: 'include',
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Failed to upload preview image.');
+  }
+
+  return { preview_image_url: data.preview_image_url, filename: data.filename };
+}
+
 // -------------------------------------------------------------
 // Booth Items API (Furniture, Electrical, Production, Print)
 // -------------------------------------------------------------

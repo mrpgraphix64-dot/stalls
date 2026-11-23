@@ -327,7 +327,7 @@ function reworkzone_init_schema(PDO $pdo) {
         $pdo->exec("ALTER TABLE booths ADD COLUMN wall_configuration TEXT DEFAULT NULL;");
     }
 
-    // 5. Booth Links (Google Drive URLs only; NO file uploads)
+    // 5. Booth Links (Categorized Drive links & 3D render preview images)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS booth_links (
             id TEXT PRIMARY KEY,
@@ -335,6 +335,7 @@ function reworkzone_init_schema(PDO $pdo) {
             category TEXT NOT NULL,
             title TEXT NOT NULL,
             drive_url TEXT NOT NULL,
+            preview_image_url TEXT DEFAULT NULL,
             version TEXT,
             is_final INTEGER NOT NULL DEFAULT 0,
             approved_at DATETIME,
@@ -426,6 +427,15 @@ function reworkzone_init_schema(PDO $pdo) {
     if (!in_array('status', $taskCols)) {
         $pdo->exec("ALTER TABLE booth_tasks ADD COLUMN status TEXT DEFAULT 'pending';");
         $pdo->exec("UPDATE booth_tasks SET status = 'completed' WHERE is_completed = 1;");
+    }
+
+    $linkCols = [];
+    $stmt = $pdo->query("PRAGMA table_info(booth_links);");
+    while ($row = $stmt->fetch()) {
+        $linkCols[] = $row['name'];
+    }
+    if (!in_array('preview_image_url', $linkCols, true)) {
+        $pdo->exec("ALTER TABLE booth_links ADD COLUMN preview_image_url TEXT DEFAULT NULL;");
     }
 
     $expCols = [];
