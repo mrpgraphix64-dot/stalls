@@ -112,8 +112,7 @@ $singleStmt = $pdo->prepare("
         b.*,
         COALESCE(
             NULLIF(b.print_drive_url, ''),
-            (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1),
-            NULLIF(b.main_drive_folder_url, '')
+            (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1)
         ) AS resolved_print_drive_url
     FROM booths b
     WHERE b.id = :id
@@ -130,8 +129,7 @@ $dirStmt = $pdo->prepare("
         b.*,
         COALESCE(
             NULLIF(b.print_drive_url, ''),
-            (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1),
-            NULLIF(b.main_drive_folder_url, '')
+            (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1)
         ) AS print_drive_url
     FROM booths b
     WHERE b.event_id = :event_id
@@ -153,8 +151,7 @@ $evtStmt = $pdo->prepare("
         b.*,
         COALESCE(
             NULLIF(b.print_drive_url, ''),
-            (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1),
-            NULLIF(b.main_drive_folder_url, '')
+            (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1)
         ) AS print_drive_url
     FROM booths b
     WHERE b.event_id = :event_id
@@ -196,8 +193,8 @@ $pdo->prepare("UPDATE booths SET print_remark = 'High-res artwork received' WHER
 $checkStmt->execute([':id' => $bA69Id]);
 assertPrintPersistence($checkStmt->fetchColumn() === $testDriveUrl, "Updating print_remark preserves print_drive_url");
 
-echo "\nTest 7: Self-Healing Fallback from booth_links and main_drive_folder_url\n";
-// Test case: booths.print_drive_url is cleared, but booth_links has it
+echo "\nTest 7: Self-Healing Fallback from booth_links and No Substitution of main_drive_folder_url\n";
+// Test case A: booths.print_drive_url is cleared, but booth_links has it
 $pdo->prepare("UPDATE booths SET print_drive_url = NULL WHERE id = :id")->execute([':id' => $bA69Id]);
 
 // Execute single booth query with self-healing fallback
@@ -208,10 +205,39 @@ $canonicalRecovered = !empty($recoveredBooth['resolved_print_drive_url'])
     : $recoveredBooth['print_drive_url'];
 assertPrintPersistence($canonicalRecovered === $testDriveUrl, "Self-healing correctly recovers print_drive_url from booth_links");
 
+// Test case B: Booth has general main_drive_folder_url but NO dedicated print files link
+// It must NOT substitute general folder for print_drive_url
+$bNoPrintId = 'test-noprint-' . bin2hex(random_bytes(4));
+$insBooth->execute([
+    ':id' => $bNoPrintId,
+    ':event_id' => $eventId,
+    ':booth_number' => 'C99',
+    ':client_name' => 'General Folder Only Inc',
+]);
+$pdo->prepare("UPDATE booths SET main_drive_folder_url = 'https://drive.google.com/drive/folders/general-booth-folder' WHERE id = :id")
+    ->execute([':id' => $bNoPrintId]);
+
+$singleStmt->execute([':id' => $bNoPrintId]);
+$noPrintBooth = $singleStmt->fetch(PDO::FETCH_ASSOC);
+assertPrintPersistence(empty($noPrintBooth['print_drive_url']), "General main_drive_folder_url is not substituted into print_drive_url");
+assertPrintPersistence(empty($noPrintBooth['resolved_print_drive_url']), "resolved_print_drive_url is empty when no dedicated print files link exists");
+
+echo "\nTest 8: 3D Stall Views Unaffected by Print Link Updates\n";
+$link3dId = 'lnk-3d-' . bin2hex(random_bytes(4));
+$test3dUrl = 'https://drive.google.com/file/d/3d-test-model/view';
+$pdo->prepare("
+    INSERT INTO booth_links (id, booth_id, category, title, drive_url, is_final, created_at, updated_at)
+    VALUES (:id, :b_id, 'render_3d', 'Final 3D View', :url, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+")->execute([':id' => $link3dId, ':b_id' => $bA69Id, ':url' => $test3dUrl]);
+
+$check3d = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :id AND category = 'render_3d'");
+$check3d->execute([':id' => $bA69Id]);
+assertPrintPersistence($check3d->fetchColumn() === $test3dUrl, "3D Stall View link exists and remains intact");
+
 // Clean up test data
-$pdo->prepare("DELETE FROM booth_tasks WHERE booth_id IN (:b1, :b2)")->execute([':b1' => $bA69Id, ':b2' => $bB02Id]);
-$pdo->prepare("DELETE FROM booth_links WHERE booth_id IN (:b1, :b2)")->execute([':b1' => $bA69Id, ':b2' => $bB02Id]);
-$pdo->prepare("DELETE FROM booths WHERE id IN (:b1, :b2)")->execute([':b1' => $bA69Id, ':b2' => $bB02Id]);
+$pdo->prepare("DELETE FROM booth_tasks WHERE booth_id IN (:b1, :b2, :b3)")->execute([':b1' => $bA69Id, ':b2' => $bB02Id, ':b3' => $bNoPrintId]);
+$pdo->prepare("DELETE FROM booth_links WHERE booth_id IN (:b1, :b2, :b3)")->execute([':b1' => $bA69Id, ':b2' => $bB02Id, ':b3' => $bNoPrintId]);
+$pdo->prepare("DELETE FROM booths WHERE id IN (:b1, :b2, :b3)")->execute([':b1' => $bA69Id, ':b2' => $bB02Id, ':b3' => $bNoPrintId]);
 $pdo->prepare("DELETE FROM events WHERE id = :id")->execute([':id' => $eventId]);
 
 echo "\nCleaned up test data safely.\n";

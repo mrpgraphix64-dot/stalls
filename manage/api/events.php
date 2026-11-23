@@ -82,8 +82,7 @@ if ($method === 'GET') {
                 (SELECT preview_image_url FROM booth_links WHERE booth_id = b.id AND category = 'render_3d' AND preview_image_url IS NOT NULL AND preview_image_url != '' ORDER BY is_final DESC, created_at ASC LIMIT 1) AS primary_3d_preview_url,
                 COALESCE(
                     NULLIF(b.print_drive_url, ''),
-                    (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1),
-                    NULLIF(b.main_drive_folder_url, '')
+                    (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1)
                 ) AS print_drive_url
             FROM booths b
             WHERE b.event_id = :event_id AND b.status != 'archived'

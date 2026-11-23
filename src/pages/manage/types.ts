@@ -54,6 +54,7 @@ export interface BoothItem {
   print_drive_url?: string | null;
   resolved_print_drive_url?: string | null;
   primary_3d_url?: string | null;
+  primary_3d_preview_url?: string | null;
   print_remark?: string | null;
   goodies_status?: 'Awaiting Client Artwork' | 'Artwork Received' | 'Ready for Printing' | string;
   goodies_drive_url?: string | null;

@@ -199,28 +199,41 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   // Section 2: Print Files State
   const [printStatus, setPrintStatus] = useState<string>('Designs Pending');
-  const [printDriveUrl, setPrintDriveUrl] = useState<string>('');
+  const [printInputUrl, setPrintInputUrl] = useState<string>('');
   const [printRemark, setPrintRemark] = useState<string>('');
   const [isSavingPrint, setIsSavingPrint] = useState<boolean>(false);
   const [isEditingPrintUrl, setIsEditingPrintUrl] = useState<boolean>(false);
   const [printError, setPrintError] = useState<string>('');
 
-  const validPrintFilesUrl = useMemo(() => {
-    const url = (booth?.print_drive_url || booth?.resolved_print_drive_url || printDriveUrl || '').trim();
+  const savedPrintUrl = useMemo(() => {
+    const url = (booth?.print_drive_url || booth?.resolved_print_drive_url || '').trim();
     if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
       return url;
     }
     return null;
-  }, [booth?.print_drive_url, booth?.resolved_print_drive_url, printDriveUrl]);
+  }, [booth?.print_drive_url, booth?.resolved_print_drive_url]);
+
+  const hasSavedPrintUrl = Boolean(savedPrintUrl);
+  const validPrintFilesUrl = savedPrintUrl;
 
   // Goodies & Promotional Printing State (inside Section 2)
   const [goodiesItems, setGoodiesItems] = useState<BoothItemRecord[]>([]);
   const [goodiesStatus, setGoodiesStatus] = useState<string>('Awaiting Client Artwork');
-  const [goodiesDriveUrl, setGoodiesDriveUrl] = useState<string>('');
+  const [goodiesInputUrl, setGoodiesInputUrl] = useState<string>('');
   const [goodiesRemark, setGoodiesRemark] = useState<string>('');
   const [isSavingGoodiesArtwork, setIsSavingGoodiesArtwork] = useState<boolean>(false);
   const [isEditingGoodiesUrl, setIsEditingGoodiesUrl] = useState<boolean>(false);
   const [goodiesError, setGoodiesError] = useState<string>('');
+
+  const savedGoodiesUrl = useMemo(() => {
+    const url = (booth?.goodies_drive_url || '').trim();
+    if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+      return url;
+    }
+    return null;
+  }, [booth?.goodies_drive_url]);
+
+  const hasSavedGoodiesUrl = Boolean(savedGoodiesUrl);
   const [goodiesNameInput, setGoodiesNameInput] = useState<string>('');
   const [goodiesSpecInput, setGoodiesSpecInput] = useState<string>('');
   const [goodiesQtyStr, setGoodiesQtyStr] = useState<string>('1');
@@ -288,6 +301,18 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     return 'Wooden';
   };
 
+  // Helper to merge booth state preserving canonical links
+  const mergeBoothCanonical = (prev: BoothItem | null, updated: BoothItem): BoothItem => {
+    const printUrl = (updated.print_drive_url || updated.resolved_print_drive_url || prev?.print_drive_url || prev?.resolved_print_drive_url || '').trim() || null;
+    return {
+      ...updated,
+      print_drive_url: printUrl,
+      resolved_print_drive_url: printUrl,
+      primary_3d_url: updated.primary_3d_url || prev?.primary_3d_url || null,
+      primary_3d_preview_url: updated.primary_3d_preview_url || prev?.primary_3d_preview_url || null,
+    };
+  };
+
   // Load booth data and section items
   const loadAllData = async () => {
     try {
@@ -306,7 +331,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       const canonicalPrintUrl = (
         bth.print_drive_url ||
         bth.resolved_print_drive_url ||
-        bth.main_drive_folder_url ||
         ''
       ).trim();
       const canonicalBooth = {
@@ -318,13 +342,13 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setDesignResp(bth.design_responsibility === 'Our Side' ? 'Our Side' : 'Client Side');
       setViews3D(d3dViews || []);
       setPrintStatus(bth.print_file_status || 'Designs Pending');
-      setPrintDriveUrl(canonicalPrintUrl);
+      setPrintInputUrl(canonicalPrintUrl);
       setPrintRemark(bth.print_remark || '');
       setIsEditingPrintUrl(false);
       setPrintError('');
 
       setGoodiesStatus(bth.goodies_status || 'Awaiting Client Artwork');
-      setGoodiesDriveUrl(bth.goodies_drive_url || '');
+      setGoodiesInputUrl(bth.goodies_drive_url || '');
       setGoodiesRemark(bth.goodies_remark || '');
       setIsEditingGoodiesUrl(false);
       setGoodiesError('');
@@ -454,7 +478,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setIsSavingDesign(true);
     try {
       const updated = await updateBooth(boothId, { design_responsibility: val });
-      setBooth((prev) => (prev ? { ...prev, ...updated, print_drive_url: prev.print_drive_url || updated.print_drive_url } : updated));
+      setBooth((prev) => mergeBoothCanonical(prev, updated));
       showToast(`Design Responsibility set to: ${val}`);
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to update design responsibility.');
@@ -680,7 +704,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setPrintStatus(val);
     try {
       const updated = await updateBooth(boothId, { print_file_status: val });
-      setBooth((prev) => (prev ? { ...prev, ...updated, print_drive_url: prev.print_drive_url || updated.print_drive_url } : updated));
+      setBooth((prev) => mergeBoothCanonical(prev, updated));
       showToast(`Print File Status set to: ${val}`);
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to update print status.');
@@ -689,7 +713,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   const handleSavePrintLink = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const url = printDriveUrl.trim();
+    const url = printInputUrl.trim();
     if (!url) {
       setPrintError('Please enter a Google Drive link.');
       return;
@@ -702,26 +726,31 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setPrintError('');
     setIsSavingPrint(true);
     try {
-      const updated = await updateBooth(boothId, {
+      // Step 1: Write to backend
+      await updateBooth(boothId, {
         print_drive_url: url,
-        main_drive_folder_url: url,
       });
-      const canonical = (
-        updated.print_drive_url ||
-        updated.resolved_print_drive_url ||
-        updated.main_drive_folder_url ||
-        url
-      ).trim();
-      setBooth((prev) =>
-        prev
-          ? { ...prev, ...updated, print_drive_url: canonical, resolved_print_drive_url: canonical }
-          : { ...updated, print_drive_url: canonical, resolved_print_drive_url: canonical }
-      );
-      setPrintDriveUrl(canonical);
+
+      // Step 2: Read-after-write verification: confirm persistence from SQLite via GET
+      const verifiedBooth = await fetchBooth(boothId);
+      const verifiedUrl = (verifiedBooth.print_drive_url || verifiedBooth.resolved_print_drive_url || '').trim();
+
+      if (!verifiedUrl || (verifiedUrl !== url && !verifiedUrl.includes(url.replace(/^https?:\/\//, '')))) {
+        throw new Error('Verification failed: Server did not confirm the saved Print Files link in database.');
+      }
+
+      // Step 3: Commit state only after verified roundtrip
+      setBooth((prev) => mergeBoothCanonical(prev, {
+        ...verifiedBooth,
+        print_drive_url: verifiedUrl,
+        resolved_print_drive_url: verifiedUrl,
+      }));
+      setPrintInputUrl(verifiedUrl);
       setIsEditingPrintUrl(false);
-      showToast('Google Drive link saved successfully.');
+      showToast('Google Drive link saved and verified.');
     } catch (err: any) {
       setPrintError(err.message || 'Failed to save Google Drive link.');
+      showErrorToast(err.message || 'Failed to save Google Drive link.');
     } finally {
       setIsSavingPrint(false);
     }
@@ -731,15 +760,16 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     if (!confirm('Remove this Google Drive link?')) return;
     setIsSavingPrint(true);
     try {
-      const updated = await updateBooth(boothId, {
+      await updateBooth(boothId, {
         print_drive_url: '',
       });
-      setBooth((prev) =>
-        prev
-          ? { ...prev, ...updated, print_drive_url: null, resolved_print_drive_url: null }
-          : updated
-      );
-      setPrintDriveUrl('');
+      const verifiedBooth = await fetchBooth(boothId);
+      setBooth((prev) => ({
+        ...verifiedBooth,
+        print_drive_url: null,
+        resolved_print_drive_url: null,
+      }));
+      setPrintInputUrl('');
       setIsEditingPrintUrl(false);
       showToast('Google Drive link removed.');
     } catch (err: any) {
@@ -754,11 +784,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       const updated = await updateBooth(boothId, {
         print_remark: printRemark.trim() || null,
       });
-      setBooth((prev) =>
-        prev
-          ? { ...prev, ...updated, print_drive_url: prev.print_drive_url || updated.print_drive_url }
-          : updated
-      );
+      setBooth((prev) => mergeBoothCanonical(prev, updated));
       setPrintRemark(updated.print_remark || '');
       showToast('Print remark saved.');
     } catch (err: any) {
@@ -771,7 +797,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setGoodiesStatus(val);
     try {
       const updated = await updateBooth(boothId, { goodies_status: val });
-      setBooth(updated);
+      setBooth((prev) => mergeBoothCanonical(prev, updated));
       showToast(`Artwork Status: ${val}`);
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to update goodies artwork status.');
@@ -780,7 +806,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   const handleSaveGoodiesArtwork = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const url = goodiesDriveUrl.trim();
+    const url = goodiesInputUrl.trim();
     if (!url) {
       setGoodiesError('Please enter an artwork Google Drive link.');
       return;
@@ -793,15 +819,24 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setGoodiesError('');
     setIsSavingGoodiesArtwork(true);
     try {
-      const updated = await updateBooth(boothId, {
+      await updateBooth(boothId, {
         goodies_drive_url: url,
       });
-      setBooth(updated);
-      setGoodiesDriveUrl(updated.goodies_drive_url || url);
+
+      const verifiedBooth = await fetchBooth(boothId);
+      const verifiedUrl = (verifiedBooth.goodies_drive_url || '').trim();
+
+      if (!verifiedUrl || (verifiedUrl !== url && !verifiedUrl.includes(url.replace(/^https?:\/\//, '')))) {
+        throw new Error('Verification failed: Server did not confirm the artwork link in database.');
+      }
+
+      setBooth((prev) => mergeBoothCanonical(prev, verifiedBooth));
+      setGoodiesInputUrl(verifiedUrl);
       setIsEditingGoodiesUrl(false);
-      showToast('Client Artwork link saved.');
+      showToast('Client Artwork link saved and verified.');
     } catch (err: any) {
       setGoodiesError(err.message || 'Failed to save artwork details.');
+      showErrorToast(err.message || 'Failed to save artwork details.');
     } finally {
       setIsSavingGoodiesArtwork(false);
     }
@@ -811,11 +846,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     if (!confirm('Remove this Client Artwork Drive link?')) return;
     setIsSavingGoodiesArtwork(true);
     try {
-      const updated = await updateBooth(boothId, {
+      await updateBooth(boothId, {
         goodies_drive_url: null,
       });
-      setBooth(updated);
-      setGoodiesDriveUrl('');
+      const verifiedBooth = await fetchBooth(boothId);
+      setBooth((prev) => mergeBoothCanonical(prev, verifiedBooth));
+      setGoodiesInputUrl('');
       setIsEditingGoodiesUrl(false);
       showToast('Client artwork link removed.');
     } catch (err: any) {
@@ -830,7 +866,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       const updated = await updateBooth(boothId, {
         goodies_remark: goodiesRemark.trim() || null,
       });
-      setBooth(updated);
+      setBooth((prev) => mergeBoothCanonical(prev, updated));
       setGoodiesRemark(updated.goodies_remark || '');
       showToast('Artwork remark saved.');
     } catch (err: any) {
@@ -882,7 +918,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setIsSavingWallConfig(true);
     try {
       const updated = await updateBooth(boothId, { wall_configuration: config });
-      setBooth(updated);
+      setBooth((prev) => mergeBoothCanonical(prev, updated));
       showToast(`Wall Configuration set to: ${config}`);
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to update wall configuration.');
@@ -896,7 +932,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setIsSavingWallConfig(true);
     try {
       const updated = await updateBooth(boothId, { wall_configuration: '' as any });
-      setBooth({ ...updated, wall_configuration: null });
+      setBooth((prev) => mergeBoothCanonical(prev, { ...updated, wall_configuration: null }));
       showToast('Wall Configuration cleared.');
     } catch (err: any) {
       showErrorToast(err.message || 'Failed to clear wall configuration.');
@@ -1663,9 +1699,9 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                           Pending
                         </span>
                       )}
-                      {sec.key === 'print' && (booth?.print_drive_url || printDriveUrl) && (
+                      {sec.key === 'print' && savedPrintUrl && (
                         <a
-                          href={booth?.print_drive_url || printDriveUrl}
+                          href={savedPrintUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
@@ -2222,7 +2258,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                             Main Google Drive Print Files Link
                           </label>
 
-                          {(booth?.print_drive_url || printDriveUrl) && !isEditingPrintUrl ? (
+                          {hasSavedPrintUrl && !isEditingPrintUrl ? (
                             <div className="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
                               <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-400">
@@ -2236,19 +2272,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                     </span>
                                   </div>
                                   <a
-                                    href={booth?.print_drive_url || printDriveUrl}
+                                    href={savedPrintUrl!}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-xs text-amber-400 hover:underline truncate block max-w-sm sm:max-w-md md:max-w-lg font-mono mt-0.5"
-                                    title={booth?.print_drive_url || printDriveUrl}
+                                    title={savedPrintUrl!}
                                   >
-                                    {booth?.print_drive_url || printDriveUrl}
+                                    {savedPrintUrl}
                                   </a>
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
                                 <a
-                                  href={booth?.print_drive_url || printDriveUrl}
+                                  href={savedPrintUrl!}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="min-h-[34px] px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 transition-colors"
@@ -2260,7 +2296,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                   type="button"
                                   onClick={() => {
                                     setIsEditingPrintUrl(true);
-                                    setPrintDriveUrl(booth?.print_drive_url || printDriveUrl);
+                                    setPrintInputUrl(savedPrintUrl || '');
                                     setPrintError('');
                                   }}
                                   className="min-h-[34px] px-2.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] rounded-lg font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
@@ -2286,9 +2322,9 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                               <div className="flex flex-col sm:flex-row gap-2">
                                 <input
                                   type="url"
-                                  value={printDriveUrl}
+                                  value={printInputUrl}
                                   onChange={(e) => {
-                                    setPrintDriveUrl(e.target.value);
+                                    setPrintInputUrl(e.target.value);
                                     if (printError) setPrintError('');
                                   }}
                                   placeholder="https://drive.google.com/drive/folders/..."
@@ -2302,7 +2338,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                       type="button"
                                       onClick={() => {
                                         setIsEditingPrintUrl(false);
-                                        setPrintDriveUrl(booth?.print_drive_url || '');
+                                        setPrintInputUrl(savedPrintUrl || '');
                                         setPrintError('');
                                       }}
                                       className="min-h-[42px] px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-semibold cursor-pointer"
@@ -2317,7 +2353,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                     className="min-h-[42px] px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-sm"
                                   >
                                     <Save className="w-3.5 h-3.5" />
-                                    <span>{isSavingPrint ? 'Saving...' : isEditingPrintUrl ? 'Update Link' : 'Save Link'}</span>
+                                    <span>{isSavingPrint ? 'Saving & Verifying...' : isEditingPrintUrl ? 'Update Link' : 'Save Link'}</span>
                                   </button>
                                 </div>
                               </div>
@@ -2555,7 +2591,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                 Client Artwork Google Drive Link
                               </label>
 
-                              {(booth?.goodies_drive_url || goodiesDriveUrl) && !isEditingGoodiesUrl ? (
+                              {hasSavedGoodiesUrl && !isEditingGoodiesUrl ? (
                                 <div className="p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-400">
@@ -2569,19 +2605,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                         </span>
                                       </div>
                                       <a
-                                        href={booth?.goodies_drive_url || goodiesDriveUrl}
+                                        href={savedGoodiesUrl!}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs text-amber-400 hover:underline truncate block max-w-sm sm:max-w-md md:max-w-lg font-mono mt-0.5"
-                                        title={booth?.goodies_drive_url || goodiesDriveUrl}
+                                        title={savedGoodiesUrl!}
                                       >
-                                        {booth?.goodies_drive_url || goodiesDriveUrl}
+                                        {savedGoodiesUrl}
                                       </a>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
                                     <a
-                                      href={booth?.goodies_drive_url || goodiesDriveUrl}
+                                      href={savedGoodiesUrl!}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="min-h-[34px] px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 transition-colors"
@@ -2593,7 +2629,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                       type="button"
                                       onClick={() => {
                                         setIsEditingGoodiesUrl(true);
-                                        setGoodiesDriveUrl(booth?.goodies_drive_url || goodiesDriveUrl);
+                                        setGoodiesInputUrl(savedGoodiesUrl || '');
                                         setGoodiesError('');
                                       }}
                                       className="min-h-[34px] px-2.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] rounded-lg font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
@@ -2619,9 +2655,9 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                   <div className="flex flex-col sm:flex-row gap-2">
                                     <input
                                       type="url"
-                                      value={goodiesDriveUrl}
+                                      value={goodiesInputUrl}
                                       onChange={(e) => {
-                                        setGoodiesDriveUrl(e.target.value);
+                                        setGoodiesInputUrl(e.target.value);
                                         if (goodiesError) setGoodiesError('');
                                       }}
                                       placeholder="https://drive.google.com/drive/folders/..."
@@ -2635,7 +2671,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                           type="button"
                                           onClick={() => {
                                             setIsEditingGoodiesUrl(false);
-                                            setGoodiesDriveUrl(booth?.goodies_drive_url || '');
+                                            setGoodiesInputUrl(savedGoodiesUrl || '');
                                             setGoodiesError('');
                                           }}
                                           className="min-h-[42px] px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-semibold cursor-pointer"
@@ -2650,7 +2686,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                         className="min-h-[42px] px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl text-xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer shadow-sm"
                                       >
                                         <Save className="w-3.5 h-3.5" />
-                                        <span>{isSavingGoodiesArtwork ? 'Saving...' : isEditingGoodiesUrl ? 'Update Link' : 'Save Link'}</span>
+                                        <span>{isSavingGoodiesArtwork ? 'Saving & Verifying...' : isEditingGoodiesUrl ? 'Update Link' : 'Save Link'}</span>
                                       </button>
                                     </div>
                                   </div>
