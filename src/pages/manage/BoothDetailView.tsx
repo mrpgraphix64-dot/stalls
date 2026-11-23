@@ -123,6 +123,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [successToast, setSuccessToast] = useState<string>('');
+  const [errorToast, setErrorToast] = useState<string>('');
 
   // Confirm Stall State (when viewing an Ongoing Discussion)
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState<boolean>(false);
@@ -163,6 +164,9 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [editIsFinal3D, setEditIsFinal3D] = useState<boolean>(false);
   const [editNote3D, setEditNote3D] = useState<string>('');
   const [isUpdating3D, setIsUpdating3D] = useState<boolean>(false);
+  const [add3DError, setAdd3DError] = useState<string>('');
+  const [edit3DError, setEdit3DError] = useState<string>('');
+  const [editHasRemovedImg3D, setEditHasRemovedImg3D] = useState<boolean>(false);
   const [is3DMenuOpen, setIs3DMenuOpen] = useState<boolean>(false);
   const [previewModalImg, setPreviewModalImg] = useState<{ url: string; title: string } | null>(null);
 
@@ -193,14 +197,6 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     return null;
   }, [primary3DView]);
 
-  const validPrintFilesUrl = useMemo(() => {
-    const url = booth?.print_drive_url?.trim();
-    if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
-      return url;
-    }
-    return null;
-  }, [booth?.print_drive_url]);
-
   // Section 2: Print Files State
   const [printStatus, setPrintStatus] = useState<string>('Designs Pending');
   const [printDriveUrl, setPrintDriveUrl] = useState<string>('');
@@ -208,6 +204,14 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [isSavingPrint, setIsSavingPrint] = useState<boolean>(false);
   const [isEditingPrintUrl, setIsEditingPrintUrl] = useState<boolean>(false);
   const [printError, setPrintError] = useState<string>('');
+
+  const validPrintFilesUrl = useMemo(() => {
+    const url = (booth?.print_drive_url || booth?.resolved_print_drive_url || printDriveUrl || '').trim();
+    if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+      return url;
+    }
+    return null;
+  }, [booth?.print_drive_url, booth?.resolved_print_drive_url, printDriveUrl]);
 
   // Goodies & Promotional Printing State (inside Section 2)
   const [goodiesItems, setGoodiesItems] = useState<BoothItemRecord[]>([]);
@@ -299,11 +303,22 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         fetchLinks(boothId, 'render_3d').catch(() => []),
       ]);
 
-      setBooth(bth);
+      const canonicalPrintUrl = (
+        bth.print_drive_url ||
+        bth.resolved_print_drive_url ||
+        bth.main_drive_folder_url ||
+        ''
+      ).trim();
+      const canonicalBooth = {
+        ...bth,
+        print_drive_url: canonicalPrintUrl || null,
+        resolved_print_drive_url: canonicalPrintUrl || null,
+      };
+      setBooth(canonicalBooth);
       setDesignResp(bth.design_responsibility === 'Our Side' ? 'Our Side' : 'Client Side');
       setViews3D(d3dViews || []);
       setPrintStatus(bth.print_file_status || 'Designs Pending');
-      setPrintDriveUrl(bth.print_drive_url || '');
+      setPrintDriveUrl(canonicalPrintUrl);
       setPrintRemark(bth.print_remark || '');
       setIsEditingPrintUrl(false);
       setPrintError('');
@@ -372,6 +387,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setTimeout(() => setSuccessToast(''), 3000);
   };
 
+  const showErrorToast = (msg: string) => {
+    setErrorToast(msg);
+    setTimeout(() => setErrorToast(''), 4000);
+  };
+
   // Find task matching section key
   const getTaskForSection = (sectionKey: string): BoothTask | undefined => {
     const key = sectionKey.toLowerCase();
@@ -424,7 +444,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       });
       showToast(`${sectionKey.toUpperCase()}: Marked as ${newStatus === 'not_applicable' ? 'Not Required' : newStatus === 'completed' ? 'Done' : 'Pending'}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update task status.');
+      showErrorToast(err.message || 'Failed to update task status.');
     }
   };
 
@@ -434,10 +454,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setIsSavingDesign(true);
     try {
       const updated = await updateBooth(boothId, { design_responsibility: val });
-      setBooth(updated);
+      setBooth((prev) => (prev ? { ...prev, ...updated, print_drive_url: prev.print_drive_url || updated.print_drive_url } : updated));
       showToast(`Design Responsibility set to: ${val}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update design responsibility.');
+      showErrorToast(err.message || 'Failed to update design responsibility.');
     } finally {
       setIsSavingDesign(false);
     }
@@ -449,31 +469,42 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      alert('Image file size must be less than 10MB.');
+      const msg = 'Image file size must be less than 10MB.';
+      if (isEditMode) setEdit3DError(msg); else setAdd3DError(msg);
+      showErrorToast(msg);
       return;
     }
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowed.includes(file.type)) {
-      alert('Please upload a JPG, PNG, or WebP image.');
+      const msg = 'Please upload a JPG, PNG, or WebP image.';
+      if (isEditMode) setEdit3DError(msg); else setAdd3DError(msg);
+      showErrorToast(msg);
       return;
     }
 
     if (isEditMode) {
       setIsEditingUploading3DImg(true);
+      setEdit3DError('');
     } else {
       setIsUploading3DImg(true);
+      setAdd3DError('');
     }
 
     try {
       const res = await uploadPreviewImage(file);
       if (isEditMode) {
         setEditPreviewImg3D(res.preview_image_url);
+        setEditHasRemovedImg3D(false);
+        setEdit3DError('');
       } else {
         setPreviewImg3D(res.preview_image_url);
+        setAdd3DError('');
       }
       showToast('3D preview image uploaded successfully!');
     } catch (err: any) {
-      alert(err.message || 'Failed to upload preview image.');
+      const msg = err.message || 'Failed to upload preview image.';
+      if (isEditMode) setEdit3DError(msg); else setAdd3DError(msg);
+      showErrorToast(msg);
     } finally {
       if (isEditMode) {
         setIsEditingUploading3DImg(false);
@@ -486,21 +517,28 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   const handleAdd3DView = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAdd3DError('');
     const title = title3D.trim();
     const url = url3D.trim();
     const note = note3D.trim();
     const previewImg = previewImg3D.trim();
 
     if (!title) {
-      alert('Please enter a 3D view title (e.g. Front View, Perspective View).');
+      const msg = 'Please enter a 3D view title (e.g. Front View, Perspective View).';
+      setAdd3DError(msg);
+      showErrorToast(msg);
       return;
     }
     if (!url && !previewImg) {
-      alert('Please add a 3D image or a 3D view link.');
+      const msg = 'Please add a 3D image or a 3D view link.';
+      setAdd3DError(msg);
+      showErrorToast(msg);
       return;
     }
     if (url && (!url.startsWith('http://') && !url.startsWith('https://'))) {
-      alert('Please enter a valid web URL starting with https:// or http://');
+      const msg = 'Please enter a valid web URL starting with https:// or http://';
+      setAdd3DError(msg);
+      showErrorToast(msg);
       return;
     }
 
@@ -525,9 +563,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setPreviewImg3D('');
       setIsFinal3D(false);
       setShowAdd3DForm(false);
+      setAdd3DError('');
       showToast(`Added 3D View: ${title}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to save 3D view.');
+      const msg = err.message || 'Failed to save 3D view.';
+      setAdd3DError(msg);
+      showErrorToast(msg);
     } finally {
       setIsSaving3D(false);
     }
@@ -538,43 +579,70 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setEditTitle3D(view.title);
     setEditUrl3D(view.drive_url || '');
     setEditPreviewImg3D(view.preview_image_url || '');
+    setEditHasRemovedImg3D(false);
     setEditIsFinal3D(view.is_final === 1);
     setEditNote3D(view.notes || '');
+    setEdit3DError('');
   };
 
   const handleCancelEdit3DView = () => {
     setEditingViewId(null);
+    setEdit3DError('');
+    setEditHasRemovedImg3D(false);
   };
 
   const handleSaveEdit3DView = async (id: string) => {
+    setEdit3DError('');
     const title = editTitle3D.trim();
     const url = editUrl3D.trim();
     const note = editNote3D.trim();
-    const previewImg = editPreviewImg3D.trim();
+
+    // 1. Existing view from state
+    const existingView = views3D.find((v) => v.id === id);
+    const existingSavedImagePath = !editHasRemovedImg3D ? (existingView?.preview_image_url || '') : '';
+    const newUploadedImage = editPreviewImg3D.trim();
+
+    // 2. Validate Image and Link presence
+    const hasImage = Boolean(newUploadedImage || existingSavedImagePath);
+    const hasLink = Boolean(url);
 
     if (!title) {
-      alert('Please enter a title.');
+      const msg = 'Please enter a title.';
+      setEdit3DError(msg);
+      showErrorToast(msg);
       return;
     }
-    if (!url && !previewImg) {
-      alert('Please add a 3D image or a 3D view link.');
+
+    if (!hasImage && !hasLink) {
+      const msg = 'Please add a 3D image or a 3D view link.';
+      setEdit3DError(msg);
+      showErrorToast(msg);
       return;
     }
-    if (url && (!url.startsWith('http://') && !url.startsWith('https://'))) {
-      alert('Please enter a valid web URL starting with https:// or http://');
+
+    if (hasLink && (!url.startsWith('http://') && !url.startsWith('https://'))) {
+      const msg = 'Please enter a valid web URL starting with https:// or http://';
+      setEdit3DError(msg);
+      showErrorToast(msg);
       return;
     }
 
     setIsUpdating3D(true);
     try {
+      const finalPreviewImg = editHasRemovedImg3D && !newUploadedImage
+        ? null
+        : (newUploadedImage || existingSavedImagePath || null);
+
       const updated = await updateLink(id, {
         category: 'render_3d',
         title,
         drive_url: url || '',
-        preview_image_url: previewImg || (null as any),
+        preview_image_url: finalPreviewImg as any,
+        remove_preview_image: editHasRemovedImg3D && !newUploadedImage ? 1 : 0,
         is_final: editIsFinal3D ? 1 : 0,
         notes: note || undefined,
       });
+
       setViews3D((prev) =>
         prev.map((v) => {
           if (v.id === id) return updated;
@@ -583,9 +651,13 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         })
       );
       setEditingViewId(null);
+      setEdit3DError('');
+      setEditHasRemovedImg3D(false);
       showToast(`Updated 3D View: ${title}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update 3D view.');
+      const msg = err.message || 'Failed to update 3D view.';
+      setEdit3DError(msg);
+      showErrorToast(msg);
     } finally {
       setIsUpdating3D(false);
     }
@@ -598,7 +670,8 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setViews3D((prev) => prev.filter((v) => v.id !== view.id));
       showToast('3D View removed.');
     } catch (err: any) {
-      alert(err.message || 'Failed to remove 3D view.');
+      const msg = err.message || 'Failed to remove 3D view.';
+      showErrorToast(msg);
     }
   };
 
@@ -607,10 +680,10 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setPrintStatus(val);
     try {
       const updated = await updateBooth(boothId, { print_file_status: val });
-      setBooth(updated);
+      setBooth((prev) => (prev ? { ...prev, ...updated, print_drive_url: prev.print_drive_url || updated.print_drive_url } : updated));
       showToast(`Print File Status set to: ${val}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update print status.');
+      showErrorToast(err.message || 'Failed to update print status.');
     }
   };
 
@@ -631,9 +704,20 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     try {
       const updated = await updateBooth(boothId, {
         print_drive_url: url,
+        main_drive_folder_url: url,
       });
-      setBooth(updated);
-      setPrintDriveUrl(updated.print_drive_url || url);
+      const canonical = (
+        updated.print_drive_url ||
+        updated.resolved_print_drive_url ||
+        updated.main_drive_folder_url ||
+        url
+      ).trim();
+      setBooth((prev) =>
+        prev
+          ? { ...prev, ...updated, print_drive_url: canonical, resolved_print_drive_url: canonical }
+          : { ...updated, print_drive_url: canonical, resolved_print_drive_url: canonical }
+      );
+      setPrintDriveUrl(canonical);
       setIsEditingPrintUrl(false);
       showToast('Google Drive link saved successfully.');
     } catch (err: any) {
@@ -648,14 +732,18 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
     setIsSavingPrint(true);
     try {
       const updated = await updateBooth(boothId, {
-        print_drive_url: null,
+        print_drive_url: '',
       });
-      setBooth(updated);
+      setBooth((prev) =>
+        prev
+          ? { ...prev, ...updated, print_drive_url: null, resolved_print_drive_url: null }
+          : updated
+      );
       setPrintDriveUrl('');
       setIsEditingPrintUrl(false);
       showToast('Google Drive link removed.');
     } catch (err: any) {
-      alert(err.message || 'Failed to remove link.');
+      showErrorToast(err.message || 'Failed to remove link.');
     } finally {
       setIsSavingPrint(false);
     }
@@ -666,11 +754,15 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       const updated = await updateBooth(boothId, {
         print_remark: printRemark.trim() || null,
       });
-      setBooth(updated);
+      setBooth((prev) =>
+        prev
+          ? { ...prev, ...updated, print_drive_url: prev.print_drive_url || updated.print_drive_url }
+          : updated
+      );
       setPrintRemark(updated.print_remark || '');
       showToast('Print remark saved.');
     } catch (err: any) {
-      alert(err.message || 'Failed to save print remark.');
+      showErrorToast(err.message || 'Failed to save print remark.');
     }
   };
 
@@ -682,7 +774,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setBooth(updated);
       showToast(`Artwork Status: ${val}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update goodies artwork status.');
+      showErrorToast(err.message || 'Failed to update goodies artwork status.');
     }
   };
 
@@ -727,7 +819,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setIsEditingGoodiesUrl(false);
       showToast('Client artwork link removed.');
     } catch (err: any) {
-      alert(err.message || 'Failed to remove artwork link.');
+      showErrorToast(err.message || 'Failed to remove artwork link.');
     } finally {
       setIsSavingGoodiesArtwork(false);
     }
@@ -742,7 +834,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setGoodiesRemark(updated.goodies_remark || '');
       showToast('Artwork remark saved.');
     } catch (err: any) {
-      alert(err.message || 'Failed to save artwork remark.');
+      showErrorToast(err.message || 'Failed to save artwork remark.');
     }
   };
 
@@ -778,7 +870,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
       showToast(`Added ${name} (Qty: 1)`);
     } catch (err: any) {
-      alert(err.message || `Failed to add ${name}.`);
+      showErrorToast(err.message || `Failed to add ${name}.`);
     }
   };
 
@@ -793,7 +885,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setBooth(updated);
       showToast(`Wall Configuration set to: ${config}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update wall configuration.');
+      showErrorToast(err.message || 'Failed to update wall configuration.');
     } finally {
       setIsSavingWallConfig(false);
     }
@@ -807,7 +899,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setBooth({ ...updated, wall_configuration: null });
       showToast('Wall Configuration cleared.');
     } catch (err: any) {
-      alert(err.message || 'Failed to clear wall configuration.');
+      showErrorToast(err.message || 'Failed to clear wall configuration.');
     } finally {
       setIsSavingWallConfig(false);
     }
@@ -855,7 +947,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       }
       setActiveSpecialPanel('none');
     } catch (err: any) {
-      alert(err.message || 'Failed to add flooring & carpet.');
+      showErrorToast(err.message || 'Failed to add flooring & carpet.');
     }
   };
 
@@ -863,7 +955,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const handleAddTv = async () => {
     const qty = parseInt(tvQtyStr, 10);
     if (isNaN(qty) || qty < 1) {
-      alert('TV Quantity must be at least 1.');
+      showErrorToast('TV Quantity must be at least 1.');
       return;
     }
 
@@ -882,7 +974,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setTvQtyStr('1');
       showToast(`Added TV — ${tvSize} (${tvMounting})`);
     } catch (err: any) {
-      alert(err.message || 'Failed to add TV.');
+      showErrorToast(err.message || 'Failed to add TV.');
     }
   };
 
@@ -912,7 +1004,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
     const qty = parseInt(qtyStr, 10);
     if (isNaN(qty) || qty < 1) {
-      alert('Quantity must be at least 1.');
+      showErrorToast('Quantity must be at least 1.');
       return;
     }
 
@@ -949,7 +1041,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
       showToast(`Added ${name} (Qty: ${qty})`);
     } catch (err: any) {
-      alert(err.message || 'Failed to add item.');
+      showErrorToast(err.message || 'Failed to add item.');
     }
   };
 
@@ -976,7 +1068,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       if (category === 'goodies') setGoodiesItems((prev) => prev.filter((i) => i.id !== item.id));
       showToast('Item removed.');
     } catch (err: any) {
-      alert(err.message || 'Failed to remove item.');
+      showErrorToast(err.message || 'Failed to remove item.');
     }
   };
 
@@ -1000,7 +1092,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setProdItems(newProd);
       setFlooringDeletePrompt(null);
     } catch (err: any) {
-      alert(err.message || 'Failed to remove item.');
+      showErrorToast(err.message || 'Failed to remove item.');
     }
   };
 
@@ -1019,12 +1111,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
 
   const handleSaveItemEdit = async (item: BoothItemRecord) => {
     if (!editItemName.trim()) {
-      alert('Item name cannot be empty.');
+      showErrorToast('Item name cannot be empty.');
       return;
     }
     const qty = parseInt(editItemQtyStr, 10);
     if (isNaN(qty) || qty < 1) {
-      alert('Quantity must be at least 1.');
+      showErrorToast('Quantity must be at least 1.');
       return;
     }
 
@@ -1051,7 +1143,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       setEditingItemId(null);
       showToast(`Updated ${updated.item_name} (Qty: ${updated.quantity})`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update item.');
+      showErrorToast(err.message || 'Failed to update item.');
     } finally {
       setIsSavingItem(false);
     }
@@ -1126,6 +1218,12 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
         <div className="fixed bottom-6 right-6 z-50 bg-amber-500 text-zinc-950 px-4 py-2.5 rounded-xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom duration-200">
           <Check className="w-4 h-4" />
           <span>{successToast}</span>
+        </div>
+      )}
+      {errorToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-red-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom duration-200">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-white" />
+          <span>{errorToast}</span>
         </div>
       )}
 
@@ -1733,13 +1831,20 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                         </button>
                                       </div>
 
+                                      {edit3DError && (
+                                        <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 animate-in fade-in duration-100">
+                                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                          <span>{edit3DError}</span>
+                                        </div>
+                                      )}
+
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         <div>
                                           <label className="text-[10px] text-zinc-400 block mb-0.5 font-medium">View Title</label>
                                           <input
                                             type="text"
                                             value={editTitle3D}
-                                            onChange={(e) => setEditTitle3D(e.target.value)}
+                                            onChange={(e) => { setEditTitle3D(e.target.value); setEdit3DError(''); }}
                                             placeholder="e.g. Front View"
                                             className="w-full min-h-[36px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
                                           />
@@ -1749,7 +1854,7 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                           <input
                                             type="url"
                                             value={editUrl3D}
-                                            onChange={(e) => setEditUrl3D(e.target.value)}
+                                            onChange={(e) => { setEditUrl3D(e.target.value); setEdit3DError(''); }}
                                             placeholder="https://... (Optional)"
                                             className="w-full min-h-[36px] bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
                                           />
@@ -1762,7 +1867,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                           {editPreviewImg3D && (
                                             <button
                                               type="button"
-                                              onClick={() => setEditPreviewImg3D('')}
+                                              onClick={() => {
+                                                setEditPreviewImg3D('');
+                                                setEditHasRemovedImg3D(true);
+                                                setEdit3DError('');
+                                              }}
                                               className="text-[10px] text-red-400 hover:text-red-300 cursor-pointer"
                                             >
                                               Remove Image
@@ -1941,12 +2050,19 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() => setShowAdd3DForm(false)}
+                                  onClick={() => { setShowAdd3DForm(false); setAdd3DError(''); }}
                                   className="text-zinc-500 hover:text-zinc-300 text-xs p-1"
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
                               </div>
+
+                              {add3DError && (
+                                <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 animate-in fade-in duration-100">
+                                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                  <span>{add3DError}</span>
+                                </div>
+                              )}
 
                               <div className="space-y-1.5">
                                 <div className="flex flex-wrap gap-1.5 mb-1">

@@ -73,7 +73,8 @@ if ($method === 'GET') {
                 (SELECT preview_image_url FROM booth_links WHERE booth_id = b.id AND category = 'render_3d' AND preview_image_url IS NOT NULL AND preview_image_url != '' ORDER BY is_final DESC, created_at ASC LIMIT 1) AS primary_3d_preview_url,
                 COALESCE(
                     NULLIF(b.print_drive_url, ''),
-                    (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1)
+                    (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1),
+                    NULLIF(b.main_drive_folder_url, '')
                 ) AS resolved_print_drive_url,
                 (SELECT COUNT(*) FROM booth_items WHERE booth_id = b.id) AS item_count,
                 (SELECT COUNT(*) FROM booth_expenses WHERE booth_id = b.id) AS expense_count
@@ -89,19 +90,24 @@ if ($method === 'GET') {
             reworkzone_json_response(['success' => false, 'error' => 'Booth not found.'], 404);
         }
 
-        // Self-healing fallback: If print_drive_url is empty on booths, check booth_links records
-        if (empty($booth['print_drive_url'])) {
-            $linkCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1");
-            $linkCheck->execute([':b_id' => $id]);
-            $foundUrl = $linkCheck->fetchColumn();
-            if ($foundUrl) {
-                $booth['print_drive_url'] = $foundUrl;
-                $pdo->prepare("UPDATE booths SET print_drive_url = :url WHERE id = :id")->execute([':url' => $foundUrl, ':id' => $id]);
-            }
+        // Canonical synchronization for single booth query:
+        // Ensure both print_drive_url and resolved_print_drive_url carry the canonical coalesced value
+        $canonicalPrintUrl = !empty($booth['resolved_print_drive_url'])
+            ? trim((string)$booth['resolved_print_drive_url'])
+            : (!empty($booth['print_drive_url'])
+                ? trim((string)$booth['print_drive_url'])
+                : (!empty($booth['main_drive_folder_url']) ? trim((string)$booth['main_drive_folder_url']) : null));
+
+        if (!empty($canonicalPrintUrl)) {
+            $booth['print_drive_url'] = $canonicalPrintUrl;
+            $booth['resolved_print_drive_url'] = $canonicalPrintUrl;
+            // Backfill booths table if print_drive_url was empty
+            $pdo->prepare("UPDATE booths SET print_drive_url = :url WHERE id = :id AND (print_drive_url IS NULL OR print_drive_url = '')")
+                ->execute([':url' => $canonicalPrintUrl, ':id' => $id]);
         }
 
         if (empty($booth['goodies_drive_url'])) {
-            $goodiesCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category = 'goodies' AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1");
+            $goodiesCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category = 'goodies' AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1");
             $goodiesCheck->execute([':b_id' => $id]);
             $foundGoodiesUrl = $goodiesCheck->fetchColumn();
             if ($foundGoodiesUrl) {
@@ -165,7 +171,8 @@ if ($method === 'GET') {
                 (SELECT preview_image_url FROM booth_links WHERE booth_id = b.id AND category = 'render_3d' AND preview_image_url IS NOT NULL AND preview_image_url != '' ORDER BY is_final DESC, created_at ASC LIMIT 1) AS primary_3d_preview_url,
                 COALESCE(
                     NULLIF(b.print_drive_url, ''),
-                    (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1)
+                    (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1),
+                    NULLIF(b.main_drive_folder_url, '')
                 ) AS print_drive_url
             FROM booths b
             LEFT JOIN events e ON b.event_id = e.id
@@ -296,7 +303,8 @@ if ($method === 'GET') {
             (SELECT preview_image_url FROM booth_links WHERE booth_id = b.id AND category = 'render_3d' AND preview_image_url IS NOT NULL AND preview_image_url != '' ORDER BY is_final DESC, created_at ASC LIMIT 1) AS primary_3d_preview_url,
             COALESCE(
                 NULLIF(b.print_drive_url, ''),
-                (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1)
+                (SELECT drive_url FROM booth_links WHERE booth_id = b.id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1),
+                NULLIF(b.main_drive_folder_url, '')
             ) AS print_drive_url
         FROM booths b
         LEFT JOIN events e ON b.event_id = e.id
@@ -739,14 +747,20 @@ if ($method === 'POST') {
 
         // Two-way synchronization: Keep booth_links synchronized with booths.print_drive_url and goodies_drive_url
         if (!empty($printDriveUrl)) {
+            // Also keep main_drive_folder_url in sync if empty
+            if (empty($mainDriveFolderUrl)) {
+                $mainDriveFolderUrl = $printDriveUrl;
+                $pdo->prepare("UPDATE booths SET main_drive_folder_url = :url WHERE id = :id AND (main_drive_folder_url IS NULL OR main_drive_folder_url = '')")
+                    ->execute([':url' => $printDriveUrl, ':id' => $id]);
+            }
             $existingLinkStmt = $pdo->prepare("SELECT id FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork') LIMIT 1");
             $existingLinkStmt->execute([':b_id' => $id]);
             $existingLinkId = $existingLinkStmt->fetchColumn();
             if ($existingLinkId) {
-                $pdo->prepare("UPDATE booth_links SET drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
+                $pdo->prepare("UPDATE booth_links SET drive_url = :url, is_final = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
                     ->execute([':url' => $printDriveUrl, ':id' => $existingLinkId]);
             } else {
-                $pdo->prepare("INSERT INTO booth_links (id, booth_id, category, title, drive_url, created_at, updated_at) VALUES (:id, :b_id, 'print_ready', 'Print Ready Artwork', :url, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
+                $pdo->prepare("INSERT INTO booth_links (id, booth_id, category, title, drive_url, is_final, created_at, updated_at) VALUES (:id, :b_id, 'print_ready', 'Print Ready Artwork', :url, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
                     ->execute([':id' => 'lnk_pr_' . bin2hex(random_bytes(6)), ':b_id' => $id, ':url' => $printDriveUrl]);
             }
         } else if (array_key_exists('print_drive_url', $body) && empty($printDriveUrl)) {
@@ -813,15 +827,21 @@ if ($method === 'POST') {
         $getStmt->execute([':id' => $id]);
         $updated = $getStmt->fetch();
 
-        // Self-healing fallback: If print_drive_url is empty on booths, check booth_links records
+        // Self-healing fallback: If print_drive_url is empty on booths, check booth_links records or main_drive_folder_url
         if (!empty($updated) && empty($updated['print_drive_url'])) {
-            $linkCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY created_at DESC LIMIT 1");
+            $linkCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :b_id AND category IN ('print_ready', 'working_artwork') AND drive_url IS NOT NULL AND drive_url != '' ORDER BY is_final DESC, created_at DESC LIMIT 1");
             $linkCheck->execute([':b_id' => $id]);
             $foundUrl = $linkCheck->fetchColumn();
+            if (!$foundUrl && !empty($updated['main_drive_folder_url'])) {
+                $foundUrl = $updated['main_drive_folder_url'];
+            }
             if ($foundUrl) {
                 $updated['print_drive_url'] = $foundUrl;
                 $pdo->prepare("UPDATE booths SET print_drive_url = :url WHERE id = :id")->execute([':url' => $foundUrl, ':id' => $id]);
             }
+        }
+        if (!empty($updated)) {
+            $updated['resolved_print_drive_url'] = $updated['print_drive_url'] ?? null;
         }
 
         if (!empty($updated) && empty($updated['goodies_drive_url'])) {

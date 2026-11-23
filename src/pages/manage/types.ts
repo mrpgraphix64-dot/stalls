@@ -52,6 +52,7 @@ export interface BoothItem {
   design_responsibility?: 'Client Side' | 'Our Side' | string;
   print_file_status?: 'Designs Pending' | 'Partially Received' | 'All Files Ready' | string;
   print_drive_url?: string | null;
+  resolved_print_drive_url?: string | null;
   primary_3d_url?: string | null;
   print_remark?: string | null;
   goodies_status?: 'Awaiting Client Artwork' | 'Artwork Received' | 'Ready for Printing' | string;
@@ -157,6 +158,7 @@ export interface BoothLink {
   title: string;
   drive_url: string;
   preview_image_url?: string | null;
+  remove_preview_image?: number | boolean;
   version: string;
   is_final: number; // 0: Draft, 1: Approved
   approved_at?: string | null;

@@ -313,6 +313,29 @@ if ($method === 'POST') {
         $version  = trim($body['version'] ?? $existing['version']);
         $notes    = trim($body['notes'] ?? $existing['notes']);
 
+        // Validate booth association if supplied
+        if (!empty($body['booth_id']) && $body['booth_id'] !== $existing['booth_id']) {
+            reworkzone_json_response(['success' => false, 'error' => 'Invalid booth association.'], 400);
+        }
+
+        // Merge existing saved preview image with explicitly supplied changes.
+        // Never interpret an omitted image field as a request to delete the image.
+        // Clear the image only through an explicit remove request (remove_preview_image: true/1)
+        // or when preview_image_url is explicitly set to empty/null.
+        if (!empty($body['remove_preview_image'])) {
+            $previewImageUrl = null;
+        } elseif (array_key_exists('preview_image_url', $body)) {
+            $rawImg = $body['preview_image_url'];
+            if ($rawImg === null || trim((string)$rawImg) === '') {
+                $previewImageUrl = null;
+            } else {
+                $previewImageUrl = trim((string)$rawImg);
+            }
+        } else {
+            // Omitted: preserve existing saved image path
+            $previewImageUrl = $existing['preview_image_url'];
+        }
+
         if (empty($title)) {
             reworkzone_json_response(['success' => false, 'error' => 'Link title is required.'], 400);
         }
@@ -361,10 +384,6 @@ if ($method === 'POST') {
             $isFinal = 0;
             $approvedAt = null;
         }
-
-        $previewImageUrl = array_key_exists('preview_image_url', $body)
-            ? (trim($body['preview_image_url'] ?? '') !== '' ? trim($body['preview_image_url']) : null)
-            : $existing['preview_image_url'];
 
         // If this 3D view is marked final, ensure other 3D views for this booth are marked draft
         if ($isFinal === 1 && $category === 'render_3d') {
@@ -568,7 +587,7 @@ if ($method === 'POST') {
 
         // Two-way sync to booths table
         if (in_array($existing['category'], ['print_ready', 'working_artwork'])) {
-            $fallbackCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :bid AND id != :id AND category IN ('print_ready', 'working_artwork') ORDER BY created_at DESC LIMIT 1");
+            $fallbackCheck = $pdo->prepare("SELECT drive_url FROM booth_links WHERE booth_id = :bid AND id != :id AND category IN ('print_ready', 'working_artwork') ORDER BY is_final DESC, created_at DESC LIMIT 1");
             $fallbackCheck->execute([':bid' => $existing['booth_id'], ':id' => $id]);
             $fallback = $fallbackCheck->fetchColumn();
             $pdo->prepare("UPDATE booths SET print_drive_url = :url, updated_at = CURRENT_TIMESTAMP WHERE id = :bid")
