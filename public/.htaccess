@@ -16,14 +16,19 @@
   RewriteCond %{REQUEST_FILENAME}.php -f
   RewriteRule ^manage/api/([^/]+)/?$ manage/api/$1.php [L,QSA]
 
+  # 3b. Serve 3D preview uploads through persistent image streamer if missing in webroot
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^uploads/3d_previews/([^/]+)$ manage/api/preview-image.php?file=$1 [L,QSA]
+
   # 4. Route all non-API /manage requests to SPA index.html
   RewriteCond %{REQUEST_URI} !^/manage/api/
   RewriteRule ^manage(?:/.*)?$ /index.html [L]
 
-  # 5. SPA Fallback for other frontend routes
+  # 5. SPA Fallback for other frontend routes (DO NOT rewrite static files / images to index.html!)
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !\.(jpe?g|png|gif|webp|svg|ico|css|js|map|woff2?|ttf|eot)$ [NC]
   RewriteRule . /index.html [L]
 </IfModule>
 

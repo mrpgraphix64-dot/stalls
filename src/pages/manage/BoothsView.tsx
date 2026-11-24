@@ -1533,8 +1533,10 @@ export function BoothsView({
           {pdfExportData.map((stall, idx) => (
             <div
               key={stall.booth.id || idx}
-              className="booths-pdf-sheet bg-white p-6"
-              style={{ width: '794px', minHeight: '1120px' }}
+              className="booths-pdf-sheet bg-white"
+              style={{ width: '794px' }}
+              data-booth-number={stall.booth.booth_number || ''}
+              data-client-name={stall.booth.client_name || ''}
             >
               <StallChecklistSheet
                 data={stall}

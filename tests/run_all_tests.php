@@ -28,6 +28,8 @@ $files = [
     __DIR__ . '/test_3d_preview_images_and_pdf.php',
     __DIR__ . '/test_3d_and_print_quick_links.php',
     __DIR__ . '/test_3d_image_without_url.php',
+    __DIR__ . '/test_minimal_a4_checklist.php',
+    __DIR__ . '/test_3d_preview_image_serving.php',
 ];
 $totalFailed = 0;
 foreach ($files as $file) {

@@ -1,4 +1,4 @@
-import{r as Sn,j as wl}from"./index.dev-D6zZjtfK.js";import{h as Rl,W as he,S as Cl,C as Pl}from"./BuilderPage-BlGMQECc.js";import"./trash-2-BB-U-0Jz.js";/**
+import{r as Sn,j as wl}from"./index.dev-BSf_B6bI.js";import{h as Rl,W as he,S as Cl,C as Pl}from"./BuilderPage-D65r-35R.js";import"./trash-2-Cqp9joPH.js";/**
  * @license
  * Copyright 2010-2024 Three.js Authors
  * SPDX-License-Identifier: MIT

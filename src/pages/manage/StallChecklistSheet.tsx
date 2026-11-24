@@ -1,4 +1,5 @@
 import React from 'react';
+import QRCode from 'qrcode';
 import { StallPrintData, StallType, BoothTask } from './types';
 import { isPendingOrEmpty } from './boothSort';
 
@@ -88,11 +89,11 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
   return (
     <svg
       viewBox="0 0 32 32"
-      className="w-6 h-6 shrink-0"
+      className="w-5 h-5 shrink-0"
       fill="none"
       aria-hidden="true"
     >
-      {/* Subtle stall footprint */}
+      {/* Stall footprint */}
       <rect
         x="4.5"
         y="4.5"
@@ -105,7 +106,6 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
 
       {is3Sides && (
         <>
-          {/* Solid physical walls: Left, Back, Right */}
           <path
             d="M 6.5 25.5 L 6.5 6.5 L 25.5 6.5 L 25.5 25.5"
             stroke="#18181b"
@@ -113,7 +113,6 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          {/* Open front: dashed */}
           <path
             d="M 6.5 25.5 L 25.5 25.5"
             stroke="#71717a"
@@ -126,7 +125,6 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
 
       {is2SidesLeft && (
         <>
-          {/* Solid physical walls: Back and Left */}
           <path
             d="M 25.5 6.5 L 6.5 6.5 L 6.5 25.5"
             stroke="#18181b"
@@ -134,7 +132,6 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          {/* Open right and front: dashed */}
           <path
             d="M 25.5 6.5 L 25.5 25.5 L 6.5 25.5"
             stroke="#71717a"
@@ -148,7 +145,6 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
 
       {is2SidesRight && (
         <>
-          {/* Solid physical walls: Back and Right */}
           <path
             d="M 6.5 6.5 L 25.5 6.5 L 25.5 25.5"
             stroke="#18181b"
@@ -156,7 +152,6 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          {/* Open left and front: dashed */}
           <path
             d="M 6.5 6.5 L 6.5 25.5 L 25.5 25.5"
             stroke="#71717a"
@@ -170,14 +165,12 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
 
       {isBackOnly && (
         <>
-          {/* Solid physical wall: Back wall only */}
           <path
             d="M 6.5 6.5 L 25.5 6.5"
             stroke="#18181b"
             strokeWidth="2.5"
             strokeLinecap="round"
           />
-          {/* Open sides: left, front, right */}
           <path
             d="M 6.5 6.5 L 6.5 25.5 L 25.5 25.5 L 25.5 6.5"
             stroke="#71717a"
@@ -190,6 +183,111 @@ export function PrintableWallDiagram({ wallConfig }: { wallConfig?: string | nul
       )}
     </svg>
   );
+}
+
+// In-memory cache for generated QR code data URLs (instant synchronous reuse)
+const qrCodeCache = new Map<string, string>();
+
+/**
+ * Scannable and clickable QR code component for A4 print and PDF export.
+ * Wrapped in an anchor tag so clicking inside PDF viewer navigates directly to the URL.
+ * Renders at approx 18-22 mm (72-84px) with high contrast black-on-white.
+ */
+export function ChecklistQRCode({
+  url,
+  label,
+  sizePx = 76,
+}: {
+  url?: string | null;
+  label: string;
+  sizePx?: number;
+}) {
+  const cleanUrl = (url || '').trim();
+  const isValid = cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://');
+
+  // Slightly larger QR canvas if URL is very long (e.g. complex Google Drive sharing links)
+  const actualSize = cleanUrl.length > 120 ? Math.max(sizePx, 84) : sizePx;
+
+  const [dataUrl, setDataUrl] = React.useState<string | null>(() => {
+    if (!isValid) return null;
+    return qrCodeCache.get(cleanUrl) || null;
+  });
+
+  React.useEffect(() => {
+    if (!isValid) {
+      setDataUrl(null);
+      return;
+    }
+    if (qrCodeCache.has(cleanUrl)) {
+      setDataUrl(qrCodeCache.get(cleanUrl)!);
+      return;
+    }
+    let isMounted = true;
+    QRCode.toDataURL(cleanUrl, {
+      margin: 1,
+      width: actualSize * 2, // high-res for 300dpi PDF canvas rendering
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#000000',
+        light: '#ffffff',
+      },
+    })
+      .then((dataUri) => {
+        qrCodeCache.set(cleanUrl, dataUri);
+        if (isMounted) {
+          setDataUrl(dataUri);
+        }
+      })
+      .catch((err) => {
+        console.error('QR code generation error for', cleanUrl, err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [cleanUrl, isValid, actualSize]);
+
+  if (!isValid || !dataUrl) {
+    return null;
+  }
+
+  return (
+    <a
+      href={cleanUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex flex-col items-center justify-between p-1 bg-white border border-zinc-300 rounded shadow-2xs hover:border-zinc-700 transition-colors group text-decoration-none shrink-0"
+      title={`Scan or click to open ${label}`}
+      style={{ width: `${actualSize + 12}px` }}
+    >
+      <img
+        src={dataUrl}
+        alt={`${label} QR Code`}
+        className="w-auto h-auto object-contain block"
+        style={{ width: `${actualSize}px`, height: `${actualSize}px` }}
+        loading="eager"
+      />
+      <span className="text-[8.5px] font-black uppercase tracking-wider text-zinc-950 mt-1 text-center leading-none group-hover:text-blue-600 block">
+        {label}
+      </span>
+      <span className="text-[7px] text-zinc-500 font-medium mt-0.5 leading-none text-center block">
+        Scan / Click
+      </span>
+    </a>
+  );
+}
+
+function getClientAccessibleImageUrl(imgUrl?: string | null): string | null {
+  if (!imgUrl) return null;
+  const clean = imgUrl.trim();
+  if (clean.startsWith('https://')) return clean;
+  if (clean.startsWith('/uploads/') && typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    if (origin.startsWith('https://')) {
+      return `${origin}${clean}`;
+    }
+  }
+  return null;
 }
 
 export function StallChecklistSheet({
@@ -208,9 +306,6 @@ export function StallChecklistSheet({
     views3D,
   } = data;
 
-  const designStatus = getSectionStatus(tasks, 'design');
-  const printStatus = getSectionStatus(tasks, 'print');
-  const prodStatus = getSectionStatus(tasks, 'production');
   const furnStatus = getSectionStatus(tasks, 'furniture');
   const elecStatus = getSectionStatus(tasks, 'electrical');
 
@@ -279,7 +374,8 @@ export function StallChecklistSheet({
       : hasMainFolder
       ? mainFolderUrl
       : '';
-  const has3D = Boolean(single3DUrl || primaryPreviewImg || valid3DViews.length > 0);
+  const has3DViewUrl = Boolean(single3DUrl && (single3DUrl.startsWith('http://') || single3DUrl.startsWith('https://')));
+  const clientImgUrl = getClientAccessibleImageUrl(primaryPreviewImg);
 
   // Print & Goodies Links processing
   const printUrl = (booth.print_drive_url || '').trim();
@@ -288,199 +384,160 @@ export function StallChecklistSheet({
   const goodiesUrl = (booth.goodies_drive_url || '').trim();
   const hasGoodiesUrl = goodiesUrl.startsWith('http://') || goodiesUrl.startsWith('https://');
 
-  const printDateStr = new Date().toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  // Furniture & Electrical omission rules
+  const isFurnNotRequired = furnStatus === 'Not Required';
+  const hasFurnItems = Boolean(furnitureItems && furnitureItems.length > 0);
+  const shouldShowFurnSection = hasFurnItems || !isFurnNotRequired;
+
+  const isElecNotRequired = elecStatus === 'Not Required';
+  const hasElecItems = Boolean(electricalItems && electricalItems.length > 0);
+  const shouldShowElecSection = hasElecItems || !isElecNotRequired;
+
+  const hasAnyQRorMedia = hasPrintUrl || has3DViewUrl || primaryPreviewImg || clientImgUrl;
 
   return (
     <div
       className={`stall-print-sheet bg-white text-zinc-950 font-sans leading-normal text-[11px] p-4 sm:p-5 w-full max-w-[210mm] mx-auto ${
         isBulk && !isLast ? 'break-after-page page-break-after-always' : ''
       }`}
+      data-booth-number={booth.booth_number || ''}
+      data-client-name={booth.client_name || ''}
       style={{
         boxSizing: 'border-box',
       }}
     >
-      {/* 1. TOP HEADER & BRANDING (Compact, Non-overlapping, Proportional) */}
-      <div className="border-b-2 border-zinc-900 pb-2 mb-2">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+      {/* 1. COMPACT MINIMAL HEADER */}
+      <div className="border-b-2 border-zinc-900 pb-2 mb-2.5">
+        {/* Top line: Exhibition Name & Logo */}
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <div className="flex items-center gap-2.5 min-w-0">
             <img
               src="/logo.png"
               alt="Reworkzone"
-              className="h-8 sm:h-9 w-auto object-contain shrink-0"
-              style={{ maxHeight: '36px' }}
+              className="h-6 w-auto object-contain shrink-0"
             />
-            <div className="border-l-2 border-zinc-300 pl-3 min-w-0">
-              <span className="text-[8.5px] tracking-widest uppercase font-bold text-zinc-500 block leading-none mb-0.5">
-                Exhibitions & Turnkey Fabrication
-              </span>
-              <h1 className="text-[13px] sm:text-[14.5px] font-black tracking-tight text-zinc-950 uppercase leading-snug break-words">
-                Stall Production & Requirements Checklist
-              </h1>
-            </div>
+            <span className="text-[11px] font-black tracking-wider uppercase text-zinc-600 truncate">
+              {eventName || 'Exhibition'}
+            </span>
           </div>
-          <div className="text-right text-[9.5px] text-zinc-600 font-mono shrink-0 leading-tight pl-3 border-l border-zinc-200">
-            <div>
-              Doc Ref:{' '}
-              <span className="font-bold text-zinc-950">
-                {booth.id ? booth.id.substring(0, 10).toUpperCase() : 'RWZ-STALL'}
-              </span>
-            </div>
-            <div className="mt-0.5">
-              Print Date: <span className="font-medium text-zinc-900">{printDateStr}</span>
-            </div>
-          </div>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 shrink-0">
+            Production Sheet
+          </span>
         </div>
 
-        {/* 2. STALL INFORMATION GRID */}
-        {/* Row 1: Company / Exhibitor & Booth Number (Equal vertical alignment, natural wrapping, no truncate) */}
-        <div className="grid grid-cols-12 gap-2 items-stretch mt-2 pt-2 border-t border-zinc-300">
-          <div className="col-span-8 bg-zinc-50 border border-zinc-300 rounded px-2.5 py-1.5 flex flex-col justify-center min-h-[44px]">
-            <span className="text-[8.5px] uppercase tracking-wider text-zinc-500 block font-bold leading-none mb-1">
+        {/* Primary Row: Company Name & Booth Number (Prominent!) */}
+        <div className="grid grid-cols-12 gap-2 items-stretch">
+          <div className="col-span-8 bg-zinc-50 border border-zinc-300 rounded px-3 py-2 flex flex-col justify-center min-h-[46px]">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold leading-none mb-1">
               Company / Exhibitor
             </span>
-            <span className="text-xs sm:text-[13px] font-black text-zinc-950 block leading-tight break-words">
+            <span className="text-sm sm:text-base font-black text-zinc-950 leading-tight break-words">
               {booth.client_name || 'Exhibitor'}
             </span>
           </div>
 
-          <div className="col-span-4 bg-zinc-50 border border-zinc-300 rounded px-2.5 py-1.5 flex flex-col justify-center min-h-[44px]">
-            <span className="text-[8.5px] uppercase tracking-wider text-zinc-500 block font-bold leading-none mb-1">
+          <div className="col-span-4 bg-zinc-900 text-white border border-zinc-900 rounded px-3 py-2 flex flex-col justify-center items-center text-center min-h-[46px]">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-300 font-bold leading-none mb-1">
               Booth Number
             </span>
-            <span className="font-mono font-black text-xs sm:text-[13px] text-zinc-950 block leading-tight break-words">
+            <span className="font-mono font-black text-sm sm:text-base text-white leading-tight break-words">
               {isPendingOrEmpty(booth.booth_number) ? 'Not Assigned' : `#${booth.booth_number}`}
             </span>
           </div>
         </div>
 
-        {/* Row 2: Exhibition, Stall Size, Stall Type, Mobile Contact (4 columns, clean horizontal separation, no overlap) */}
-        <div className="grid grid-cols-12 gap-2 items-start mt-1.5 pt-1.5 border-t border-zinc-200 text-[11px]">
-          {/* 1. Exhibition */}
-          <div className="col-span-4 min-w-0">
-            <span className="text-[8.5px] uppercase tracking-wider text-zinc-500 block font-bold leading-none mb-1">
-              Exhibition
+        {/* Secondary Row: Stall Size, Stall Type, Wall Configuration (with vector diagram) */}
+        <div className="grid grid-cols-12 gap-2 items-center mt-2 pt-1.5 border-t border-zinc-200 text-[11px]">
+          <div className="col-span-3 min-w-0">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-none mb-0.5">
+              Size
             </span>
-            <span className="font-bold text-zinc-900 text-[11px] leading-tight block break-words">
-              {eventName || 'Exhibition'}
-            </span>
-          </div>
-
-          {/* 2. Stall Size */}
-          <div className="col-span-2 min-w-0">
-            <span className="text-[8.5px] uppercase tracking-wider text-zinc-500 block font-bold leading-none mb-1">
-              Stall Size
-            </span>
-            <span className="font-mono font-bold text-zinc-900 text-[11px] leading-tight block">
+            <span className="font-mono font-bold text-zinc-900 text-[11.5px] leading-tight block">
               {booth.stand_size || '3 × 3 m'}
             </span>
           </div>
 
-          {/* 3. Stall Type */}
           <div className="col-span-3 min-w-0">
-            <span className="text-[8.5px] uppercase tracking-wider text-zinc-500 block font-bold leading-none mb-1">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-none mb-0.5">
               Stall Type
             </span>
-            <span className="font-bold text-zinc-900 text-[11px] leading-tight block break-words">
+            <span className="font-bold text-zinc-900 text-[11.5px] leading-tight block break-words">
               {structureType}
             </span>
           </div>
 
-          {/* 4. Mobile Number */}
-          <div className="col-span-3 min-w-0">
-            <span className="text-[8.5px] uppercase tracking-wider text-zinc-500 block font-bold leading-none mb-1">
-              Mobile Number
-            </span>
-            <span className="font-mono font-medium text-zinc-900 text-[11px] leading-tight block break-words">
-              {booth.phone || '—'}
-            </span>
-          </div>
-        </div>
-
-        {/* Row 3: Wall Configuration with Compact Top-View Vector Diagram */}
-        <div className="mt-2 py-1 px-2.5 bg-amber-50/70 border border-amber-300/80 rounded flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[8.5px] uppercase tracking-wider text-amber-900/80 font-bold shrink-0">
-              Wall Configuration:
-            </span>
-            <span className="font-bold text-zinc-950 text-[11px] truncate">
-              {wallConfigInfo.label}
-            </span>
-          </div>
-          {wallConfigInfo.hasDiagram && (
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[8.5px] text-zinc-500 uppercase tracking-wider font-semibold">
-                Top View:
+          <div className="col-span-6 min-w-0 bg-amber-50/80 border border-amber-300/80 rounded px-2.5 py-1 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <span className="text-[8px] uppercase tracking-wider text-amber-900 font-bold block leading-none mb-0.5">
+                Wall Configuration
               </span>
-              <PrintableWallDiagram wallConfig={booth.wall_configuration} />
+              <span className="font-bold text-zinc-950 text-[10.5px] leading-tight block truncate">
+                {wallConfigInfo.label}
+              </span>
             </div>
-          )}
+            {wallConfigInfo.hasDiagram && (
+              <PrintableWallDiagram wallConfig={booth.wall_configuration} />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* 3. FOUR CHECKLIST SECTIONS (Standardized Structure & Table Layout) */}
-      <div className="space-y-2">
+      {/* 2. FOUR CHECKLIST SECTIONS */}
+      <div className="space-y-2.5">
         {/* SECTION 1: PRINT FILES & DESIGN */}
-        <div className="border-b border-zinc-200 pb-1.5">
-          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
-              <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                1. Print Files & Design
-              </h2>
-              <span className="text-zinc-400 font-normal mx-0.5">—</span>
-              {renderStatusBadge(printStatus)}
-            </div>
-            <div className="flex items-center gap-1 text-[9px] text-zinc-500">
-              <span className="w-3 h-3 border border-zinc-400 rounded-sm inline-block shrink-0" />
-              <span>Design & print verified</span>
+        <div className="border-b border-zinc-200 pb-2">
+          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-1.5">
+            <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
+              1. Print Files & Design
+            </h2>
+            <div className="flex items-center gap-1.5 text-[9px] text-zinc-600 font-semibold">
+              <span className="w-3.5 h-3.5 border border-zinc-500 rounded-xs inline-block shrink-0 bg-white" />
+              <span>Verified on site</span>
             </div>
           </div>
 
-          <div className="text-[11px] text-zinc-800 space-y-0.5">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
-              <div>
-                <span className="text-zinc-500 font-semibold">Responsibility: </span>
-                <span className="font-bold text-zinc-950">{booth.design_responsibility || 'Client Side'}</span>
-              </div>
+          <div className="flex flex-col sm:flex-row gap-3 items-start justify-between">
+            {/* Left Column: Details, Links, Remarks, Goodies */}
+            <div className="flex-1 min-w-0 space-y-1.5 text-[11px] text-zinc-800">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <div>
+                  <span className="text-zinc-500 font-semibold">Responsibility: </span>
+                  <span className="font-bold text-zinc-950">{booth.design_responsibility || 'Client Side'}</span>
+                </div>
 
-              <span className="text-zinc-300 hidden sm:inline">|</span>
+                <span className="text-zinc-300 hidden sm:inline">|</span>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-zinc-500 font-semibold">3D View: </span>
-                {valid3DViews.length > 1 ? (
-                  <span className="inline-flex items-center gap-1.5 flex-wrap">
-                    {valid3DViews.map((v, idx) => {
-                      const vUrl = (v.drive_url || (v as any).url || '').trim();
-                      const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
-                      const vTitle = v.title?.trim() || `View ${idx + 1}`;
-                      return (
-                        <React.Fragment key={v.id || idx}>
-                          {idx > 0 && <span className="text-zinc-300">/</span>}
-                          {hasVUrl ? (
-                            <a
-                              href={vUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
-                              title={`Open ${vTitle}`}
-                            >
-                              {vTitle}
-                            </a>
-                          ) : (
-                            <span className="text-zinc-950 font-bold text-[11px]">
-                              {vTitle} (Image Attached)
-                            </span>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </span>
-                ) : has3D ? (
-                  single3DUrl ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500 font-semibold">3D View: </span>
+                  {valid3DViews.length > 1 ? (
+                    <span className="inline-flex items-center gap-1.5 flex-wrap">
+                      {valid3DViews.map((v, idx) => {
+                        const vUrl = (v.drive_url || (v as any).url || '').trim();
+                        const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
+                        const vTitle = v.title?.trim() || `View ${idx + 1}`;
+                        return (
+                          <React.Fragment key={v.id || idx}>
+                            {idx > 0 && <span className="text-zinc-300">/</span>}
+                            {hasVUrl ? (
+                              <a
+                                href={vUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                                title={`Open ${vTitle}`}
+                              >
+                                {vTitle}
+                              </a>
+                            ) : (
+                              <span className="text-zinc-950 font-bold text-[11px]">
+                                {vTitle} (Image Attached)
+                              </span>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </span>
+                  ) : has3DViewUrl ? (
                     <a
                       href={single3DUrl}
                       target="_blank"
@@ -488,53 +545,43 @@ export function StallChecklistSheet({
                       className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
                       title="Open 3D Design in new tab"
                     >
-                      {valid3DViews.length === 1 && valid3DViews[0].title && valid3DViews[0].title.toLowerCase() !== 'view 3d design'
+                      {valid3DViews[0]?.title && valid3DViews[0].title.toLowerCase() !== 'view 3d design'
                         ? valid3DViews[0].title
-                        : 'View 3D Design'}
+                        : 'Open 3D View'}
+                    </a>
+                  ) : primaryPreviewImg ? (
+                    <span className="text-zinc-950 font-bold text-[11px]">
+                      {primary3DView?.title || '3D Design'} (Image Attached)
+                    </span>
+                  ) : (
+                    <span className="text-zinc-400 italic text-[11px]">Not Added</span>
+                  )}
+                </div>
+
+                <span className="text-zinc-300 hidden sm:inline">|</span>
+
+                <div>
+                  <span className="text-zinc-500 font-semibold">Print Files: </span>
+                  {hasPrintUrl ? (
+                    <a
+                      href={printUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                      title="Open Print Files in Google Drive"
+                    >
+                      Open Drive
                     </a>
                   ) : (
-                    <span className="text-zinc-950 font-bold text-[11px]">
-                      {valid3DViews[0]?.title || '3D Design'} (Image Attached)
-                    </span>
-                  )
-                ) : (
-                  <span className="text-zinc-400 italic text-[11px]">Not Added</span>
-                )}
-              </div>
+                    <span className="text-zinc-400 italic text-[11px]">Not Added</span>
+                  )}
+                </div>
 
-              <span className="text-zinc-300 hidden sm:inline">|</span>
-
-              <div>
-                <span className="text-zinc-500 font-semibold">Print Status: </span>
-                <span className="font-bold text-zinc-950">{booth.print_file_status || 'Designs Pending'}</span>
-              </div>
-
-              <span className="text-zinc-300 hidden sm:inline">|</span>
-
-              <div>
-                <span className="text-zinc-500 font-semibold">Print Files: </span>
-                {hasPrintUrl ? (
-                  <a
-                    href={printUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
-                    title="Open Print Files in Google Drive"
-                  >
-                    Open Drive
-                  </a>
-                ) : (
-                  <span className="text-zinc-400 italic text-[11px]">Not Added</span>
-                )}
-              </div>
-
-              {/* Only show Goodies Artwork & Status when goodies are recorded or goodies link exists */}
-              {(hasGoodiesUrl || (goodiesItems && goodiesItems.length > 0)) && (
-                <>
-                  <span className="text-zinc-300 hidden sm:inline">|</span>
-                  <div>
-                    <span className="text-zinc-500 font-semibold">Goodies Artwork: </span>
-                    {hasGoodiesUrl ? (
+                {hasGoodiesUrl && (
+                  <>
+                    <span className="text-zinc-300 hidden sm:inline">|</span>
+                    <div>
+                      <span className="text-zinc-500 font-semibold">Goodies Files: </span>
                       <a
                         href={goodiesUrl}
                         target="_blank"
@@ -544,138 +591,135 @@ export function StallChecklistSheet({
                       >
                         Open Artwork
                       </a>
-                    ) : (
-                      <span className="text-zinc-400 italic text-[11px]">Not Added</span>
-                    )}
-                  </div>
+                    </div>
+                  </>
+                )}
+              </div>
 
-                  {booth.goodies_status && (
-                    <>
-                      <span className="text-zinc-300 hidden sm:inline">|</span>
-                      <div>
-                        <span className="text-zinc-500 font-semibold">Goodies Status: </span>
-                        <span className="font-bold text-zinc-950">{booth.goodies_status}</span>
-                      </div>
-                    </>
+              {/* Remarks (Only when saved & relevant) */}
+              {(booth.print_remark || booth.notes || booth.goodies_remark) && (
+                <div className="text-[10px] text-zinc-600 italic flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5">
+                  {booth.print_remark && (
+                    <div>
+                      <span className="text-zinc-500 not-italic font-semibold">Print Remark: </span>
+                      {booth.print_remark}
+                    </div>
                   )}
-                </>
+                  {booth.notes && (
+                    <div>
+                      <span className="text-zinc-500 not-italic font-semibold">Notes: </span>
+                      {booth.notes}
+                    </div>
+                  )}
+                  {booth.goodies_remark && (
+                    <div>
+                      <span className="text-zinc-500 not-italic font-semibold">Goodies Note: </span>
+                      {booth.goodies_remark}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Promotional Goodies Requirements (Omitted entirely if no goodies saved) */}
+              {goodiesItems && goodiesItems.length > 0 && (
+                <div className="mt-1 pt-1 border-t border-zinc-200">
+                  <div className="text-[9.5px] font-bold text-zinc-700 uppercase tracking-wider mb-0.5">
+                    Goodies Requirements
+                  </div>
+                  <table className="table-fixed w-full text-left border-collapse text-[10px]">
+                    <colgroup>
+                      <col className="w-[50%]" />
+                      <col className="w-[25%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[13%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
+                        <th className="py-0.5 px-2 text-left">Goodies Item</th>
+                        <th className="py-0.5 px-2 text-left">Specification</th>
+                        <th className="py-0.5 px-2 text-center">Qty</th>
+                        <th className="py-0.5 px-2 text-center">Check</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200">
+                      {goodiesItems.map((item) => (
+                        <tr key={item.id} className="break-inside-avoid">
+                          <td className="py-0.5 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
+                          <td className="py-0.5 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
+                          <td className="py-0.5 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
+                          <td className="py-0.5 px-2 text-center">
+                            <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
 
-            {/* Remarks */}
-            {(booth.notes || booth.print_remark || booth.goodies_remark) && (
-              <div className="text-[10px] text-zinc-600 italic flex flex-wrap gap-x-3 gap-y-0.5">
-                {booth.notes && (
-                  <div>
-                    <span className="text-zinc-500 not-italic font-medium">Remarks: </span>
-                    {booth.notes}
-                  </div>
+            {/* Right Column: QR Codes & 3D Thumbnail (Compact Media Block) */}
+            {hasAnyQRorMedia && (
+              <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2 shrink-0 self-center sm:self-start">
+                {/* Print Files QR Code */}
+                {hasPrintUrl && (
+                  <ChecklistQRCode url={printUrl} label="PRINT FILES" />
                 )}
-                {booth.print_remark && (
-                  <div>
-                    <span className="text-zinc-500 not-italic font-medium">Print Remark: </span>
-                    {booth.print_remark}
-                  </div>
-                )}
-                {booth.goodies_remark && (
-                  <div>
-                    <span className="text-zinc-500 not-italic font-medium">Goodies Note: </span>
-                    {booth.goodies_remark}
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* Promotional Goodies Requirements (Only shown when goodies items exist) */}
-            {goodiesItems && goodiesItems.length > 0 && (
-              <div className="mt-1 pt-0.5 border-t border-zinc-200">
-                <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
-                  <colgroup>
-                    <col className="w-[50%]" />
-                    <col className="w-[25%]" />
-                    <col className="w-[12%]" />
-                    <col className="w-[13%]" />
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[9px] tracking-wider">
-                      <th className="py-1 px-2 text-left">Goodies Item</th>
-                      <th className="py-1 px-2 text-left">Specification</th>
-                      <th className="py-1 px-2 text-center">Qty</th>
-                      <th className="py-1 px-2 text-center">Check</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200">
-                    {goodiesItems.map((item) => (
-                      <tr key={item.id} className="break-inside-avoid">
-                        <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                        <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                        <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
-                        <td className="py-1 px-2 text-center">
-                          <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-sm inline-block align-middle" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                {/* 3D View QR Code (or 3D Image QR if image-only with accessible HTTPS URL) */}
+                {has3DViewUrl ? (
+                  <ChecklistQRCode url={single3DUrl} label="3D VIEW" />
+                ) : clientImgUrl ? (
+                  <ChecklistQRCode url={clientImgUrl} label="3D IMAGE" />
+                ) : null}
 
-            {/* 3D Stall Design Preview Image (when available for this stall) */}
-            {primaryPreviewImg && (
-              <div className="mt-2 p-2 bg-zinc-50 border border-zinc-200 rounded-lg break-inside-avoid print:break-inside-avoid">
-                <div className="flex justify-center items-center overflow-hidden">
-                  <img
-                    src={primaryPreviewImg}
-                    alt={`3D Design Preview — ${primary3DView?.title || 'Stall View'}`}
-                    className="max-w-[580px] max-h-[200px] w-auto h-auto object-contain rounded"
-                    crossOrigin="anonymous"
-                    loading="eager"
-                  />
-                </div>
-                <div className="text-center mt-1 text-[9.5px] text-zinc-600 font-medium">
-                  <span>
-                    3D Stall Design Preview:{' '}
-                    <strong className="text-zinc-950 font-bold">{primary3DView?.title || '3D View'}</strong>
-                  </span>
-                  {primary3DView && (primary3DView.drive_url || (primary3DView as any).url)?.trim() && (
-                    <span className="ml-2">
-                      (
-                      <a
-                        href={(primary3DView.drive_url || (primary3DView as any).url).trim()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline font-bold"
-                        title="Open Interactive 3D Model"
-                      >
-                        Open Interactive 3D Model
-                      </a>
-                      )
+                {/* 3D Stall Design Preview Thumbnail */}
+                {primaryPreviewImg && (
+                  <div className="inline-flex flex-col items-center justify-between p-1 bg-white border border-zinc-300 rounded shadow-2xs shrink-0">
+                    <a
+                      href={has3DViewUrl ? single3DUrl : primaryPreviewImg}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block overflow-hidden"
+                      title={primary3DView?.title || 'Open 3D Design'}
+                    >
+                      <img
+                        src={primaryPreviewImg}
+                        alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
+                        className="max-h-[76px] max-w-[120px] w-auto h-auto object-contain rounded-xs"
+                        crossOrigin="anonymous"
+                        loading="eager"
+                        onError={(e) => {
+                          const box = (e.currentTarget.parentElement as HTMLElement)?.parentElement;
+                          if (box) box.style.display = 'none';
+                        }}
+                      />
+                    </a>
+                    <span className="text-[7.5px] font-black uppercase tracking-wider text-zinc-950 mt-1 text-center leading-none block">
+                      3D Preview
                     </span>
-                  )}
-                </div>
+                    <span className="text-[7px] text-zinc-500 font-medium mt-0.5 leading-none text-center block">
+                      {primary3DView?.title || 'Design View'}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
         {/* SECTION 2: PRODUCTION REQUIREMENTS */}
-        <div className="border-b border-zinc-200 pb-1.5">
-          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
-              <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                2. Production Requirements
-              </h2>
-              <span className="text-zinc-400 font-normal mx-0.5">—</span>
-              {renderStatusBadge(prodStatus)}
-            </div>
-            <div className="flex items-center gap-1 text-[9px] text-zinc-500">
-              <span className="w-3 h-3 border border-zinc-400 rounded-sm inline-block shrink-0" />
-              <span>Production checked on site</span>
+        <div className="border-b border-zinc-200 pb-2">
+          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-1.5">
+            <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
+              2. Production Requirements
+            </h2>
+            <div className="flex items-center gap-1.5 text-[9px] text-zinc-600 font-semibold">
+              <span className="w-3.5 h-3.5 border border-zinc-500 rounded-xs inline-block shrink-0 bg-white" />
+              <span>Production verified</span>
             </div>
           </div>
 
-          {/* Table of actual saved Production items */}
           {productionItems && productionItems.length > 0 ? (
             <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
               <colgroup>
@@ -685,7 +729,7 @@ export function StallChecklistSheet({
                 <col className="w-[13%]" />
               </colgroup>
               <thead>
-                <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[9px] tracking-wider">
+                <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
                   <th className="py-1 px-2 text-left">Production Item</th>
                   <th className="py-1 px-2 text-left">Specification</th>
                   <th className="py-1 px-2 text-center">Qty</th>
@@ -699,161 +743,137 @@ export function StallChecklistSheet({
                     <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
                     <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
                     <td className="py-1 px-2 text-center">
-                      <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-sm inline-block align-middle" />
+                      <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <p className="text-[10px] text-zinc-500 italic py-0.5 px-1.5">
-              No specific production items assigned.
+            <p className="text-[10px] text-zinc-500 italic py-0.5 px-1">
+              No production items recorded.
             </p>
           )}
         </div>
 
-        {/* SECTION 3: FURNITURE */}
-        <div className="border-b border-zinc-200 pb-1.5">
-          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
-              <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                3. Furniture
-              </h2>
-              <span className="text-zinc-400 font-normal mx-0.5">—</span>
-              {renderStatusBadge(furnStatus)}
+        {/* SECTION 3: FURNITURE (Omitted if explicitly Not Required and 0 items) */}
+        {shouldShowFurnSection && (
+          <div className="border-b border-zinc-200 pb-2">
+            <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-1.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
+                  3. Furniture
+                </h2>
+                {isFurnNotRequired && hasFurnItems && (
+                  <span className="text-[8.5px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded leading-none">
+                    Marked N/A with active items
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 text-[9px] text-zinc-600 font-semibold">
+                <span className="w-3.5 h-3.5 border border-zinc-500 rounded-xs inline-block shrink-0 bg-white" />
+                <span>Placed & verified</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1 text-[9px] text-zinc-500">
-              <span className="w-3 h-3 border border-zinc-400 rounded-sm inline-block shrink-0" />
-              <span>Furniture placed & verified</span>
-            </div>
+
+            {hasFurnItems ? (
+              <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
+                <colgroup>
+                  <col className="w-[50%]" />
+                  <col className="w-[25%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[13%]" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
+                    <th className="py-1 px-2 text-left">Furniture Item</th>
+                    <th className="py-1 px-2 text-left">Specification</th>
+                    <th className="py-1 px-2 text-center">Qty</th>
+                    <th className="py-1 px-2 text-center">Check</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {furnitureItems.map((item) => (
+                    <tr key={item.id} className="break-inside-avoid">
+                      <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
+                      <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
+                      <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
+                      <td className="py-1 px-2 text-center">
+                        <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-[10px] text-zinc-500 italic py-0.5 px-1">
+                No furniture items requested.
+              </p>
+            )}
           </div>
+        )}
 
-          {furnitureItems && furnitureItems.length > 0 ? (
-            <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
-              <colgroup>
-                <col className="w-[50%]" />
-                <col className="w-[25%]" />
-                <col className="w-[12%]" />
-                <col className="w-[13%]" />
-              </colgroup>
-              <thead>
-                <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[9px] tracking-wider">
-                  <th className="py-1 px-2 text-left">Furniture Item</th>
-                  <th className="py-1 px-2 text-left">Specification</th>
-                  <th className="py-1 px-2 text-center">Qty</th>
-                  <th className="py-1 px-2 text-center">Check</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200">
-                {furnitureItems.map((item) => (
-                  <tr key={item.id} className="break-inside-avoid">
-                    <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                    <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                    <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
-                    <td className="py-1 px-2 text-center">
-                      <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-sm inline-block align-middle" />
-                    </td>
+        {/* SECTION 4: ELECTRICAL (Omitted if explicitly Not Required and 0 items) */}
+        {shouldShowElecSection && (
+          <div className="border-b border-zinc-200 pb-2">
+            <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-1.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
+                  4. Electrical
+                </h2>
+                {isElecNotRequired && hasElecItems && (
+                  <span className="text-[8.5px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded leading-none">
+                    Marked N/A with active items
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 text-[9px] text-zinc-600 font-semibold">
+                <span className="w-3.5 h-3.5 border border-zinc-500 rounded-xs inline-block shrink-0 bg-white" />
+                <span>Connected & tested</span>
+              </div>
+            </div>
+
+            {hasElecItems ? (
+              <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
+                <colgroup>
+                  <col className="w-[50%]" />
+                  <col className="w-[25%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[13%]" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
+                    <th className="py-1 px-2 text-left">Electrical Item</th>
+                    <th className="py-1 px-2 text-left">Specification</th>
+                    <th className="py-1 px-2 text-center">Qty</th>
+                    <th className="py-1 px-2 text-center">Check</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-[10px] text-zinc-500 italic py-0.5 px-1.5">
-              No furniture items assigned.
-            </p>
-          )}
-        </div>
-
-        {/* SECTION 4: ELECTRICAL */}
-        <div className="border-b border-zinc-200 pb-1.5">
-          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-0.5 mb-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 border-2 border-zinc-900 rounded-sm inline-block shrink-0" />
-              <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
-                4. Electrical
-              </h2>
-              <span className="text-zinc-400 font-normal mx-0.5">—</span>
-              {renderStatusBadge(elecStatus)}
-            </div>
-            <div className="flex items-center gap-1 text-[9px] text-zinc-500">
-              <span className="w-3 h-3 border border-zinc-400 rounded-sm inline-block shrink-0" />
-              <span>Electrical connected & tested</span>
-            </div>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {electricalItems.map((item) => (
+                    <tr key={item.id} className="break-inside-avoid">
+                      <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
+                      <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
+                      <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
+                      <td className="py-1 px-2 text-center">
+                        <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-[10px] text-zinc-500 italic py-0.5 px-1">
+                No electrical items requested.
+              </p>
+            )}
           </div>
-
-          {electricalItems && electricalItems.length > 0 ? (
-            <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
-              <colgroup>
-                <col className="w-[50%]" />
-                <col className="w-[25%]" />
-                <col className="w-[12%]" />
-                <col className="w-[13%]" />
-              </colgroup>
-              <thead>
-                <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[9px] tracking-wider">
-                  <th className="py-1 px-2 text-left">Electrical Item</th>
-                  <th className="py-1 px-2 text-left">Specification</th>
-                  <th className="py-1 px-2 text-center">Qty</th>
-                  <th className="py-1 px-2 text-center">Check</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200">
-                {electricalItems.map((item) => (
-                  <tr key={item.id} className="break-inside-avoid">
-                    <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                    <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                    <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
-                    <td className="py-1 px-2 text-center">
-                      <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-sm inline-block align-middle" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-[10px] text-zinc-500 italic py-0.5 px-1.5">
-              No electrical items assigned.
-            </p>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* 4. FOOTER (Prepared By, Checked By, Date - Compact Layout) */}
-      <div className="mt-3 pt-2 border-t-2 border-zinc-900 break-inside-avoid">
-        <div className="grid grid-cols-3 gap-6 text-[10px] text-zinc-800">
-          <div>
-            <span className="font-bold text-zinc-900 uppercase tracking-wider block">
-              Prepared By:
-            </span>
-            <div className="h-5 border-b border-zinc-400 mt-2" />
-          </div>
-
-          <div>
-            <span className="font-bold text-zinc-900 uppercase tracking-wider block">
-              Checked By:
-            </span>
-            <div className="h-5 border-b border-zinc-400 mt-2" />
-          </div>
-
-          <div>
-            <span className="font-bold text-zinc-900 uppercase tracking-wider block">
-              Date:
-            </span>
-            <div className="h-5 border-b border-zinc-400 mt-2" />
-          </div>
-        </div>
-
-        <div className="mt-2 pt-1 border-t border-zinc-200 flex items-center justify-between text-[8.5px] text-zinc-500">
-          <div className="flex items-center gap-1.5">
-            <img src="/logo.png" alt="Reworkzone" className="h-2.5 w-auto object-contain opacity-70" />
-            <span>Reworkzone Stalls Operations Management • stalls.reworkzone.in</span>
-          </div>
-          <span className="font-mono">
-            Doc Ref: {booth.id ? booth.id.substring(0, 10).toUpperCase() : 'RWZ'} • Official Production Checklist
-          </span>
-        </div>
-      </div>
+      {/* NO FOOTER / SIGNATURES AREA - Clean sheet boundary */}
     </div>
   );
 }
+
+export default StallChecklistSheet;

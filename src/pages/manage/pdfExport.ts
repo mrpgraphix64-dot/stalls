@@ -142,7 +142,10 @@ export async function exportElementsToPdf(
 
     const el = validElements[i];
 
-    // Ensure all preview and logo images in this stall sheet are loaded prior to canvas rendering
+    // Ensure any asynchronous QR code renders have flushed to DOM
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    // Ensure all preview, QR code, and logo images in this stall sheet are loaded prior to canvas rendering
     const images = Array.from(el.querySelectorAll<HTMLImageElement>('img'));
     if (images.length > 0) {
       await Promise.all(
@@ -188,10 +191,25 @@ export async function exportElementsToPdf(
       pageIndex++;
       heightLeft -= printHeight;
 
+      const boothNum = el.getAttribute('data-booth-number') || el.querySelector('[data-booth-number]')?.getAttribute('data-booth-number') || '';
+      const clientName = el.getAttribute('data-client-name') || el.querySelector('[data-client-name]')?.getAttribute('data-client-name') || '';
+
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
         pdf.addImage(canvas, 'JPEG', margin, margin + position, imgWidth, imgHeight, undefined, 'FAST');
+
+        // Repeat essential booth identification on continuation pages
+        if (clientName || boothNum) {
+          pdf.setFontSize(8);
+          pdf.setTextColor(120, 120, 120);
+          pdf.text(
+            `${clientName}${boothNum ? ` • Stall #${boothNum}` : ''} (Continuation)`,
+            margin,
+            margin - 2
+          );
+        }
+
         pageIndex++;
         heightLeft -= printHeight;
       }

@@ -27,6 +27,22 @@ $baseUrl = 'http://127.0.0.1:8000';
 $passed = 0;
 $failed = 0;
 
+// Ensure test HTTP server is running
+$serverProcess = null;
+$fp = @fsockopen('127.0.0.1', 8000, $errno, $errstr, 0.5);
+if (!$fp) {
+    $cmd = 'php -S 127.0.0.1:8000 -t ' . escapeshellarg(dirname(__DIR__)) . ' ' . escapeshellarg(dirname(__DIR__) . '/local-server.php');
+    $descriptors = [
+        0 => ['file', 'nul', 'r'],
+        1 => ['file', 'nul', 'w'],
+        2 => ['file', 'nul', 'w'],
+    ];
+    $serverProcess = proc_open($cmd, $descriptors, $pipes);
+    usleep(500000);
+} else {
+    fclose($fp);
+}
+
 function assertCondition($cond, $msg, $details = '') {
     global $passed, $failed;
     if ($cond) {
@@ -246,6 +262,16 @@ echo "\n--- SUMMARY ---\n";
 echo "Total assertions: " . ($passed + $failed) . "\n";
 echo "Passed: $passed\n";
 echo "Failed: $failed\n";
+
+if ($serverProcess) {
+    $pstatus = proc_get_status($serverProcess);
+    if (!empty($pstatus['pid']) && strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        exec("taskkill /F /T /PID " . (int)$pstatus['pid'] . " 2>nul");
+    } else {
+        proc_terminate($serverProcess);
+    }
+    proc_close($serverProcess);
+}
 
 if ($failed === 0) {
     echo "\n[SUCCESS] 3D View Image Without URL test suite passed!\n";

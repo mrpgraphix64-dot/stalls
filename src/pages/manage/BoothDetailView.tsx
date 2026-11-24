@@ -32,6 +32,8 @@ import {
   Upload,
   Image as ImageIcon,
   Eye,
+  RotateCw,
+  AlertCircle,
 } from 'lucide-react';
 import {
   fetchBooth,
@@ -169,6 +171,21 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
   const [editHasRemovedImg3D, setEditHasRemovedImg3D] = useState<boolean>(false);
   const [is3DMenuOpen, setIs3DMenuOpen] = useState<boolean>(false);
   const [previewModalImg, setPreviewModalImg] = useState<{ url: string; title: string } | null>(null);
+  const [modalImgError, setModalImgError] = useState<boolean>(false);
+  const [modalImgRetryKey, setModalImgRetryKey] = useState<number>(0);
+  const [brokenThumbnails, setBrokenThumbnails] = useState<Set<string>>(new Set());
+
+  // Close 3D preview lightbox on Escape key
+  useEffect(() => {
+    if (!previewModalImg) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewModalImg(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewModalImg]);
 
   // Fast resolution for 3D Stall Views & Print Files quick shortcuts
   const valid3DViews = useMemo(() => {
@@ -1995,14 +2012,42 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
                                       {hasImg ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => setPreviewModalImg({ url: view.preview_image_url!, title: view.title })}
-                                          className="w-8 h-8 rounded border border-zinc-700 bg-black/40 overflow-hidden shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                                          title="Click to view full image"
-                                        >
-                                          <img src={view.preview_image_url || undefined} alt={view.title} className="w-full h-full object-cover" />
-                                        </button>
+                                        brokenThumbnails.has(view.preview_image_url!) ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setModalImgError(false);
+                                              setModalImgRetryKey(0);
+                                              setPreviewModalImg({ url: view.preview_image_url!, title: view.title });
+                                            }}
+                                            className="w-8 h-8 rounded border border-amber-500/30 bg-amber-500/10 flex items-center justify-center shrink-0 cursor-pointer text-amber-400 hover:bg-amber-500/20 transition-colors"
+                                            title="Image preview unavailable — Click to view details or retry"
+                                          >
+                                            <ImageIcon className="w-4 h-4 opacity-70" />
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setModalImgError(false);
+                                              setModalImgRetryKey(0);
+                                              setPreviewModalImg({ url: view.preview_image_url!, title: view.title });
+                                            }}
+                                            className="w-8 h-8 rounded border border-zinc-700 bg-black/40 overflow-hidden shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                                            title="Click to view full image"
+                                          >
+                                            <img
+                                              src={view.preview_image_url || undefined}
+                                              alt={view.title}
+                                              className="w-full h-full object-cover"
+                                              onError={() => {
+                                                if (view.preview_image_url) {
+                                                  setBrokenThumbnails((prev) => new Set(prev).add(view.preview_image_url!));
+                                                }
+                                              }}
+                                            />
+                                          </button>
+                                        )
                                       ) : (
                                         <div className="w-8 h-8 rounded border border-zinc-800 bg-zinc-950 flex items-center justify-center shrink-0 text-amber-400/80">
                                           <Box className="w-4 h-4" />
@@ -2026,7 +2071,11 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                                       {hasImg && (
                                         <button
                                           type="button"
-                                          onClick={() => setPreviewModalImg({ url: view.preview_image_url!, title: view.title })}
+                                          onClick={() => {
+                                            setModalImgError(false);
+                                            setModalImgRetryKey(0);
+                                            setPreviewModalImg({ url: view.preview_image_url!, title: view.title });
+                                          }}
                                           className="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1 cursor-pointer"
                                           title="View full-size 3D image"
                                         >
@@ -3774,26 +3823,30 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
       {/* 3D Image Full-size Preview Lightbox Modal */}
       {previewModalImg && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={() => setPreviewModalImg(null)}
         >
           <div
-            className="relative max-w-4xl max-h-[90vh] bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+            className="relative max-w-5xl w-full max-h-[92vh] bg-zinc-900 border border-zinc-700/80 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-950/80">
-              <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-950/90">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <ImageIcon className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-sm font-semibold text-zinc-100 truncate">
+                <span className="text-sm font-semibold text-zinc-100 truncate" title={previewModalImg.title || '3D Design Preview'}>
                   {previewModalImg.title || '3D Design Preview'}
                 </span>
+                <span className="text-[11px] font-mono text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded border border-zinc-700/60 shrink-0">
+                  {booth.booth_number}
+                </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <a
                   href={previewModalImg.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 text-xs text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                  title="Open image in a new tab"
                 >
                   <span>Open Full Tab</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -3802,17 +3855,54 @@ export function BoothDetailView({ boothId, onNavigate }: BoothDetailViewProps) {
                   type="button"
                   onClick={() => setPreviewModalImg(null)}
                   className="p-1 text-zinc-400 hover:text-zinc-100 rounded-lg transition-colors cursor-pointer"
+                  title="Close (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
-            <div className="p-2 sm:p-4 overflow-auto flex items-center justify-center bg-black/60 max-h-[calc(90vh-60px)]">
-              <img
-                src={previewModalImg.url}
-                alt={previewModalImg.title || '3D Preview'}
-                className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-lg"
-              />
+            <div className="p-2 sm:p-6 overflow-auto flex items-center justify-center bg-zinc-950 min-h-[260px] max-h-[calc(92vh-60px)]">
+              {modalImgError ? (
+                <div className="flex flex-col items-center justify-center p-6 text-center max-w-md my-auto">
+                  <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-3">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-sm font-bold text-zinc-100 mb-1">Preview Image Unavailable</h4>
+                  <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+                    The 3D preview image could not be loaded from <span className="font-mono text-zinc-300 break-all">{previewModalImg.url}</span>.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalImgError(false);
+                        setModalImgRetryKey((k) => k + 1);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      <span>Retry</span>
+                    </button>
+                    <a
+                      href={previewModalImg.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Open Link Directly</span>
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <img
+                  key={modalImgRetryKey}
+                  src={modalImgRetryKey ? `${previewModalImg.url}${previewModalImg.url.includes('?') ? '&' : '?'}t=${modalImgRetryKey}` : previewModalImg.url}
+                  alt={previewModalImg.title || '3D Preview'}
+                  className="max-w-full max-h-[78vh] w-auto h-auto object-contain rounded-lg shadow-2xl transition-all"
+                  onError={() => setModalImgError(true)}
+                />
+              )}
             </div>
           </div>
         </div>

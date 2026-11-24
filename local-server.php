@@ -39,9 +39,24 @@ if (is_file($requestedFile)) {
     return false;
 }
 
+// 3b. Serve 3D preview uploads through persistent image streamer if missing in local root
+if (preg_match('#^/uploads/3d_previews/([^/]+)$#', $uri, $m)) {
+    $_GET['file'] = $m[1];
+    require __DIR__ . '/manage/api/preview-image.php';
+    exit;
+}
+
 // 4. Special rewrites
 if ($uri === '/admin' || $uri === '/admin/') {
     require __DIR__ . '/admin.php';
+    exit;
+}
+
+// Do not serve index.html for missing images or assets (prevent 422/syntax errors)
+if (preg_match('#\.(jpe?g|png|gif|webp|svg|ico|css|js|map|woff2?|ttf|eot)$#i', $uri)) {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo "404 Not Found";
     exit;
 }
 

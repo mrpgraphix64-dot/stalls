@@ -130,14 +130,44 @@ if ($method === 'POST') {
         $safeName = 'stall_3d_' . bin2hex(random_bytes(8)) . $ext;
 
         $rootDir = dirname(__DIR__, 2);
+        $dataDir = reworkzone_manage_get_data_dir();
+        
+        // 1. Primary persistent storage (survives Git deployments)
+        $persistentUploadDir = $dataDir . '/uploads/3d_previews';
+        if (!is_dir($persistentUploadDir)) {
+            @mkdir($persistentUploadDir, 0755, true);
+        }
+
+        // 2. Webroot storage for direct Apache/static serving
         $uploadDir = $rootDir . '/uploads/3d_previews';
         if (!is_dir($uploadDir)) {
             @mkdir($uploadDir, 0755, true);
         }
 
-        $destPath = $uploadDir . '/' . $safeName;
+        $destPath = $persistentUploadDir . '/' . $safeName;
         if (!move_uploaded_file($file['tmp_name'], $destPath)) {
-            reworkzone_json_response(['success' => false, 'error' => 'Failed to save uploaded image.'], 500);
+            // Fallback: try moving directly into webroot uploadDir if persistent failed
+            $destPath = $uploadDir . '/' . $safeName;
+            if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+                reworkzone_json_response(['success' => false, 'error' => 'Failed to save uploaded image.'], 500);
+            }
+        }
+
+        // Replicate to webroot directory for high-performance direct web serving
+        $webrootDest = $uploadDir . '/' . $safeName;
+        if ($destPath !== $webrootDest && file_exists($destPath)) {
+            @copy($destPath, $webrootDest);
+        }
+
+        // Replicate to parent external directory if configured
+        $parentExternalDir = dirname($rootDir) . '/reworkzone_data/uploads/3d_previews';
+        if (is_dir(dirname($rootDir) . '/reworkzone_data')) {
+            if (!is_dir($parentExternalDir)) {
+                @mkdir($parentExternalDir, 0755, true);
+            }
+            if ($destPath !== $parentExternalDir . '/' . $safeName && file_exists($destPath)) {
+                @copy($destPath, $parentExternalDir . '/' . $safeName);
+            }
         }
 
         // Sync to public/uploads/3d_previews if public directory exists
@@ -146,7 +176,9 @@ if ($method === 'POST') {
             if (!is_dir($publicUploadDir)) {
                 @mkdir($publicUploadDir, 0755, true);
             }
-            @copy($destPath, $publicUploadDir . '/' . $safeName);
+            if (file_exists($destPath)) {
+                @copy($destPath, $publicUploadDir . '/' . $safeName);
+            }
         }
 
         $webUrl = '/uploads/3d_previews/' . $safeName;
@@ -566,12 +598,18 @@ if ($method === 'POST') {
         // Cleanup uploaded preview image if stored locally
         if (!empty($existing['preview_image_url']) && strpos($existing['preview_image_url'], '/uploads/3d_previews/') === 0) {
             $rootDir = dirname(__DIR__, 2);
-            $filePath = $rootDir . $existing['preview_image_url'];
-            if (is_file($filePath)) {
-                @unlink($filePath);
-            }
-            if (is_file($rootDir . '/public' . $existing['preview_image_url'])) {
-                @unlink($rootDir . '/public' . $existing['preview_image_url']);
+            $cleanImg = basename($existing['preview_image_url']);
+            $dataDir = reworkzone_manage_get_data_dir();
+            $candidates = [
+                $dataDir . '/uploads/3d_previews/' . $cleanImg,
+                $rootDir . '/uploads/3d_previews/' . $cleanImg,
+                $rootDir . '/public/uploads/3d_previews/' . $cleanImg,
+                dirname($rootDir) . '/reworkzone_data/uploads/3d_previews/' . $cleanImg,
+            ];
+            foreach ($candidates as $fPath) {
+                if (is_file($fPath)) {
+                    @unlink($fPath);
+                }
             }
         }
 
