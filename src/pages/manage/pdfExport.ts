@@ -167,6 +167,25 @@ export async function exportElementsToPdf(
       logging: false,
       backgroundColor: '#ffffff',
       windowWidth: 794,
+      onclone: (_clonedDoc, clonedEl) => {
+        // Enforce standard canonical A4 width (794px = 210mm @ 96dpi) on the cloned element
+        clonedEl.style.width = '794px';
+        clonedEl.style.minWidth = '794px';
+        clonedEl.style.maxWidth = '794px';
+        clonedEl.style.boxSizing = 'border-box';
+        clonedEl.style.margin = '0 auto';
+        clonedEl.style.boxShadow = 'none';
+        clonedEl.style.borderRadius = '0';
+        clonedEl.style.transform = 'none';
+
+        // Ensure text is never clipped by overflow rules in canvas
+        const clippedElements = clonedEl.querySelectorAll<HTMLElement>('.truncate');
+        clippedElements.forEach((node) => {
+          node.style.overflow = 'visible';
+          node.style.textOverflow = 'clip';
+          node.style.whiteSpace = 'normal';
+        });
+      },
     });
 
     const imgWidth = printWidth;

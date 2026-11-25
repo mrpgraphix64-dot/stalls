@@ -188,7 +188,7 @@ export function PrintChecklistModal({
             page-break-inside: auto !important;
             break-inside: auto !important;
             margin: 0 auto !important;
-            padding: 0 !important;
+            padding: 2mm 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             min-height: auto !important;

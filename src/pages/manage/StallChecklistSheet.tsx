@@ -205,8 +205,13 @@ export function ChecklistQRCode({
   const cleanUrl = (url || '').trim();
   const isValid = cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://');
 
-  // Slightly larger QR canvas if URL is very long (e.g. complex Google Drive sharing links)
-  const actualSize = cleanUrl.length > 120 ? Math.max(sizePx, 84) : sizePx;
+  // Slightly larger QR canvas if URL is very long, unless a compact size was explicitly requested
+  const actualSize =
+    sizePx < 70
+      ? sizePx
+      : cleanUrl.length > 120
+      ? Math.max(sizePx, 84)
+      : sizePx;
 
   const [dataUrl, setDataUrl] = React.useState<string | null>(() => {
     if (!isValid) return null;
@@ -267,10 +272,18 @@ export function ChecklistQRCode({
         style={{ width: `${actualSize}px`, height: `${actualSize}px` }}
         loading="eager"
       />
-      <span className="text-[8.5px] font-black uppercase tracking-wider text-zinc-950 mt-1 text-center leading-none group-hover:text-blue-600 block">
+      <span
+        className={`${
+          actualSize < 65 ? 'text-[7.5px]' : 'text-[8.5px]'
+        } font-black uppercase tracking-wider text-zinc-950 mt-1 text-center leading-tight group-hover:text-blue-600 block whitespace-nowrap`}
+      >
         {label}
       </span>
-      <span className="text-[7px] text-zinc-500 font-medium mt-0.5 leading-none text-center block">
+      <span
+        className={`${
+          actualSize < 65 ? 'text-[6.5px]' : 'text-[7px]'
+        } text-zinc-500 font-medium mt-0.5 leading-none text-center block whitespace-nowrap`}
+      >
         Scan / Click
       </span>
     </a>
@@ -397,7 +410,7 @@ export function StallChecklistSheet({
 
   return (
     <div
-      className={`stall-print-sheet bg-white text-zinc-950 font-sans leading-normal text-[11px] p-4 sm:p-5 w-full max-w-[210mm] mx-auto ${
+      className={`stall-print-sheet bg-white text-zinc-950 font-sans leading-normal text-[11px] p-5 w-full max-w-[210mm] mx-auto ${
         isBulk && !isLast ? 'break-after-page page-break-after-always' : ''
       }`}
       data-booth-number={booth.booth_number || ''}
@@ -407,76 +420,83 @@ export function StallChecklistSheet({
       }}
     >
       {/* 1. COMPACT MINIMAL HEADER */}
-      <div className="border-b-2 border-zinc-900 pb-2 mb-2.5">
+      <div className="border-b-2 border-zinc-900 pb-2.5 mb-3">
         {/* Top line: Exhibition Name & Logo */}
-        <div className="flex items-center justify-between gap-4 mb-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between gap-3 mb-2.5">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <img
               src="/logo.png"
               alt="Reworkzone"
               className="h-6 w-auto object-contain shrink-0"
+              onError={(e) => {
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
             />
-            <span className="text-[11px] font-black tracking-wider uppercase text-zinc-600 truncate">
-              {eventName || 'Exhibition'}
-            </span>
+            <div className="min-w-0 flex-1">
+              <span className="text-[11.5px] font-black tracking-wide uppercase text-zinc-700 block leading-snug break-words">
+                {eventName || 'Exhibition'}
+              </span>
+            </div>
           </div>
-          <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 shrink-0">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600 bg-zinc-100 border border-zinc-300 px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap self-center">
             Production Sheet
           </span>
         </div>
 
         {/* Primary Row: Company Name & Booth Number (Prominent!) */}
-        <div className="grid grid-cols-12 gap-2 items-stretch">
-          <div className="col-span-8 bg-zinc-50 border border-zinc-300 rounded px-3 py-2 flex flex-col justify-center min-h-[46px]">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold leading-none mb-1">
+        <div className="grid grid-cols-12 gap-2.5 items-stretch">
+          <div className="col-span-8 bg-zinc-50 border border-zinc-300 rounded px-3.5 py-2.5 flex flex-col justify-between">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold leading-normal mb-1">
               Company / Exhibitor
             </span>
-            <span className="text-sm sm:text-base font-black text-zinc-950 leading-tight break-words">
+            <span className="text-sm sm:text-base font-black text-zinc-950 leading-snug break-words">
               {booth.client_name || 'Exhibitor'}
             </span>
           </div>
 
-          <div className="col-span-4 bg-zinc-900 text-white border border-zinc-900 rounded px-3 py-2 flex flex-col justify-center items-center text-center min-h-[46px]">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-300 font-bold leading-none mb-1">
+          <div className="col-span-4 bg-zinc-900 text-white border border-zinc-900 rounded px-3.5 py-2.5 flex flex-col justify-between items-center text-center">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-300 font-bold leading-normal mb-1">
               Booth Number
             </span>
-            <span className="font-mono font-black text-sm sm:text-base text-white leading-tight break-words">
+            <span className="font-mono font-black text-sm sm:text-base text-white leading-snug break-words">
               {isPendingOrEmpty(booth.booth_number) ? 'Not Assigned' : `#${booth.booth_number}`}
             </span>
           </div>
         </div>
 
         {/* Secondary Row: Stall Size, Stall Type, Wall Configuration (with vector diagram) */}
-        <div className="grid grid-cols-12 gap-2 items-center mt-2 pt-1.5 border-t border-zinc-200 text-[11px]">
-          <div className="col-span-3 min-w-0">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-none mb-0.5">
+        <div className="grid grid-cols-12 gap-2.5 items-stretch mt-2.5 pt-2 border-t border-zinc-200 text-[11px]">
+          <div className="col-span-3 bg-zinc-50/70 border border-zinc-200 rounded px-3 py-2 flex flex-col justify-between min-w-0">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-normal mb-1">
               Size
             </span>
-            <span className="font-mono font-bold text-zinc-900 text-[11.5px] leading-tight block">
+            <span className="font-mono font-bold text-zinc-950 text-[11.5px] leading-snug block break-words">
               {booth.stand_size || '3 × 3 m'}
             </span>
           </div>
 
-          <div className="col-span-3 min-w-0">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-none mb-0.5">
+          <div className="col-span-3 bg-zinc-50/70 border border-zinc-200 rounded px-3 py-2 flex flex-col justify-between min-w-0">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-normal mb-1">
               Stall Type
             </span>
-            <span className="font-bold text-zinc-900 text-[11.5px] leading-tight block break-words">
+            <span className="font-bold text-zinc-950 text-[11.5px] leading-snug block break-words">
               {structureType}
             </span>
           </div>
 
-          <div className="col-span-6 min-w-0 bg-amber-50/80 border border-amber-300/80 rounded px-2.5 py-1 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-[8px] uppercase tracking-wider text-amber-900 font-bold block leading-none mb-0.5">
+          <div className="col-span-6 bg-amber-50/80 border border-amber-300/80 rounded px-3 py-2 flex items-center justify-between gap-2.5 min-w-0">
+            <div className="min-w-0 flex-1">
+              <span className="text-[8px] uppercase tracking-wider text-amber-900 font-bold block leading-normal mb-1">
                 Wall Configuration
               </span>
-              <span className="font-bold text-zinc-950 text-[10.5px] leading-tight block truncate">
+              <span className="font-bold text-zinc-950 text-[11px] leading-snug block break-words">
                 {wallConfigInfo.label}
               </span>
             </div>
             {wallConfigInfo.hasDiagram && (
-              <PrintableWallDiagram wallConfig={booth.wall_configuration} />
+              <div className="shrink-0 p-1 bg-white/90 rounded border border-amber-200">
+                <PrintableWallDiagram wallConfig={booth.wall_configuration} />
+              </div>
             )}
           </div>
         </div>
@@ -730,19 +750,19 @@ export function StallChecklistSheet({
               </colgroup>
               <thead>
                 <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                  <th className="py-1 px-2 text-left">Production Item</th>
-                  <th className="py-1 px-2 text-left">Specification</th>
-                  <th className="py-1 px-2 text-center">Qty</th>
-                  <th className="py-1 px-2 text-center">Check</th>
+                  <th className="py-1 px-2.5 text-left">Production Item</th>
+                  <th className="py-1 px-2.5 text-left">Specification</th>
+                  <th className="py-1 px-2.5 text-center">Qty</th>
+                  <th className="py-1 px-2.5 text-center">Check</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200">
                 {productionItems.map((item) => (
                   <tr key={item.id} className="break-inside-avoid">
-                    <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                    <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                    <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
-                    <td className="py-1 px-2 text-center">
+                    <td className="py-1.5 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                    <td className="py-1.5 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
+                    <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
+                    <td className="py-1.5 px-2.5 text-center">
                       <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
                     </td>
                   </tr>
@@ -750,7 +770,7 @@ export function StallChecklistSheet({
               </tbody>
             </table>
           ) : (
-            <p className="text-[10px] text-zinc-500 italic py-0.5 px-1">
+            <p className="text-[10px] text-zinc-500 italic py-1 px-2.5">
               No production items recorded.
             </p>
           )}
@@ -786,19 +806,19 @@ export function StallChecklistSheet({
                 </colgroup>
                 <thead>
                   <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                    <th className="py-1 px-2 text-left">Furniture Item</th>
-                    <th className="py-1 px-2 text-left">Specification</th>
-                    <th className="py-1 px-2 text-center">Qty</th>
-                    <th className="py-1 px-2 text-center">Check</th>
+                    <th className="py-1 px-2.5 text-left">Furniture Item</th>
+                    <th className="py-1 px-2.5 text-left">Specification</th>
+                    <th className="py-1 px-2.5 text-center">Qty</th>
+                    <th className="py-1 px-2.5 text-center">Check</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
                   {furnitureItems.map((item) => (
                     <tr key={item.id} className="break-inside-avoid">
-                      <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                      <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                      <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
-                      <td className="py-1 px-2 text-center">
+                      <td className="py-1.5 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                      <td className="py-1.5 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
+                      <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
+                      <td className="py-1.5 px-2.5 text-center">
                         <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
                       </td>
                     </tr>
@@ -806,7 +826,7 @@ export function StallChecklistSheet({
                 </tbody>
               </table>
             ) : (
-              <p className="text-[10px] text-zinc-500 italic py-0.5 px-1">
+              <p className="text-[10px] text-zinc-500 italic py-1 px-2.5">
                 No furniture items requested.
               </p>
             )}
@@ -843,19 +863,19 @@ export function StallChecklistSheet({
                 </colgroup>
                 <thead>
                   <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                    <th className="py-1 px-2 text-left">Electrical Item</th>
-                    <th className="py-1 px-2 text-left">Specification</th>
-                    <th className="py-1 px-2 text-center">Qty</th>
-                    <th className="py-1 px-2 text-center">Check</th>
+                    <th className="py-1 px-2.5 text-left">Electrical Item</th>
+                    <th className="py-1 px-2.5 text-left">Specification</th>
+                    <th className="py-1 px-2.5 text-center">Qty</th>
+                    <th className="py-1 px-2.5 text-center">Check</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
                   {electricalItems.map((item) => (
                     <tr key={item.id} className="break-inside-avoid">
-                      <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                      <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                      <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
-                      <td className="py-1 px-2 text-center">
+                      <td className="py-1.5 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                      <td className="py-1.5 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
+                      <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
+                      <td className="py-1.5 px-2.5 text-center">
                         <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
                       </td>
                     </tr>
@@ -863,7 +883,7 @@ export function StallChecklistSheet({
                 </tbody>
               </table>
             ) : (
-              <p className="text-[10px] text-zinc-500 italic py-0.5 px-1">
+              <p className="text-[10px] text-zinc-500 italic py-1 px-2.5">
                 No electrical items requested.
               </p>
             )}

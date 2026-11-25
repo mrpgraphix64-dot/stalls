@@ -104,7 +104,7 @@ export function ClientStallSheet({
 
   return (
     <div
-      className={`client-stall-sheet bg-white text-zinc-950 font-sans leading-normal text-[11px] p-4 sm:p-5 w-full max-w-[210mm] mx-auto select-text ${
+      className={`client-stall-sheet bg-white text-zinc-950 font-sans leading-normal text-[11px] p-5 w-full max-w-[210mm] mx-auto select-text ${
         isPrintPreview ? 'shadow-2xl ring-1 ring-zinc-300 rounded-sm' : ''
       }`}
       data-booth-number={hasAssignedBooth ? rawBoothNum : 'Proposed'}
@@ -114,10 +114,10 @@ export function ClientStallSheet({
       }}
     >
       {/* 1. COMPACT PROFESSIONAL HEADER */}
-      <div className="border-b-2 border-zinc-900 pb-2 mb-2.5">
+      <div className="border-b-2 border-zinc-900 pb-2.5 mb-3">
         {/* Top line: Exhibition Name & Logo */}
-        <div className="flex items-center justify-between gap-4 mb-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between gap-3 mb-2.5">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <img
               src="/logo.png"
               alt="Reworkzone"
@@ -126,67 +126,71 @@ export function ClientStallSheet({
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
             />
-            <span className="text-[11px] font-black tracking-wider uppercase text-zinc-600 truncate">
-              {eventName || 'Exhibition'}
-            </span>
+            <div className="min-w-0 flex-1">
+              <span className="text-[11.5px] font-black tracking-wide uppercase text-zinc-700 block leading-snug break-words">
+                {eventName || 'Exhibition'}
+              </span>
+            </div>
           </div>
-          <span className="text-[9px] font-bold uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-800 bg-amber-50 border border-amber-200/90 px-2.5 py-1 rounded-full shrink-0 whitespace-nowrap self-center">
             {isDiscussion ? 'Proposed Specification' : 'Client Specification Sheet'}
           </span>
         </div>
 
         {/* Primary Row: Company Name & Booth Number */}
-        <div className="grid grid-cols-12 gap-2 items-stretch">
-          <div className="col-span-8 bg-zinc-50 border border-zinc-300 rounded px-3 py-2 flex flex-col justify-center min-h-[46px]">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold leading-none mb-1">
+        <div className="grid grid-cols-12 gap-2.5 items-stretch">
+          <div className="col-span-8 bg-zinc-50 border border-zinc-300 rounded px-3.5 py-2.5 flex flex-col justify-between">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold leading-normal mb-1">
               Company / Exhibitor
             </span>
-            <span className="text-sm sm:text-base font-black text-zinc-950 leading-tight break-words">
+            <span className="text-sm sm:text-base font-black text-zinc-950 leading-snug break-words">
               {booth.client_name || 'Exhibitor'}
             </span>
           </div>
 
-          <div className="col-span-4 bg-zinc-900 text-white border border-zinc-900 rounded px-3 py-2 flex flex-col justify-center items-center text-center min-h-[46px]">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-300 font-bold leading-none mb-1">
+          <div className="col-span-4 bg-zinc-900 text-white border border-zinc-900 rounded px-3.5 py-2.5 flex flex-col justify-between items-center text-center">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-300 font-bold leading-normal mb-1">
               Stall Number
             </span>
-            <span className="font-mono font-black text-sm sm:text-base text-white leading-tight break-words">
+            <span className="font-mono font-black text-sm sm:text-base text-white leading-snug break-words">
               {boothNumberDisplay}
             </span>
           </div>
         </div>
 
         {/* Secondary Row: Stall Size, Stall Type, Wall Configuration */}
-        <div className="grid grid-cols-12 gap-2 items-center mt-2 pt-1.5 border-t border-zinc-200 text-[11px]">
-          <div className="col-span-3 min-w-0">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-none mb-0.5">
+        <div className="grid grid-cols-12 gap-2.5 items-stretch mt-2.5 pt-2 border-t border-zinc-200 text-[11px]">
+          <div className="col-span-3 bg-zinc-50/70 border border-zinc-200 rounded px-3 py-2 flex flex-col justify-between min-w-0">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-normal mb-1">
               Size
             </span>
-            <span className="font-mono font-bold text-zinc-900 text-[11.5px] leading-tight block">
+            <span className="font-mono font-bold text-zinc-950 text-[11.5px] leading-snug block break-words">
               {booth.stand_size || '3 × 3 m'}
             </span>
           </div>
 
-          <div className="col-span-3 min-w-0">
-            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-none mb-0.5">
+          <div className="col-span-3 bg-zinc-50/70 border border-zinc-200 rounded px-3 py-2 flex flex-col justify-between min-w-0">
+            <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold block leading-normal mb-1">
               Structure Type
             </span>
-            <span className="font-bold text-zinc-900 text-[11.5px] leading-tight block break-words">
+            <span className="font-bold text-zinc-950 text-[11.5px] leading-snug block break-words">
               {structureType} Stall
             </span>
           </div>
 
-          <div className="col-span-6 min-w-0 bg-amber-50/80 border border-amber-300/80 rounded px-2.5 py-1 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-[8px] uppercase tracking-wider text-amber-900 font-bold block leading-none mb-0.5">
+          <div className="col-span-6 bg-amber-50/80 border border-amber-300/80 rounded px-3 py-2 flex items-center justify-between gap-2.5 min-w-0">
+            <div className="min-w-0 flex-1">
+              <span className="text-[8px] uppercase tracking-wider text-amber-900 font-bold block leading-normal mb-1">
                 Wall Configuration
               </span>
-              <span className="font-bold text-zinc-950 text-[10.5px] leading-tight block truncate">
+              <span className="font-bold text-zinc-950 text-[11px] leading-snug block break-words">
                 {wallConfigInfo.label}
               </span>
             </div>
             {wallConfigInfo.hasDiagram && (
-              <PrintableWallDiagram wallConfig={booth.wall_configuration} />
+              <div className="shrink-0 p-1 bg-white/90 rounded border border-amber-200">
+                <PrintableWallDiagram wallConfig={booth.wall_configuration} />
+              </div>
             )}
           </div>
         </div>
@@ -195,29 +199,37 @@ export function ClientStallSheet({
       {/* 2. FOUR COMPACT CATEGORIES */}
       <div className="space-y-2.5">
         {/* SECTION 1: 3D DESIGN & CLIENT FILES */}
-        <div className="border-b border-zinc-200 pb-2">
-          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-1.5">
+        <div className="border-b border-zinc-200 pb-2.5">
+          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-2">
             <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
               1. 3D Design &amp; Approved Files
             </h2>
             <span className="text-[9px] text-zinc-500 font-medium">Design &amp; Artwork References</span>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-start justify-between">
+          <div className="grid grid-cols-12 gap-3.5 items-start">
             {/* Left Column: Design Info, Links, Goodies */}
-            <div className="flex-1 min-w-0 space-y-1.5 text-[11px] text-zinc-800">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <div>
-                  <span className="text-zinc-500 font-semibold">Responsibility: </span>
-                  <span className="font-bold text-zinc-950">{booth.design_responsibility || 'Client Side'}</span>
+            <div
+              className={`${
+                hasAnyQRorMedia ? 'col-span-7' : 'col-span-12'
+              } space-y-2 text-[11px] text-zinc-800 min-w-0`}
+            >
+              <div className="bg-zinc-50 border border-zinc-300 rounded p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                  <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                    Responsibility
+                  </span>
+                  <span className="font-black text-zinc-950 text-right">
+                    {booth.design_responsibility || 'Client Side'}
+                  </span>
                 </div>
 
-                <span className="text-zinc-300 hidden sm:inline">|</span>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-zinc-500 font-semibold">3D Design: </span>
+                <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                  <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                    3D Design Link
+                  </span>
                   {active3DViews.length > 0 ? (
-                    <span className="inline-flex items-center gap-1.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 flex-wrap justify-end text-right">
                       {active3DViews.map((v, idx) => {
                         const vUrl = (v.drive_url || '').trim();
                         const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
@@ -230,13 +242,13 @@ export function ClientStallSheet({
                                 href={vUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                                className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
                                 title={`Open ${vTitle}`}
                               >
-                                {vTitle}
+                                {vTitle} ↗
                               </a>
                             ) : (
-                              <span className="text-zinc-950 font-bold text-[11px]">
+                              <span className="text-zinc-950 font-bold text-[10.5px]">
                                 {vTitle} (Image Attached)
                               </span>
                             )}
@@ -245,51 +257,49 @@ export function ClientStallSheet({
                       })}
                     </span>
                   ) : (
-                    <span className="text-zinc-400 italic text-[11px]">Not Provided</span>
+                    <span className="text-zinc-400 italic text-[10.5px]">Not Provided</span>
                   )}
                 </div>
 
                 {hasClientPrintUrl && (
-                  <>
-                    <span className="text-zinc-300 hidden sm:inline">|</span>
-                    <div>
-                      <span className="text-zinc-500 font-semibold">Print Files: </span>
-                      <a
-                        href={printUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
-                        title="Open Shared Print Files in Google Drive"
-                      >
-                        Open Drive Folder
-                      </a>
-                    </div>
-                  </>
+                  <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                    <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                      Print Files
+                    </span>
+                    <a
+                      href={printUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
+                      title="Open Shared Print Files in Google Drive"
+                    >
+                      Open Drive Folder ↗
+                    </a>
+                  </div>
                 )}
 
                 {hasClientGoodiesUrl && (
-                  <>
-                    <span className="text-zinc-300 hidden sm:inline">|</span>
-                    <div>
-                      <span className="text-zinc-500 font-semibold">Goodies Files: </span>
-                      <a
-                        href={goodiesUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
-                        title="Open Shared Goodies Artwork in Google Drive"
-                      >
-                        Open Artwork Folder
-                      </a>
-                    </div>
-                  </>
+                  <div className="flex items-center justify-between gap-2 py-0.5 text-[10.5px]">
+                    <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                      Goodies Files
+                    </span>
+                    <a
+                      href={goodiesUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
+                      title="Open Shared Goodies Artwork in Google Drive"
+                    >
+                      Open Artwork Folder ↗
+                    </a>
+                  </div>
                 )}
               </div>
 
               {/* Promotional Goodies Requirements (Omitted if none selected) */}
               {activeGoodiesItems.length > 0 && (
-                <div className="mt-1 pt-1 border-t border-zinc-200">
-                  <div className="text-[9.5px] font-bold text-zinc-700 uppercase tracking-wider mb-0.5">
+                <div className="mt-1.5 pt-1.5 border-t border-zinc-200">
+                  <div className="text-[9px] font-bold text-zinc-700 uppercase tracking-wider mb-1">
                     Promotional Goodies Requirements
                   </div>
                   <table className="table-fixed w-full text-left border-collapse text-[10px]">
@@ -300,17 +310,17 @@ export function ClientStallSheet({
                     </colgroup>
                     <thead>
                       <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                        <th className="py-0.5 px-2 text-left">Goodies Item</th>
-                        <th className="py-0.5 px-2 text-left">Specification</th>
-                        <th className="py-0.5 px-2 text-center">Qty</th>
+                        <th className="py-1 px-2.5 text-left">Goodies Item</th>
+                        <th className="py-1 px-2.5 text-left">Specification</th>
+                        <th className="py-1 px-2.5 text-center">Qty</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-200">
                       {activeGoodiesItems.map((item) => (
                         <tr key={item.id} className="break-inside-avoid">
-                          <td className="py-0.5 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                          <td className="py-0.5 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                          <td className="py-0.5 px-2 text-center font-mono font-bold text-zinc-900">
+                          <td className="py-1 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                          <td className="py-1 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
+                          <td className="py-1 px-2.5 text-center font-mono font-bold text-zinc-900">
                             {item.quantity} {item.unit && item.unit !== 'nos' ? item.unit : ''}
                           </td>
                         </tr>
@@ -321,33 +331,23 @@ export function ClientStallSheet({
               )}
             </div>
 
-            {/* Right Column: QR Codes & 3D Thumbnail (Compact Media Block) */}
+            {/* Right Column: Visual Media Panel (Hero 3D Preview Image & Compact QR Codes) */}
             {hasAnyQRorMedia && (
-              <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2 shrink-0 self-center sm:self-start">
-                {/* Print Files QR Code (when client print link is approved) */}
-                {hasClientPrintUrl && (
-                  <ChecklistQRCode url={printUrl} label="PRINT FILES" />
-                )}
-
-                {/* 3D View QR Code */}
-                {hasPrimary3DUrl && (
-                  <ChecklistQRCode url={primary3DUrl} label="3D VIEW" />
-                )}
-
-                {/* 3D Stall Design Preview Thumbnail */}
+              <div className="col-span-5 flex flex-col items-center justify-start w-full min-w-0">
+                {/* 3D Stall Design Preview — Primary Visual Hero */}
                 {primaryPreviewImg && (
-                  <div className="inline-flex flex-col items-center justify-between p-1 bg-white border border-zinc-300 rounded shadow-2xs shrink-0">
+                  <div className="w-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col items-center justify-center shadow-2xs">
                     <a
                       href={hasPrimary3DUrl ? primary3DUrl : primaryPreviewImg}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="client-pdf-link block overflow-hidden"
+                      className="client-pdf-link w-full bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-1 group min-h-[120px] max-h-[145px]"
                       title={primary3DView?.title || 'Open 3D Design'}
                     >
                       <img
                         src={primaryPreviewImg}
                         alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
-                        className="max-h-[76px] max-w-[120px] w-auto h-auto object-contain rounded-xs"
+                        className="max-h-[135px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
                         crossOrigin="anonymous"
                         loading="eager"
                         onError={(e) => {
@@ -356,12 +356,41 @@ export function ClientStallSheet({
                         }}
                       />
                     </a>
-                    <span className="text-[7.5px] font-black uppercase tracking-wider text-zinc-950 mt-1 text-center leading-none block">
-                      3D Preview
-                    </span>
-                    <span className="text-[7px] text-zinc-500 font-medium mt-0.5 leading-none text-center block">
-                      {primary3DView?.title || 'Design View'}
-                    </span>
+                    <div className="mt-1 flex items-center justify-between w-full px-1">
+                      <span className="text-[8px] font-black uppercase tracking-wider text-zinc-950">
+                        3D Stall Preview
+                      </span>
+                      <span className="text-[7.5px] text-zinc-500 font-semibold truncate max-w-[140px]">
+                        {primary3DView?.title || 'Main View'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Compact QR Codes Row (Print Files & 3D View) */}
+                {(hasClientPrintUrl || hasPrimary3DUrl) && (
+                  <div
+                    className={`flex items-center justify-center gap-2.5 w-full ${
+                      primaryPreviewImg ? 'mt-2' : ''
+                    }`}
+                  >
+                    {/* Print Files QR Code */}
+                    {hasClientPrintUrl && (
+                      <ChecklistQRCode
+                        url={printUrl}
+                        label="PRINT FILES"
+                        sizePx={primaryPreviewImg ? 58 : 72}
+                      />
+                    )}
+
+                    {/* 3D View QR Code */}
+                    {hasPrimary3DUrl && (
+                      <ChecklistQRCode
+                        url={primary3DUrl}
+                        label="3D VIEW"
+                        sizePx={primaryPreviewImg ? 58 : 72}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -380,34 +409,34 @@ export function ClientStallSheet({
 
           <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
             <colgroup>
-              <col className="w-[50%]" />
-              <col className="w-[35%]" />
+              <col className="w-[48%]" />
+              <col className="w-[37%]" />
               <col className="w-[15%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                <th className="py-1 px-2 text-left">Requirement / Item</th>
-                <th className="py-1 px-2 text-left">Specification / Scope</th>
-                <th className="py-1 px-2 text-center">Quantity</th>
+                <th className="py-1 px-2.5 text-left">Requirement / Item</th>
+                <th className="py-1 px-2.5 text-left">Specification / Scope</th>
+                <th className="py-1 px-2.5 text-center">Quantity</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200">
               {/* Core Physical Stall Specs */}
               <tr className="break-inside-avoid">
-                <td className="py-1 px-2 font-bold text-zinc-950">Structure Fabrication</td>
-                <td className="py-1 px-2 text-zinc-700">
+                <td className="py-1.5 px-2.5 font-bold text-zinc-950">Structure Fabrication</td>
+                <td className="py-1.5 px-2.5 text-zinc-700 leading-snug">
                   {structureType} Structure • {booth.stand_size || '3 × 3 m'}
                 </td>
-                <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">
+                <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">
                   1 Set
                 </td>
               </tr>
               <tr className="break-inside-avoid">
-                <td className="py-1 px-2 font-bold text-zinc-950">Wall Configuration</td>
-                <td className="py-1 px-2 text-zinc-700">
+                <td className="py-1.5 px-2.5 font-bold text-zinc-950">Wall Configuration</td>
+                <td className="py-1.5 px-2.5 text-zinc-700 leading-snug break-words">
                   {wallConfigInfo.label}
                 </td>
-                <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">
+                <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">
                   1 Stall
                 </td>
               </tr>
@@ -415,9 +444,9 @@ export function ClientStallSheet({
               {/* Saved Production Items */}
               {activeProdItems.map((item) => (
                 <tr key={item.id} className="break-inside-avoid">
-                  <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                  <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                  <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">
+                  <td className="py-1.5 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                  <td className="py-1.5 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
+                  <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">
                     {item.quantity} {item.unit && item.unit !== 'nos' ? item.unit : ''}
                   </td>
                 </tr>
@@ -438,23 +467,23 @@ export function ClientStallSheet({
 
             <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
               <colgroup>
-                <col className="w-[50%]" />
-                <col className="w-[35%]" />
+                <col className="w-[48%]" />
+                <col className="w-[37%]" />
                 <col className="w-[15%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                  <th className="py-1 px-2 text-left">Furniture Item</th>
-                  <th className="py-1 px-2 text-left">Specification</th>
-                  <th className="py-1 px-2 text-center">Quantity</th>
+                  <th className="py-1 px-2.5 text-left">Furniture Item</th>
+                  <th className="py-1 px-2.5 text-left">Specification</th>
+                  <th className="py-1 px-2.5 text-center">Quantity</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200">
                 {activeFurnItems.map((item) => (
                   <tr key={item.id} className="break-inside-avoid">
-                    <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                    <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || 'Standard Exhibition Finish'}</td>
-                    <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">
+                    <td className="py-1.5 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                    <td className="py-1.5 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || 'Standard Exhibition Finish'}</td>
+                    <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">
                       {item.quantity} {item.unit && item.unit !== 'nos' ? item.unit : ''}
                     </td>
                   </tr>
@@ -476,23 +505,23 @@ export function ClientStallSheet({
 
             <table className="table-fixed w-full text-left border-collapse text-[10.5px]">
               <colgroup>
-                <col className="w-[50%]" />
-                <col className="w-[35%]" />
+                <col className="w-[48%]" />
+                <col className="w-[37%]" />
                 <col className="w-[15%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                  <th className="py-1 px-2 text-left">Electrical Item</th>
-                  <th className="py-1 px-2 text-left">Specification</th>
-                  <th className="py-1 px-2 text-center">Quantity</th>
+                  <th className="py-1 px-2.5 text-left">Electrical Item</th>
+                  <th className="py-1 px-2.5 text-left">Specification</th>
+                  <th className="py-1 px-2.5 text-center">Quantity</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200">
                 {activeElecItems.map((item) => (
                   <tr key={item.id} className="break-inside-avoid">
-                    <td className="py-1 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                    <td className="py-1 px-2 text-zinc-700 break-words">{item.specification || 'Standard Electrical Connection'}</td>
-                    <td className="py-1 px-2 text-center font-mono font-bold text-zinc-900">
+                    <td className="py-1.5 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                    <td className="py-1.5 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || 'Standard Electrical Connection'}</td>
+                    <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-900">
                       {item.quantity} {item.unit && item.unit !== 'nos' ? item.unit : ''}
                     </td>
                   </tr>
