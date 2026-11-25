@@ -6,6 +6,7 @@ import {
   PrintableWallDiagram,
   getWallConfigDisplay,
   ChecklistQRCode,
+  computeDynamic3DHeight,
 } from './StallChecklistSheet';
 
 export interface ClientStallSheetProps {
@@ -101,6 +102,29 @@ export function ClientStallSheet({
   const hasClientGoodiesUrl = goodiesUrl.startsWith('http://') || goodiesUrl.startsWith('https://');
 
   const hasAnyQRorMedia = hasClientPrintUrl || hasPrimary3DUrl || primaryPreviewImg;
+
+  // Dynamic content-aware height calculation for strict 1-page A4 layout
+  const totalItemRows =
+    activeProdItems.length +
+    activeFurnItems.length +
+    activeElecItems.length +
+    activeGoodiesItems.length;
+
+  const activeSectionsCount =
+    (activeProdItems.length > 0 ? 1 : 0) +
+    (activeFurnItems.length > 0 ? 1 : 0) +
+    (activeElecItems.length > 0 ? 1 : 0) +
+    (activeGoodiesItems.length > 0 ? 1 : 0) || 1;
+
+  const hasRemarks = Boolean(clientNote);
+  const clientNameLength = (booth.client_name || '').length;
+
+  const dynamicHeight = computeDynamic3DHeight({
+    totalItemRows,
+    activeSectionsCount,
+    hasRemarks,
+    clientNameLength,
+  });
 
   return (
     <div
@@ -208,24 +232,34 @@ export function ClientStallSheet({
           </div>
 
           {primaryPreviewImg ? (
-            /* Layout with 3D Preview Image: 72% Hero Visual (Left/Center) + 28% Compact Details & QRs (Right) */
+            /* Layout with 3D Preview Image: 80% Hero Visual (Left/Center) + 20% Compact Details & QRs (Right) */
             <div
-              className="items-stretch gap-3"
-              style={{ display: 'grid', gridTemplateColumns: '72% 1fr' }}
+              className="items-stretch gap-2.5"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '80% 20%',
+                minHeight: `${dynamicHeight.containerHeightPx}px`,
+                maxHeight: `${dynamicHeight.containerHeightPx}px`,
+              }}
             >
               {/* Left / Center: Large 3D Stall Preview Hero Display */}
-              <div className="h-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col justify-between shadow-2xs min-w-0">
+              <div
+                className="h-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col justify-between shadow-2xs min-w-0"
+                style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
+              >
                 <a
                   href={hasPrimary3DUrl ? primary3DUrl : primaryPreviewImg}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="client-pdf-link w-full flex-1 bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group min-h-[190px] max-h-[250px]"
+                  className="client-pdf-link w-full flex-1 bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group"
+                  style={{ maxHeight: `${dynamicHeight.imageMaxHeightPx}px` }}
                   title={primary3DView?.title || 'Open 3D Design'}
                 >
                   <img
                     src={primaryPreviewImg}
                     alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
-                    className="max-h-[235px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
+                    className="max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
+                    style={{ maxHeight: `${dynamicHeight.imageMaxHeightPx}px` }}
                     crossOrigin="anonymous"
                     loading="eager"
                     onError={(e) => {
@@ -234,7 +268,7 @@ export function ClientStallSheet({
                     }}
                   />
                 </a>
-                <div className="mt-1 flex items-center justify-between w-full px-1 text-[8.5px]">
+                <div className="mt-1 flex items-center justify-between w-full px-1 text-[8.5px] shrink-0">
                   <span className="font-black uppercase tracking-wider text-zinc-950">
                     3D Stall Preview
                   </span>
@@ -245,12 +279,15 @@ export function ClientStallSheet({
               </div>
 
               {/* Right Side: Compact Details Card & Vertically Stacked QR Codes */}
-              <div className="flex flex-col justify-between gap-1.5 min-w-0">
+              <div
+                className="flex flex-col justify-between gap-1.5 min-w-0 h-full"
+                style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
+              >
                 {/* Compact Details Box */}
-                <div className="bg-zinc-50 border border-zinc-300 rounded p-2 space-y-1 text-[10px]">
+                <div className="bg-zinc-50 border border-zinc-300 rounded p-1.5 space-y-1 text-[9.5px]">
                   <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
-                      Responsibility:
+                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                      Resp:
                     </span>
                     <span className="font-bold text-zinc-950 text-right truncate">
                       {booth.design_responsibility || 'Client Side'}
@@ -258,7 +295,7 @@ export function ClientStallSheet({
                   </div>
 
                   <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
                       3D View:
                     </span>
                     {active3DViews.length > 0 ? (
@@ -296,8 +333,8 @@ export function ClientStallSheet({
 
                   {hasClientPrintUrl && (
                     <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
-                        Print Files:
+                      <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                        Print:
                       </span>
                       <a
                         href={printUrl}
@@ -313,7 +350,7 @@ export function ClientStallSheet({
 
                   {hasClientGoodiesUrl && (
                     <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                      <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
                         Goodies:
                       </span>
                       <a
@@ -337,7 +374,7 @@ export function ClientStallSheet({
                       <ChecklistQRCode
                         url={printUrl}
                         label="PRINT FILES"
-                        sizePx={50}
+                        sizePx={48}
                       />
                     )}
 
@@ -346,7 +383,7 @@ export function ClientStallSheet({
                       <ChecklistQRCode
                         url={primary3DUrl}
                         label="3D VIEW"
-                        sizePx={50}
+                        sizePx={48}
                       />
                     )}
                   </div>

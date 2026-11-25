@@ -303,6 +303,66 @@ function getClientAccessibleImageUrl(imgUrl?: string | null): string | null {
   return null;
 }
 
+export interface Dynamic3DHeightResult {
+  containerHeightPx: number;
+  imageMaxHeightPx: number;
+  heightMm: number;
+}
+
+/**
+ * Calculates dynamic content-aware height budget for the 3D stall preview visual card.
+ * Strictly guarantees that every stall's complete requirements fit on exactly ONE A4 page.
+ *
+ * Targets:
+ * - 1–3 items: 95–115 mm (360–435 px)
+ * - 4–8 items: 75–95 mm (280–360 px)
+ * - 9–13 items: 55–75 mm (215–280 px)
+ * - 14+ items: 48–55 mm (180–215 px)
+ */
+export function computeDynamic3DHeight(params: {
+  totalItemRows: number;
+  activeSectionsCount: number;
+  hasRemarks: boolean;
+  clientNameLength: number;
+}): Dynamic3DHeightResult {
+  const { totalItemRows, activeSectionsCount, hasRemarks, clientNameLength } = params;
+
+  // Header height estimate: 145px base + extra if company name wraps
+  let headerEst = 145;
+  if (clientNameLength > 30) headerEst = 162;
+  if (clientNameLength > 55) headerEst = 175;
+
+  // Table rows: ~25px per item row + ~46px per active table header (title + th)
+  const tablesEst = activeSectionsCount * 46 + totalItemRows * 25;
+  const remarksEst = hasRemarks ? 20 : 0;
+  const paddingEst = 70; // 40px outer padding + 30px section gaps
+  const safetyBuffer = 25;
+
+  const nonImageEst = headerEst + 32 + tablesEst + remarksEst + paddingEst + safetyBuffer;
+  const availableBudget = Math.max(180, 1050 - nonImageEst);
+
+  let targetHeight: number;
+  if (totalItemRows <= 3) {
+    targetHeight = Math.min(435, Math.max(360, availableBudget));
+  } else if (totalItemRows <= 8) {
+    targetHeight = Math.min(360, Math.max(280, availableBudget));
+  } else if (totalItemRows <= 13) {
+    targetHeight = Math.min(280, Math.max(215, availableBudget));
+  } else {
+    targetHeight = Math.min(215, Math.max(180, availableBudget));
+  }
+
+  // Account for card borders, padding and bottom caption row (~36px)
+  const imageMaxHeightPx = Math.max(140, targetHeight - 36);
+  const heightMm = Math.round((targetHeight / 3.7795) * 10) / 10;
+
+  return {
+    containerHeightPx: targetHeight,
+    imageMaxHeightPx,
+    heightMm,
+  };
+}
+
 export function StallChecklistSheet({
   data,
   isBulk = false,
@@ -407,6 +467,29 @@ export function StallChecklistSheet({
   const shouldShowElecSection = hasElecItems || !isElecNotRequired;
 
   const hasAnyQRorMedia = hasPrintUrl || has3DViewUrl || primaryPreviewImg || clientImgUrl;
+
+  // Dynamic content-aware height calculation for strict 1-page A4 layout
+  const prodCount = (productionItems || []).length;
+  const furnCount = (furnitureItems || []).length;
+  const elecCount = (electricalItems || []).length;
+  const goodiesCount = (goodiesItems || []).length;
+  const totalItemRows = prodCount + furnCount + elecCount + goodiesCount;
+
+  const activeSectionsCount =
+    1 + // production
+    (shouldShowFurnSection ? 1 : 0) +
+    (shouldShowElecSection ? 1 : 0) +
+    (goodiesCount > 0 ? 1 : 0);
+
+  const hasRemarks = Boolean(booth.print_remark || booth.notes || booth.goodies_remark);
+  const clientNameLength = (booth.client_name || '').length;
+
+  const dynamicHeight = computeDynamic3DHeight({
+    totalItemRows,
+    activeSectionsCount,
+    hasRemarks,
+    clientNameLength,
+  });
 
   return (
     <div
@@ -517,24 +600,34 @@ export function StallChecklistSheet({
           </div>
 
           {primaryPreviewImg ? (
-            /* Layout with 3D Preview Image: 72% Hero Visual (Left/Center) + 28% Compact Details & QRs (Right) */
+            /* Layout with 3D Preview Image: 80% Hero Visual (Left/Center) + 20% Compact Details & QRs (Right) */
             <div
-              className="items-stretch gap-3"
-              style={{ display: 'grid', gridTemplateColumns: '72% 1fr' }}
+              className="items-stretch gap-2.5"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '80% 20%',
+                minHeight: `${dynamicHeight.containerHeightPx}px`,
+                maxHeight: `${dynamicHeight.containerHeightPx}px`,
+              }}
             >
               {/* Left / Center: Large 3D Stall Preview Hero Display */}
-              <div className="h-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col justify-between shadow-2xs min-w-0">
+              <div
+                className="h-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col justify-between shadow-2xs min-w-0"
+                style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
+              >
                 <a
                   href={has3DViewUrl ? single3DUrl : primaryPreviewImg}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex-1 bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group min-h-[190px] max-h-[250px]"
+                  className="w-full flex-1 bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group"
+                  style={{ maxHeight: `${dynamicHeight.imageMaxHeightPx}px` }}
                   title={primary3DView?.title || 'Open 3D Design'}
                 >
                   <img
                     src={primaryPreviewImg}
                     alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
-                    className="max-h-[235px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
+                    className="max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
+                    style={{ maxHeight: `${dynamicHeight.imageMaxHeightPx}px` }}
                     crossOrigin="anonymous"
                     loading="eager"
                     onError={(e) => {
@@ -543,7 +636,7 @@ export function StallChecklistSheet({
                     }}
                   />
                 </a>
-                <div className="mt-1 flex items-center justify-between w-full px-1 text-[8.5px]">
+                <div className="mt-1 flex items-center justify-between w-full px-1 text-[8.5px] shrink-0">
                   <span className="font-black uppercase tracking-wider text-zinc-950">
                     3D Stall Preview
                   </span>
@@ -554,12 +647,15 @@ export function StallChecklistSheet({
               </div>
 
               {/* Right Side: Compact Details Card & Vertically Stacked QR Codes */}
-              <div className="flex flex-col justify-between gap-1.5 min-w-0">
+              <div
+                className="flex flex-col justify-between gap-1.5 min-w-0 h-full"
+                style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
+              >
                 {/* Compact Details Box */}
-                <div className="bg-zinc-50 border border-zinc-300 rounded p-2 space-y-1 text-[10px]">
+                <div className="bg-zinc-50 border border-zinc-300 rounded p-1.5 space-y-1 text-[9.5px]">
                   <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
-                      Responsibility:
+                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                      Resp:
                     </span>
                     <span className="font-bold text-zinc-950 text-right truncate">
                       {booth.design_responsibility || 'Client Side'}
@@ -567,7 +663,7 @@ export function StallChecklistSheet({
                   </div>
 
                   <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
                       3D View:
                     </span>
                     {valid3DViews.length > 1 ? (
@@ -603,12 +699,12 @@ export function StallChecklistSheet({
                         href={single3DUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors truncate max-w-[105px]"
+                        className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors truncate max-w-[85px]"
                         title="Open 3D Design in new tab"
                       >
                         {valid3DViews[0]?.title && valid3DViews[0].title.toLowerCase() !== 'view 3d design'
                           ? `${valid3DViews[0].title} ↗`
-                          : 'Open 3D View ↗'}
+                          : 'Open 3D ↗'}
                       </a>
                     ) : (
                       <span className="text-zinc-400 italic">Not Added</span>
@@ -616,8 +712,8 @@ export function StallChecklistSheet({
                   </div>
 
                   <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
-                      Print Files:
+                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                      Print:
                     </span>
                     {hasPrintUrl ? (
                       <a
@@ -636,7 +732,7 @@ export function StallChecklistSheet({
 
                   {hasGoodiesUrl && (
                     <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                      <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
                         Goodies:
                       </span>
                       <a
@@ -652,7 +748,7 @@ export function StallChecklistSheet({
                   )}
 
                   {(booth.print_remark || booth.notes || booth.goodies_remark) && (
-                    <div className="text-[9px] text-zinc-600 italic pt-0.5 line-clamp-2">
+                    <div className="text-[8px] text-zinc-600 italic pt-0.5 line-clamp-2">
                       {booth.print_remark && <span><strong className="not-italic text-zinc-500 font-bold">Print:</strong> {booth.print_remark} </span>}
                       {booth.notes && <span><strong className="not-italic text-zinc-500 font-bold">Note:</strong> {booth.notes} </span>}
                       {booth.goodies_remark && <span><strong className="not-italic text-zinc-500 font-bold">Goodies:</strong> {booth.goodies_remark}</span>}
@@ -665,14 +761,14 @@ export function StallChecklistSheet({
                   <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-0.5">
                     {/* Print Files QR Code */}
                     {hasPrintUrl && (
-                      <ChecklistQRCode url={printUrl} label="PRINT FILES" sizePx={50} />
+                      <ChecklistQRCode url={printUrl} label="PRINT FILES" sizePx={48} />
                     )}
 
                     {/* 3D View QR Code */}
                     {has3DViewUrl ? (
-                      <ChecklistQRCode url={single3DUrl} label="3D VIEW" sizePx={50} />
+                      <ChecklistQRCode url={single3DUrl} label="3D VIEW" sizePx={48} />
                     ) : clientImgUrl ? (
-                      <ChecklistQRCode url={clientImgUrl} label="3D IMAGE" sizePx={50} />
+                      <ChecklistQRCode url={clientImgUrl} label="3D IMAGE" sizePx={48} />
                     ) : null}
                   </div>
                 )}
