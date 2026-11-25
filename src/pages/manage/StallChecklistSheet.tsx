@@ -505,8 +505,8 @@ export function StallChecklistSheet({
       {/* 2. FOUR CHECKLIST SECTIONS */}
       <div className="space-y-2.5">
         {/* SECTION 1: PRINT FILES & DESIGN */}
-        <div className="border-b border-zinc-200 pb-2">
-          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-1.5">
+        <div className="border-b border-zinc-200 pb-2.5">
+          <div className="break-inside-avoid flex items-center justify-between border-b border-zinc-300 pb-1 mb-2">
             <h2 className="text-xs font-black text-zinc-950 uppercase tracking-wide">
               1. Print Files & Design
             </h2>
@@ -516,21 +516,26 @@ export function StallChecklistSheet({
             </div>
           </div>
 
+          {/* Top Row: Left Text Details & Right Compact QR Codes */}
           <div className="flex flex-col sm:flex-row gap-3 items-start justify-between">
             {/* Left Column: Details, Links, Remarks, Goodies */}
             <div className="flex-1 min-w-0 space-y-1.5 text-[11px] text-zinc-800">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <div>
-                  <span className="text-zinc-500 font-semibold">Responsibility: </span>
-                  <span className="font-bold text-zinc-950">{booth.design_responsibility || 'Client Side'}</span>
+              <div className="bg-zinc-50 border border-zinc-300 rounded p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                  <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                    Responsibility:
+                  </span>
+                  <span className="font-bold text-zinc-950 text-right">
+                    {booth.design_responsibility || 'Client Side'}
+                  </span>
                 </div>
 
-                <span className="text-zinc-300 hidden sm:inline">|</span>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-zinc-500 font-semibold">3D View: </span>
+                <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                  <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                    3D View:
+                  </span>
                   {valid3DViews.length > 1 ? (
-                    <span className="inline-flex items-center gap-1.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 flex-wrap justify-end text-right">
                       {valid3DViews.map((v, idx) => {
                         const vUrl = (v.drive_url || (v as any).url || '').trim();
                         const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
@@ -543,13 +548,13 @@ export function StallChecklistSheet({
                                 href={vUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                                className="text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
                                 title={`Open ${vTitle}`}
                               >
-                                {vTitle}
+                                {vTitle} ↗
                               </a>
                             ) : (
-                              <span className="text-zinc-950 font-bold text-[11px]">
+                              <span className="text-zinc-950 font-bold text-[10.5px]">
                                 {vTitle} (Image Attached)
                               </span>
                             )}
@@ -562,88 +567,87 @@ export function StallChecklistSheet({
                       href={single3DUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                      className="text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
                       title="Open 3D Design in new tab"
                     >
                       {valid3DViews[0]?.title && valid3DViews[0].title.toLowerCase() !== 'view 3d design'
-                        ? valid3DViews[0].title
-                        : 'Open 3D View'}
+                        ? `${valid3DViews[0].title} ↗`
+                        : 'Open 3D View ↗'}
                     </a>
                   ) : primaryPreviewImg ? (
-                    <span className="text-zinc-950 font-bold text-[11px]">
+                    <span className="text-zinc-950 font-bold text-[10.5px]">
                       {primary3DView?.title || '3D Design'} (Image Attached)
                     </span>
                   ) : (
-                    <span className="text-zinc-400 italic text-[11px]">Not Added</span>
+                    <span className="text-zinc-400 italic text-[10.5px]">Not Added</span>
                   )}
                 </div>
 
-                <span className="text-zinc-300 hidden sm:inline">|</span>
-
-                <div>
-                  <span className="text-zinc-500 font-semibold">Print Files: </span>
+                <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                  <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                    Print Files:
+                  </span>
                   {hasPrintUrl ? (
                     <a
                       href={printUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
+                      className="text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
                       title="Open Print Files in Google Drive"
                     >
-                      Open Drive
+                      Open Drive Folder ↗
                     </a>
                   ) : (
-                    <span className="text-zinc-400 italic text-[11px]">Not Added</span>
+                    <span className="text-zinc-400 italic text-[10.5px]">Not Added</span>
                   )}
                 </div>
 
                 {hasGoodiesUrl && (
-                  <>
-                    <span className="text-zinc-300 hidden sm:inline">|</span>
-                    <div>
-                      <span className="text-zinc-500 font-semibold">Goodies Files: </span>
-                      <a
-                        href={goodiesUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline font-bold text-[11px] transition-colors"
-                        title="Open Goodies Artwork in Google Drive"
-                      >
-                        Open Artwork
-                      </a>
-                    </div>
-                  </>
+                  <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                    <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                      Goodies Files:
+                    </span>
+                    <a
+                      href={goodiesUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
+                      title="Open Goodies Artwork in Google Drive"
+                    >
+                      Open Artwork Folder ↗
+                    </a>
+                  </div>
+                )}
+
+                {/* Remarks (Only when saved & relevant) */}
+                {(booth.print_remark || booth.notes || booth.goodies_remark) && (
+                  <div className="text-[10px] text-zinc-600 italic flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5">
+                    {booth.print_remark && (
+                      <div>
+                        <span className="text-zinc-500 not-italic font-bold">Print Remark: </span>
+                        {booth.print_remark}
+                      </div>
+                    )}
+                    {booth.notes && (
+                      <div>
+                        <span className="text-zinc-500 not-italic font-bold">Notes: </span>
+                        {booth.notes}
+                      </div>
+                    )}
+                    {booth.goodies_remark && (
+                      <div>
+                        <span className="text-zinc-500 not-italic font-bold">Goodies Note: </span>
+                        {booth.goodies_remark}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-
-              {/* Remarks (Only when saved & relevant) */}
-              {(booth.print_remark || booth.notes || booth.goodies_remark) && (
-                <div className="text-[10px] text-zinc-600 italic flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5">
-                  {booth.print_remark && (
-                    <div>
-                      <span className="text-zinc-500 not-italic font-semibold">Print Remark: </span>
-                      {booth.print_remark}
-                    </div>
-                  )}
-                  {booth.notes && (
-                    <div>
-                      <span className="text-zinc-500 not-italic font-semibold">Notes: </span>
-                      {booth.notes}
-                    </div>
-                  )}
-                  {booth.goodies_remark && (
-                    <div>
-                      <span className="text-zinc-500 not-italic font-semibold">Goodies Note: </span>
-                      {booth.goodies_remark}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Promotional Goodies Requirements (Omitted entirely if no goodies saved) */}
               {goodiesItems && goodiesItems.length > 0 && (
                 <div className="mt-1 pt-1 border-t border-zinc-200">
-                  <div className="text-[9.5px] font-bold text-zinc-700 uppercase tracking-wider mb-0.5">
+                  <div className="text-[9px] font-bold text-zinc-700 uppercase tracking-wider mb-0.5">
                     Goodies Requirements
                   </div>
                   <table className="table-fixed w-full text-left border-collapse text-[10px]">
@@ -655,19 +659,19 @@ export function StallChecklistSheet({
                     </colgroup>
                     <thead>
                       <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                        <th className="py-0.5 px-2 text-left">Goodies Item</th>
-                        <th className="py-0.5 px-2 text-left">Specification</th>
-                        <th className="py-0.5 px-2 text-center">Qty</th>
-                        <th className="py-0.5 px-2 text-center">Check</th>
+                        <th className="py-1 px-2.5 text-left">Goodies Item</th>
+                        <th className="py-1 px-2.5 text-left">Specification</th>
+                        <th className="py-1 px-2.5 text-center">Qty</th>
+                        <th className="py-1 px-2.5 text-center">Check</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-200">
                       {goodiesItems.map((item) => (
                         <tr key={item.id} className="break-inside-avoid">
-                          <td className="py-0.5 px-2 font-bold text-zinc-950 break-words">{item.item_name}</td>
-                          <td className="py-0.5 px-2 text-zinc-700 break-words">{item.specification || '—'}</td>
-                          <td className="py-0.5 px-2 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
-                          <td className="py-0.5 px-2 text-center">
+                          <td className="py-1 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                          <td className="py-1 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
+                          <td className="py-1 px-2.5 text-center font-mono font-bold text-zinc-900">{item.quantity}</td>
+                          <td className="py-1 px-2.5 text-center">
                             <span className="w-3.5 h-3.5 border-2 border-zinc-700 rounded-xs inline-block align-middle" />
                           </td>
                         </tr>
@@ -678,54 +682,56 @@ export function StallChecklistSheet({
               )}
             </div>
 
-            {/* Right Column: QR Codes & 3D Thumbnail (Compact Media Block) */}
-            {hasAnyQRorMedia && (
-              <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2 shrink-0 self-center sm:self-start">
+            {/* Right Column: Compact QR Codes Block */}
+            {(hasPrintUrl || has3DViewUrl || clientImgUrl) && (
+              <div className="flex items-center justify-end gap-2.5 shrink-0 self-center sm:self-start">
                 {/* Print Files QR Code */}
                 {hasPrintUrl && (
-                  <ChecklistQRCode url={printUrl} label="PRINT FILES" />
+                  <ChecklistQRCode url={printUrl} label="PRINT FILES" sizePx={primaryPreviewImg ? 58 : 72} />
                 )}
 
                 {/* 3D View QR Code (or 3D Image QR if image-only with accessible HTTPS URL) */}
                 {has3DViewUrl ? (
-                  <ChecklistQRCode url={single3DUrl} label="3D VIEW" />
+                  <ChecklistQRCode url={single3DUrl} label="3D VIEW" sizePx={primaryPreviewImg ? 58 : 72} />
                 ) : clientImgUrl ? (
-                  <ChecklistQRCode url={clientImgUrl} label="3D IMAGE" />
+                  <ChecklistQRCode url={clientImgUrl} label="3D IMAGE" sizePx={primaryPreviewImg ? 58 : 72} />
                 ) : null}
-
-                {/* 3D Stall Design Preview Thumbnail */}
-                {primaryPreviewImg && (
-                  <div className="inline-flex flex-col items-center justify-between p-1 bg-white border border-zinc-300 rounded shadow-2xs shrink-0">
-                    <a
-                      href={has3DViewUrl ? single3DUrl : primaryPreviewImg}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block overflow-hidden"
-                      title={primary3DView?.title || 'Open 3D Design'}
-                    >
-                      <img
-                        src={primaryPreviewImg}
-                        alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
-                        className="max-h-[76px] max-w-[120px] w-auto h-auto object-contain rounded-xs"
-                        crossOrigin="anonymous"
-                        loading="eager"
-                        onError={(e) => {
-                          const box = (e.currentTarget.parentElement as HTMLElement)?.parentElement;
-                          if (box) box.style.display = 'none';
-                        }}
-                      />
-                    </a>
-                    <span className="text-[7.5px] font-black uppercase tracking-wider text-zinc-950 mt-1 text-center leading-none block">
-                      3D Preview
-                    </span>
-                    <span className="text-[7px] text-zinc-500 font-medium mt-0.5 leading-none text-center block">
-                      {primary3DView?.title || 'Design View'}
-                    </span>
-                  </div>
-                )}
               </div>
             )}
           </div>
+
+          {/* Centered Large 3D Stall Design Preview Hero Display */}
+          {primaryPreviewImg && (
+            <div className="mt-2.5 w-full bg-zinc-50 border border-zinc-300 rounded p-2 flex flex-col items-center justify-center shadow-2xs break-inside-avoid">
+              <a
+                href={has3DViewUrl ? single3DUrl : primaryPreviewImg}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group max-h-[220px]"
+                title={primary3DView?.title || 'Open 3D Design'}
+              >
+                <img
+                  src={primaryPreviewImg}
+                  alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
+                  className="max-h-[200px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
+                  crossOrigin="anonymous"
+                  loading="eager"
+                  onError={(e) => {
+                    const box = (e.currentTarget.parentElement as HTMLElement)?.parentElement;
+                    if (box) box.style.display = 'none';
+                  }}
+                />
+              </a>
+              <div className="mt-1.5 flex items-center justify-between w-full px-1 text-[8.5px]">
+                <span className="font-black uppercase tracking-wider text-zinc-950">
+                  3D Stall Preview
+                </span>
+                <span className="text-zinc-600 font-semibold truncate max-w-[280px]">
+                  {primary3DView?.title || 'Main Perspective View'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SECTION 2: PRODUCTION REQUIREMENTS */}

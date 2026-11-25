@@ -207,13 +207,10 @@ export function ClientStallSheet({
             <span className="text-[9px] text-zinc-500 font-medium">Design &amp; Artwork References</span>
           </div>
 
-          <div className="grid grid-cols-12 gap-3.5 items-start">
+          {/* Top Row: Left Text Details & Right Compact QR Codes */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start justify-between">
             {/* Left Column: Design Info, Links, Goodies */}
-            <div
-              className={`${
-                hasAnyQRorMedia ? 'col-span-7' : 'col-span-12'
-              } space-y-2 text-[11px] text-zinc-800 min-w-0`}
-            >
+            <div className="flex-1 min-w-0 space-y-1.5 text-[11px] text-zinc-800">
               <div className="bg-zinc-50 border border-zinc-300 rounded p-2.5 space-y-1.5">
                 <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
                   <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
@@ -331,71 +328,62 @@ export function ClientStallSheet({
               )}
             </div>
 
-            {/* Right Column: Visual Media Panel (Hero 3D Preview Image & Compact QR Codes) */}
-            {hasAnyQRorMedia && (
-              <div className="col-span-5 flex flex-col items-center justify-start w-full min-w-0">
-                {/* 3D Stall Design Preview — Primary Visual Hero */}
-                {primaryPreviewImg && (
-                  <div className="w-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col items-center justify-center shadow-2xs">
-                    <a
-                      href={hasPrimary3DUrl ? primary3DUrl : primaryPreviewImg}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="client-pdf-link w-full bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-1 group min-h-[120px] max-h-[145px]"
-                      title={primary3DView?.title || 'Open 3D Design'}
-                    >
-                      <img
-                        src={primaryPreviewImg}
-                        alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
-                        className="max-h-[135px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
-                        crossOrigin="anonymous"
-                        loading="eager"
-                        onError={(e) => {
-                          const box = (e.currentTarget.parentElement as HTMLElement)?.parentElement;
-                          if (box) box.style.display = 'none';
-                        }}
-                      />
-                    </a>
-                    <div className="mt-1 flex items-center justify-between w-full px-1">
-                      <span className="text-[8px] font-black uppercase tracking-wider text-zinc-950">
-                        3D Stall Preview
-                      </span>
-                      <span className="text-[7.5px] text-zinc-500 font-semibold truncate max-w-[140px]">
-                        {primary3DView?.title || 'Main View'}
-                      </span>
-                    </div>
-                  </div>
+            {/* Right Column: Compact QR Codes Block */}
+            {(hasClientPrintUrl || hasPrimary3DUrl) && (
+              <div className="flex items-center justify-end gap-2.5 shrink-0 self-center sm:self-start">
+                {/* Print Files QR Code */}
+                {hasClientPrintUrl && (
+                  <ChecklistQRCode
+                    url={printUrl}
+                    label="PRINT FILES"
+                    sizePx={primaryPreviewImg ? 58 : 72}
+                  />
                 )}
 
-                {/* Compact QR Codes Row (Print Files & 3D View) */}
-                {(hasClientPrintUrl || hasPrimary3DUrl) && (
-                  <div
-                    className={`flex items-center justify-center gap-2.5 w-full ${
-                      primaryPreviewImg ? 'mt-2' : ''
-                    }`}
-                  >
-                    {/* Print Files QR Code */}
-                    {hasClientPrintUrl && (
-                      <ChecklistQRCode
-                        url={printUrl}
-                        label="PRINT FILES"
-                        sizePx={primaryPreviewImg ? 58 : 72}
-                      />
-                    )}
-
-                    {/* 3D View QR Code */}
-                    {hasPrimary3DUrl && (
-                      <ChecklistQRCode
-                        url={primary3DUrl}
-                        label="3D VIEW"
-                        sizePx={primaryPreviewImg ? 58 : 72}
-                      />
-                    )}
-                  </div>
+                {/* 3D View QR Code */}
+                {hasPrimary3DUrl && (
+                  <ChecklistQRCode
+                    url={primary3DUrl}
+                    label="3D VIEW"
+                    sizePx={primaryPreviewImg ? 58 : 72}
+                  />
                 )}
               </div>
             )}
           </div>
+
+          {/* Centered Large 3D Stall Design Preview Hero Display */}
+          {primaryPreviewImg && (
+            <div className="mt-2.5 w-full bg-zinc-50 border border-zinc-300 rounded p-2 flex flex-col items-center justify-center shadow-2xs break-inside-avoid">
+              <a
+                href={hasPrimary3DUrl ? primary3DUrl : primaryPreviewImg}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="client-pdf-link w-full bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group max-h-[220px]"
+                title={primary3DView?.title || 'Open 3D Design'}
+              >
+                <img
+                  src={primaryPreviewImg}
+                  alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
+                  className="max-h-[200px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
+                  crossOrigin="anonymous"
+                  loading="eager"
+                  onError={(e) => {
+                    const box = (e.currentTarget.parentElement as HTMLElement)?.parentElement;
+                    if (box) box.style.display = 'none';
+                  }}
+                />
+              </a>
+              <div className="mt-1.5 flex items-center justify-between w-full px-1 text-[8.5px]">
+                <span className="font-black uppercase tracking-wider text-zinc-950">
+                  3D Stall Preview
+                </span>
+                <span className="text-zinc-600 font-semibold truncate max-w-[280px]">
+                  {primary3DView?.title || 'Main Perspective View'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SECTION 2: PRODUCTION & STRUCTURE REQUIREMENTS */}
