@@ -207,181 +207,267 @@ export function ClientStallSheet({
             <span className="text-[9px] text-zinc-500 font-medium">Design &amp; Artwork References</span>
           </div>
 
-          {/* Top Row: Left Text Details & Right Compact QR Codes */}
-          <div className="flex flex-col sm:flex-row gap-3 items-start justify-between">
-            {/* Left Column: Design Info, Links, Goodies */}
-            <div className="flex-1 min-w-0 space-y-1.5 text-[11px] text-zinc-800">
-              <div className="bg-zinc-50 border border-zinc-300 rounded p-2.5 space-y-1.5">
-                <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
-                  <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
-                    Responsibility
+          {primaryPreviewImg ? (
+            /* Layout with 3D Preview Image: 72% Hero Visual (Left/Center) + 28% Compact Details & QRs (Right) */
+            <div
+              className="items-stretch gap-3"
+              style={{ display: 'grid', gridTemplateColumns: '72% 1fr' }}
+            >
+              {/* Left / Center: Large 3D Stall Preview Hero Display */}
+              <div className="h-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col justify-between shadow-2xs min-w-0">
+                <a
+                  href={hasPrimary3DUrl ? primary3DUrl : primaryPreviewImg}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="client-pdf-link w-full flex-1 bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group min-h-[190px] max-h-[250px]"
+                  title={primary3DView?.title || 'Open 3D Design'}
+                >
+                  <img
+                    src={primaryPreviewImg}
+                    alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
+                    className="max-h-[235px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
+                    crossOrigin="anonymous"
+                    loading="eager"
+                    onError={(e) => {
+                      const box = (e.currentTarget.parentElement as HTMLElement)?.parentElement;
+                      if (box) box.style.display = 'none';
+                    }}
+                  />
+                </a>
+                <div className="mt-1 flex items-center justify-between w-full px-1 text-[8.5px]">
+                  <span className="font-black uppercase tracking-wider text-zinc-950">
+                    3D Stall Preview
                   </span>
-                  <span className="font-black text-zinc-950 text-right">
-                    {booth.design_responsibility || 'Client Side'}
+                  <span className="text-zinc-600 font-semibold truncate max-w-[280px]">
+                    {primary3DView?.title || 'Main Perspective View'}
                   </span>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
-                  <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
-                    3D Design Link
-                  </span>
-                  {active3DViews.length > 0 ? (
-                    <span className="inline-flex items-center gap-1.5 flex-wrap justify-end text-right">
-                      {active3DViews.map((v, idx) => {
-                        const vUrl = (v.drive_url || '').trim();
-                        const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
-                        const vTitle = v.title?.trim() || `View ${idx + 1}`;
-                        return (
-                          <React.Fragment key={v.id || idx}>
-                            {idx > 0 && <span className="text-zinc-300">/</span>}
-                            {hasVUrl ? (
-                              <a
-                                href={vUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
-                                title={`Open ${vTitle}`}
-                              >
-                                {vTitle} ↗
-                              </a>
-                            ) : (
-                              <span className="text-zinc-950 font-bold text-[10.5px]">
-                                {vTitle} (Image Attached)
-                              </span>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
+              {/* Right Side: Compact Details Card & Vertically Stacked QR Codes */}
+              <div className="flex flex-col justify-between gap-1.5 min-w-0">
+                {/* Compact Details Box */}
+                <div className="bg-zinc-50 border border-zinc-300 rounded p-2 space-y-1 text-[10px]">
+                  <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
+                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                      Responsibility:
                     </span>
-                  ) : (
-                    <span className="text-zinc-400 italic text-[10.5px]">Not Provided</span>
+                    <span className="font-bold text-zinc-950 text-right truncate">
+                      {booth.design_responsibility || 'Client Side'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
+                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                      3D View:
+                    </span>
+                    {active3DViews.length > 0 ? (
+                      <span className="inline-flex items-center gap-1 flex-wrap justify-end text-right">
+                        {active3DViews.map((v, idx) => {
+                          const vUrl = (v.drive_url || '').trim();
+                          const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
+                          const vTitle = v.title?.trim() || `V${idx + 1}`;
+                          return (
+                            <React.Fragment key={v.id || idx}>
+                              {idx > 0 && <span className="text-zinc-300">/</span>}
+                              {hasVUrl ? (
+                                <a
+                                  href={vUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold transition-colors"
+                                  title={`Open ${vTitle}`}
+                                >
+                                  {vTitle} ↗
+                                </a>
+                              ) : (
+                                <span className="text-zinc-950 font-bold">
+                                  {vTitle}
+                                </span>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400 italic">Not Provided</span>
+                    )}
+                  </div>
+
+                  {hasClientPrintUrl && (
+                    <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
+                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                        Print Files:
+                      </span>
+                      <a
+                        href={printUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold transition-colors"
+                        title="Open Shared Print Files in Google Drive"
+                      >
+                        Open Drive ↗
+                      </a>
+                    </div>
+                  )}
+
+                  {hasClientGoodiesUrl && (
+                    <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
+                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                        Goodies:
+                      </span>
+                      <a
+                        href={goodiesUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold transition-colors"
+                        title="Open Shared Goodies Artwork in Google Drive"
+                      >
+                        Artwork ↗
+                      </a>
+                    </div>
                   )}
                 </div>
 
-                {hasClientPrintUrl && (
-                  <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
-                    <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
-                      Print Files
-                    </span>
-                    <a
-                      href={printUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
-                      title="Open Shared Print Files in Google Drive"
-                    >
-                      Open Drive Folder ↗
-                    </a>
-                  </div>
-                )}
+                {/* Compact QR Code Blocks (Stacked Vertically) */}
+                {(hasClientPrintUrl || hasPrimary3DUrl) && (
+                  <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-0.5">
+                    {/* Print Files QR Code */}
+                    {hasClientPrintUrl && (
+                      <ChecklistQRCode
+                        url={printUrl}
+                        label="PRINT FILES"
+                        sizePx={50}
+                      />
+                    )}
 
-                {hasClientGoodiesUrl && (
-                  <div className="flex items-center justify-between gap-2 py-0.5 text-[10.5px]">
-                    <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
-                      Goodies Files
-                    </span>
-                    <a
-                      href={goodiesUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
-                      title="Open Shared Goodies Artwork in Google Drive"
-                    >
-                      Open Artwork Folder ↗
-                    </a>
+                    {/* 3D View QR Code */}
+                    {hasPrimary3DUrl && (
+                      <ChecklistQRCode
+                        url={primary3DUrl}
+                        label="3D VIEW"
+                        sizePx={50}
+                      />
+                    )}
                   </div>
                 )}
               </div>
-
-              {/* Promotional Goodies Requirements (Omitted if none selected) */}
-              {activeGoodiesItems.length > 0 && (
-                <div className="mt-1.5 pt-1.5 border-t border-zinc-200">
-                  <div className="text-[9px] font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                    Promotional Goodies Requirements
+            </div>
+          ) : (
+            /* Fallback layout when no 3D preview image exists */
+            <div className="flex flex-col sm:flex-row gap-3 items-start justify-between">
+              <div className="flex-1 min-w-0 space-y-1.5 text-[11px] text-zinc-800">
+                <div className="bg-zinc-50 border border-zinc-300 rounded p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                    <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                      Responsibility:
+                    </span>
+                    <span className="font-bold text-zinc-950 text-right">
+                      {booth.design_responsibility || 'Client Side'}
+                    </span>
                   </div>
-                  <table className="table-fixed w-full text-left border-collapse text-[10px]">
-                    <colgroup>
-                      <col className="w-[50%]" />
-                      <col className="w-[35%]" />
-                      <col className="w-[15%]" />
-                    </colgroup>
-                    <thead>
-                      <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
-                        <th className="py-1 px-2.5 text-left">Goodies Item</th>
-                        <th className="py-1 px-2.5 text-left">Specification</th>
-                        <th className="py-1 px-2.5 text-center">Qty</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200">
-                      {activeGoodiesItems.map((item) => (
-                        <tr key={item.id} className="break-inside-avoid">
-                          <td className="py-1 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
-                          <td className="py-1 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
-                          <td className="py-1 px-2.5 text-center font-mono font-bold text-zinc-900">
-                            {item.quantity} {item.unit && item.unit !== 'nos' ? item.unit : ''}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                  <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                    <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                      3D Design Link:
+                    </span>
+                    {active3DViews.length > 0 ? (
+                      <span className="inline-flex items-center gap-1.5 flex-wrap justify-end text-right">
+                        {active3DViews.map((v, idx) => {
+                          const vUrl = (v.drive_url || '').trim();
+                          const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
+                          const vTitle = v.title?.trim() || `View ${idx + 1}`;
+                          return (
+                            <React.Fragment key={v.id || idx}>
+                              {idx > 0 && <span className="text-zinc-300">/</span>}
+                              {hasVUrl ? (
+                                <a
+                                  href={vUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
+                                  title={`Open ${vTitle}`}
+                                >
+                                  {vTitle} ↗
+                                </a>
+                              ) : (
+                                <span className="text-zinc-950 font-bold text-[10.5px]">
+                                  {vTitle} (Image Attached)
+                                </span>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400 italic text-[10.5px]">Not Provided</span>
+                    )}
+                  </div>
+
+                  {hasClientPrintUrl && (
+                    <div className="flex items-center justify-between gap-2 py-0.5 border-b border-zinc-200/80 text-[10.5px]">
+                      <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider shrink-0">
+                        Print Files:
+                      </span>
+                      <a
+                        href={printUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[10.5px] transition-colors"
+                        title="Open Shared Print Files in Google Drive"
+                      >
+                        Open Drive Folder ↗
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* QR Codes Row */}
+              {(hasClientPrintUrl || hasPrimary3DUrl) && (
+                <div className="flex items-center justify-end gap-2.5 shrink-0">
+                  {hasClientPrintUrl && (
+                    <ChecklistQRCode url={printUrl} label="PRINT FILES" sizePx={72} />
+                  )}
+                  {hasPrimary3DUrl && (
+                    <ChecklistQRCode url={primary3DUrl} label="3D VIEW" sizePx={72} />
+                  )}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Right Column: Compact QR Codes Block */}
-            {(hasClientPrintUrl || hasPrimary3DUrl) && (
-              <div className="flex items-center justify-end gap-2.5 shrink-0 self-center sm:self-start">
-                {/* Print Files QR Code */}
-                {hasClientPrintUrl && (
-                  <ChecklistQRCode
-                    url={printUrl}
-                    label="PRINT FILES"
-                    sizePx={primaryPreviewImg ? 58 : 72}
-                  />
-                )}
-
-                {/* 3D View QR Code */}
-                {hasPrimary3DUrl && (
-                  <ChecklistQRCode
-                    url={primary3DUrl}
-                    label="3D VIEW"
-                    sizePx={primaryPreviewImg ? 58 : 72}
-                  />
-                )}
+          {/* Promotional Goodies Requirements (Omitted if none selected) */}
+          {activeGoodiesItems.length > 0 && (
+            <div className="mt-2.5 pt-2 border-t border-zinc-200">
+              <div className="text-[9px] font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                Promotional Goodies Requirements
               </div>
-            )}
-          </div>
-
-          {/* Centered Large 3D Stall Design Preview Hero Display */}
-          {primaryPreviewImg && (
-            <div className="mt-2.5 w-full bg-zinc-50 border border-zinc-300 rounded p-2 flex flex-col items-center justify-center shadow-2xs break-inside-avoid">
-              <a
-                href={hasPrimary3DUrl ? primary3DUrl : primaryPreviewImg}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="client-pdf-link w-full bg-white border border-zinc-200 rounded-xs overflow-hidden flex items-center justify-center p-2 group max-h-[220px]"
-                title={primary3DView?.title || 'Open 3D Design'}
-              >
-                <img
-                  src={primaryPreviewImg}
-                  alt={`3D Design — ${primary3DView?.title || 'Stall View'}`}
-                  className="max-h-[200px] max-w-full w-auto h-auto object-contain rounded-xs transition-transform mx-auto block"
-                  crossOrigin="anonymous"
-                  loading="eager"
-                  onError={(e) => {
-                    const box = (e.currentTarget.parentElement as HTMLElement)?.parentElement;
-                    if (box) box.style.display = 'none';
-                  }}
-                />
-              </a>
-              <div className="mt-1.5 flex items-center justify-between w-full px-1 text-[8.5px]">
-                <span className="font-black uppercase tracking-wider text-zinc-950">
-                  3D Stall Preview
-                </span>
-                <span className="text-zinc-600 font-semibold truncate max-w-[280px]">
-                  {primary3DView?.title || 'Main Perspective View'}
-                </span>
-              </div>
+              <table className="table-fixed w-full text-left border-collapse text-[10px]">
+                <colgroup>
+                  <col className="w-[50%]" />
+                  <col className="w-[35%]" />
+                  <col className="w-[15%]" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-zinc-300 text-zinc-600 font-bold uppercase text-[8.5px] tracking-wider">
+                    <th className="py-1 px-2.5 text-left">Goodies Item</th>
+                    <th className="py-1 px-2.5 text-left">Specification</th>
+                    <th className="py-1 px-2.5 text-center">Qty</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {activeGoodiesItems.map((item) => (
+                    <tr key={item.id} className="break-inside-avoid">
+                      <td className="py-1 px-2.5 font-bold text-zinc-950 break-words leading-snug">{item.item_name}</td>
+                      <td className="py-1 px-2.5 text-zinc-700 break-words leading-snug">{item.specification || '—'}</td>
+                      <td className="py-1 px-2.5 text-center font-mono font-bold text-zinc-900">
+                        {item.quantity} {item.unit && item.unit !== 'nos' ? item.unit : ''}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
