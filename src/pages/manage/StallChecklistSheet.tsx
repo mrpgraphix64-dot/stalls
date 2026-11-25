@@ -196,7 +196,7 @@ const qrCodeCache = new Map<string, string>();
 export function ChecklistQRCode({
   url,
   label,
-  sizePx = 76,
+  sizePx = 106,
 }: {
   url?: string | null;
   label: string;
@@ -205,13 +205,7 @@ export function ChecklistQRCode({
   const cleanUrl = (url || '').trim();
   const isValid = cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://');
 
-  // Slightly larger QR canvas if URL is very long, unless a compact size was explicitly requested
-  const actualSize =
-    sizePx < 70
-      ? sizePx
-      : cleanUrl.length > 120
-      ? Math.max(sizePx, 84)
-      : sizePx;
+  const actualSize = sizePx;
 
   const [dataUrl, setDataUrl] = React.useState<string | null>(() => {
     if (!isValid) return null;
@@ -230,7 +224,7 @@ export function ChecklistQRCode({
     let isMounted = true;
     QRCode.toDataURL(cleanUrl, {
       margin: 1,
-      width: actualSize * 2, // high-res for 300dpi PDF canvas rendering
+      width: Math.max(actualSize * 3, 320), // High-res 300+ dpi PDF canvas rendering
       errorCorrectionLevel: 'M',
       color: {
         dark: '#000000',
@@ -261,28 +255,30 @@ export function ChecklistQRCode({
       href={cleanUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex flex-col items-center justify-between p-1 bg-white border border-zinc-300 rounded shadow-2xs hover:border-zinc-700 transition-colors group text-decoration-none shrink-0"
+      className="inline-flex flex-col items-center justify-center p-2 bg-white border border-zinc-300 rounded shadow-2xs hover:border-zinc-700 transition-colors group text-decoration-none shrink-0"
       title={`Scan or click to open ${label}`}
-      style={{ width: `${actualSize + 12}px` }}
+      style={{
+        width: `${actualSize + 16}px`,
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+      }}
     >
+      <span
+        className="font-black uppercase tracking-wider text-zinc-950 text-center leading-tight group-hover:text-blue-600 block whitespace-nowrap mb-1"
+        style={{ fontSize: actualSize >= 95 ? '9px' : '8px' }}
+      >
+        {label}
+      </span>
       <img
         src={dataUrl}
         alt={`${label} QR Code`}
-        className="w-auto h-auto object-contain block"
+        className="w-auto h-auto object-contain block bg-white"
         style={{ width: `${actualSize}px`, height: `${actualSize}px` }}
         loading="eager"
       />
       <span
-        className={`${
-          actualSize < 65 ? 'text-[7.5px]' : 'text-[8.5px]'
-        } font-black uppercase tracking-wider text-zinc-950 mt-1 text-center leading-tight group-hover:text-blue-600 block whitespace-nowrap`}
-      >
-        {label}
-      </span>
-      <span
-        className={`${
-          actualSize < 65 ? 'text-[6.5px]' : 'text-[7px]'
-        } text-zinc-500 font-medium mt-0.5 leading-none text-center block whitespace-nowrap`}
+        className="text-zinc-500 font-semibold leading-none text-center block whitespace-nowrap mt-1"
+        style={{ fontSize: actualSize >= 95 ? '7px' : '6.5px' }}
       >
         Scan / Click
       </span>
@@ -307,25 +303,22 @@ export interface Dynamic3DHeightResult {
   containerHeightPx: number;
   imageMaxHeightPx: number;
   heightMm: number;
+  qrSizePx: number;
 }
 
 /**
- * Calculates dynamic content-aware height budget for the 3D stall preview visual card.
+ * Calculates dynamic content-aware height budget for the 3D stall preview visual card
+ * and optimal enlarged QR code size (approx 27-32 mm / 102-120 px).
  * Strictly guarantees that every stall's complete requirements fit on exactly ONE A4 page.
- *
- * Targets:
- * - 1–3 items: 95–115 mm (360–435 px)
- * - 4–8 items: 75–95 mm (280–360 px)
- * - 9–13 items: 55–75 mm (215–280 px)
- * - 14+ items: 48–55 mm (180–215 px)
  */
 export function computeDynamic3DHeight(params: {
   totalItemRows: number;
   activeSectionsCount: number;
   hasRemarks: boolean;
   clientNameLength: number;
+  qrCount?: number;
 }): Dynamic3DHeightResult {
-  const { totalItemRows, activeSectionsCount, hasRemarks, clientNameLength } = params;
+  const { totalItemRows, activeSectionsCount, hasRemarks, clientNameLength, qrCount = 1 } = params;
 
   // Header height estimate: 145px base + extra if company name wraps
   let headerEst = 145;
@@ -336,30 +329,51 @@ export function computeDynamic3DHeight(params: {
   const tablesEst = activeSectionsCount * 46 + totalItemRows * 25;
   const remarksEst = hasRemarks ? 20 : 0;
   const paddingEst = 70; // 40px outer padding + 30px section gaps
-  const safetyBuffer = 25;
+  const safetyBuffer = 20;
 
   const nonImageEst = headerEst + 32 + tablesEst + remarksEst + paddingEst + safetyBuffer;
-  const availableBudget = Math.max(180, 1050 - nonImageEst);
+  const availableBudget = Math.max(190, 1055 - nonImageEst);
 
   let targetHeight: number;
   if (totalItemRows <= 3) {
+    // 1-3 items: Very large 3D preview: 95-115 mm (360-435 px)
     targetHeight = Math.min(435, Math.max(360, availableBudget));
-  } else if (totalItemRows <= 8) {
-    targetHeight = Math.min(360, Math.max(280, availableBudget));
-  } else if (totalItemRows <= 13) {
-    targetHeight = Math.min(280, Math.max(215, availableBudget));
+  } else if (totalItemRows <= 7) {
+    // 4-7 items: Medium-large preview: 75-99 mm (290-375 px)
+    targetHeight = Math.min(375, Math.max(290, availableBudget));
+  } else if (totalItemRows <= 11) {
+    // 8-11 items: Balanced preview: 60-77 mm (225-290 px)
+    targetHeight = Math.min(290, Math.max(225, availableBudget));
   } else {
-    targetHeight = Math.min(215, Math.max(180, availableBudget));
+    // 12+ items: Max-content stalls: use largest height that strictly fits
+    targetHeight = Math.min(240, Math.max(190, availableBudget));
   }
 
   // Account for card borders, padding and bottom caption row (~36px)
   const imageMaxHeightPx = Math.max(140, targetHeight - 36);
   const heightMm = Math.round((targetHeight / 3.7795) * 10) / 10;
 
+  // Dynamic QR Code sizing: target 27-32 mm (102-120 px)
+  // Available vertical space in right column = targetHeight - detailsBox (~76px) - internal margins (~16px)
+  const availableForQrs = Math.max(100, targetHeight - 92);
+  let qrSizePx: number;
+  if (qrCount <= 1) {
+    // Single QR code: use maximum large size 27-32 mm (106-118 px)
+    qrSizePx = Math.min(118, Math.max(102, availableForQrs - 34));
+  } else {
+    // 2 QR codes vertically stacked
+    const availablePerQr = (availableForQrs - 10) / 2;
+    const fittingQr = availablePerQr - 34;
+    // For low/moderate content stalls: 27-30 mm (102-112 px)
+    // For high-content stalls: clamp to 74-88 px so everything strictly fits on 1 page
+    qrSizePx = Math.min(110, Math.max(74, Math.floor(fittingQr)));
+  }
+
   return {
     containerHeightPx: targetHeight,
     imageMaxHeightPx,
     heightMm,
+    qrSizePx,
   };
 }
 
@@ -483,12 +497,14 @@ export function StallChecklistSheet({
 
   const hasRemarks = Boolean(booth.print_remark || booth.notes || booth.goodies_remark);
   const clientNameLength = (booth.client_name || '').length;
+  const qrCount = (hasPrintUrl ? 1 : 0) + (has3DViewUrl || clientImgUrl ? 1 : 0);
 
   const dynamicHeight = computeDynamic3DHeight({
     totalItemRows,
     activeSectionsCount,
     hasRemarks,
     clientNameLength,
+    qrCount,
   });
 
   return (
@@ -600,19 +616,19 @@ export function StallChecklistSheet({
           </div>
 
           {primaryPreviewImg ? (
-            /* Layout with 3D Preview Image: 80% Hero Visual (Left/Center) + 20% Compact Details & QRs (Right) */
+            /* Layout with 3D Preview Image: 75% Hero Visual (Left/Center) + 25% Details & Enlarged QRs (Right) */
             <div
-              className="items-stretch gap-2.5"
+              className="items-stretch gap-3 w-full box-border"
               style={{
                 display: 'grid',
-                gridTemplateColumns: '80% 20%',
+                gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 1fr)',
                 minHeight: `${dynamicHeight.containerHeightPx}px`,
                 maxHeight: `${dynamicHeight.containerHeightPx}px`,
               }}
             >
-              {/* Left / Center: Large 3D Stall Preview Hero Display */}
+              {/* Left / Center (75%): Large 3D Stall Preview Hero Display */}
               <div
-                className="h-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col justify-between shadow-2xs min-w-0"
+                className="h-full bg-zinc-50 border border-zinc-300 rounded p-2 flex flex-col justify-between shadow-2xs min-w-0 w-full box-border"
                 style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
               >
                 <a
@@ -646,28 +662,28 @@ export function StallChecklistSheet({
                 </div>
               </div>
 
-              {/* Right Side: Compact Details Card & Vertically Stacked QR Codes */}
+              {/* Right Side (25%): Details Card & Vertically Stacked Enlarged QR Codes */}
               <div
-                className="flex flex-col justify-between gap-1.5 min-w-0 h-full"
+                className="flex flex-col justify-between gap-2 min-w-0 w-full h-full box-border"
                 style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
               >
-                {/* Compact Details Box */}
-                <div className="bg-zinc-50 border border-zinc-300 rounded p-1.5 space-y-1 text-[9.5px]">
-                  <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
-                      Resp:
+                {/* Details Box */}
+                <div className="bg-zinc-50 border border-zinc-300 rounded p-2 space-y-1 text-[9.5px] w-full box-border">
+                  <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                      Responsibility:
                     </span>
-                    <span className="font-bold text-zinc-950 text-right truncate">
+                    <span className="font-bold text-zinc-950 text-right text-[9px] break-words">
                       {booth.design_responsibility || 'Client Side'}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                  <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
                       3D View:
                     </span>
                     {valid3DViews.length > 1 ? (
-                      <span className="inline-flex items-center gap-1 flex-wrap justify-end text-right">
+                      <span className="inline-flex items-center gap-1 flex-wrap justify-end text-right text-[9px]">
                         {valid3DViews.map((v, idx) => {
                           const vUrl = (v.drive_url || (v as any).url || '').trim();
                           const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
@@ -699,47 +715,45 @@ export function StallChecklistSheet({
                         href={single3DUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors truncate max-w-[85px]"
+                        className="text-blue-600 hover:text-blue-800 underline font-bold text-[9px] transition-colors truncate max-w-[110px]"
                         title="Open 3D Design in new tab"
                       >
-                        {valid3DViews[0]?.title && valid3DViews[0].title.toLowerCase() !== 'view 3d design'
-                          ? `${valid3DViews[0].title} ↗`
-                          : 'Open 3D ↗'}
+                        Open ↗
                       </a>
                     ) : (
-                      <span className="text-zinc-400 italic">Not Added</span>
+                      <span className="text-zinc-400 italic text-[9px]">Not Added</span>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
-                      Print:
+                  <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                      Print Files:
                     </span>
                     {hasPrintUrl ? (
                       <a
                         href={printUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors"
+                        className="text-blue-600 hover:text-blue-800 underline font-bold text-[9px] transition-colors"
                         title="Open Print Files in Google Drive"
                       >
                         Open Drive ↗
                       </a>
                     ) : (
-                      <span className="text-zinc-400 italic">Not Added</span>
+                      <span className="text-zinc-400 italic text-[9px]">Not Added</span>
                     )}
                   </div>
 
                   {hasGoodiesUrl && (
-                    <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                      <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                    <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
                         Goodies:
                       </span>
                       <a
                         href={goodiesUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline font-bold transition-colors"
+                        className="text-blue-600 hover:text-blue-800 underline font-bold text-[9px] transition-colors"
                         title="Open Goodies Artwork in Google Drive"
                       >
                         Artwork ↗
@@ -756,19 +770,19 @@ export function StallChecklistSheet({
                   )}
                 </div>
 
-                {/* Compact QR Code Blocks (Stacked Vertically) */}
+                {/* Enlarged QR Code Blocks (Centered in right panel, vertically stacked) */}
                 {(hasPrintUrl || has3DViewUrl || clientImgUrl) && (
-                  <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-0.5">
+                  <div className="flex flex-col items-center justify-center gap-2 flex-1 w-full py-1 min-w-0">
                     {/* Print Files QR Code */}
                     {hasPrintUrl && (
-                      <ChecklistQRCode url={printUrl} label="PRINT FILES" sizePx={48} />
+                      <ChecklistQRCode url={printUrl} label="PRINT FILES" sizePx={dynamicHeight.qrSizePx} />
                     )}
 
                     {/* 3D View QR Code */}
                     {has3DViewUrl ? (
-                      <ChecklistQRCode url={single3DUrl} label="3D VIEW" sizePx={48} />
+                      <ChecklistQRCode url={single3DUrl} label="3D VIEW" sizePx={dynamicHeight.qrSizePx} />
                     ) : clientImgUrl ? (
-                      <ChecklistQRCode url={clientImgUrl} label="3D IMAGE" sizePx={48} />
+                      <ChecklistQRCode url={clientImgUrl} label="3D IMAGE" sizePx={dynamicHeight.qrSizePx} />
                     ) : null}
                   </div>
                 )}

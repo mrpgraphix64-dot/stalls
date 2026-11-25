@@ -118,12 +118,14 @@ export function ClientStallSheet({
 
   const hasRemarks = Boolean(clientNote);
   const clientNameLength = (booth.client_name || '').length;
+  const qrCount = (hasClientPrintUrl ? 1 : 0) + (hasPrimary3DUrl ? 1 : 0);
 
   const dynamicHeight = computeDynamic3DHeight({
     totalItemRows,
     activeSectionsCount,
     hasRemarks,
     clientNameLength,
+    qrCount,
   });
 
   return (
@@ -232,19 +234,19 @@ export function ClientStallSheet({
           </div>
 
           {primaryPreviewImg ? (
-            /* Layout with 3D Preview Image: 80% Hero Visual (Left/Center) + 20% Compact Details & QRs (Right) */
+            /* Layout with 3D Preview Image: 75% Hero Visual (Left/Center) + 25% Details & Enlarged QRs (Right) */
             <div
-              className="items-stretch gap-2.5"
+              className="items-stretch gap-3 w-full box-border"
               style={{
                 display: 'grid',
-                gridTemplateColumns: '80% 20%',
+                gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 1fr)',
                 minHeight: `${dynamicHeight.containerHeightPx}px`,
                 maxHeight: `${dynamicHeight.containerHeightPx}px`,
               }}
             >
-              {/* Left / Center: Large 3D Stall Preview Hero Display */}
+              {/* Left / Center (75%): Large 3D Stall Preview Hero Display */}
               <div
-                className="h-full bg-zinc-50 border border-zinc-300 rounded p-1.5 flex flex-col justify-between shadow-2xs min-w-0"
+                className="h-full bg-zinc-50 border border-zinc-300 rounded p-2 flex flex-col justify-between shadow-2xs min-w-0 w-full box-border"
                 style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
               >
                 <a
@@ -278,28 +280,28 @@ export function ClientStallSheet({
                 </div>
               </div>
 
-              {/* Right Side: Compact Details Card & Vertically Stacked QR Codes */}
+              {/* Right Side (25%): Details Card & Vertically Stacked Enlarged QR Codes */}
               <div
-                className="flex flex-col justify-between gap-1.5 min-w-0 h-full"
+                className="flex flex-col justify-between gap-2 min-w-0 w-full h-full box-border"
                 style={{ maxHeight: `${dynamicHeight.containerHeightPx}px` }}
               >
-                {/* Compact Details Box */}
-                <div className="bg-zinc-50 border border-zinc-300 rounded p-1.5 space-y-1 text-[9.5px]">
-                  <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
-                      Resp:
+                {/* Details Box */}
+                <div className="bg-zinc-50 border border-zinc-300 rounded p-2 space-y-1 text-[9.5px] w-full box-border">
+                  <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                      Responsibility:
                     </span>
-                    <span className="font-bold text-zinc-950 text-right truncate">
+                    <span className="font-bold text-zinc-950 text-right text-[9px] break-words">
                       {booth.design_responsibility || 'Client Side'}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                    <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                  <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                    <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
                       3D View:
                     </span>
                     {active3DViews.length > 0 ? (
-                      <span className="inline-flex items-center gap-1 flex-wrap justify-end text-right">
+                      <span className="inline-flex items-center gap-1 flex-wrap justify-end text-right text-[9px]">
                         {active3DViews.map((v, idx) => {
                           const vUrl = (v.drive_url || '').trim();
                           const hasVUrl = vUrl.startsWith('http://') || vUrl.startsWith('https://');
@@ -327,20 +329,20 @@ export function ClientStallSheet({
                         })}
                       </span>
                     ) : (
-                      <span className="text-zinc-400 italic">Not Provided</span>
+                      <span className="text-zinc-400 italic text-[9px]">Not Provided</span>
                     )}
                   </div>
 
                   {hasClientPrintUrl && (
-                    <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                      <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
-                        Print:
+                    <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
+                        Print Files:
                       </span>
                       <a
                         href={printUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold transition-colors"
+                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[9px] transition-colors"
                         title="Open Shared Print Files in Google Drive"
                       >
                         Open Drive ↗
@@ -349,15 +351,15 @@ export function ClientStallSheet({
                   )}
 
                   {hasClientGoodiesUrl && (
-                    <div className="flex items-center justify-between gap-1 py-0.5 border-b border-zinc-200/80">
-                      <span className="text-zinc-500 font-bold uppercase text-[7px] tracking-wider shrink-0">
+                    <div className="flex items-center justify-between gap-1.5 py-0.5 border-b border-zinc-200/80">
+                      <span className="text-zinc-500 font-bold uppercase text-[7.5px] tracking-wider shrink-0">
                         Goodies:
                       </span>
                       <a
                         href={goodiesUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold transition-colors"
+                        className="client-pdf-link text-blue-600 hover:text-blue-800 underline font-bold text-[9px] transition-colors"
                         title="Open Shared Goodies Artwork in Google Drive"
                       >
                         Artwork ↗
@@ -366,15 +368,15 @@ export function ClientStallSheet({
                   )}
                 </div>
 
-                {/* Compact QR Code Blocks (Stacked Vertically) */}
+                {/* Enlarged QR Code Blocks (Centered in right panel, vertically stacked) */}
                 {(hasClientPrintUrl || hasPrimary3DUrl) && (
-                  <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-0.5">
+                  <div className="flex flex-col items-center justify-center gap-2 flex-1 w-full py-1 min-w-0">
                     {/* Print Files QR Code */}
                     {hasClientPrintUrl && (
                       <ChecklistQRCode
                         url={printUrl}
                         label="PRINT FILES"
-                        sizePx={48}
+                        sizePx={dynamicHeight.qrSizePx}
                       />
                     )}
 
@@ -383,7 +385,7 @@ export function ClientStallSheet({
                       <ChecklistQRCode
                         url={primary3DUrl}
                         label="3D VIEW"
-                        sizePx={48}
+                        sizePx={dynamicHeight.qrSizePx}
                       />
                     )}
                   </div>
